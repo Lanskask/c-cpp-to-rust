@@ -469,3 +469,19 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** cJSON tickets 01 and 02 are `done` with every task still `[ ]`: the session marks status but never
   ticks criteria, so `--tasks` shows done tickets with open boxes until it follows the new line.
 - **Next:** none needed; the cJSON session picks it up at its next `status`.
+
+## 32. Ticket 03 skipped (user decision), ticket 04 in_progress, guard proof
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Translation session (governor)
+- **Done:** user chose to skip the LLM stress test (c2rust is the Stage 1 engine; the polish prompt gets a dry run on
+  `cJSON_Utils` inside ticket 04). Ticket 03 has a "Skipped" note, boxes left unchecked, `mark 03 done`.
+  `mark 04 in_progress`; `status`: 3/7 done. Guard proof: an Edit of the cjson rulebook was refused by `guard.py`
+  ("read-only while ticket 04 or 06 of cjson is in_progress"), and the file is unchanged in `git status`. The guard
+  also refuses Bash commands that merely name that file (a heredoc into WORK-LOG containing its name was blocked).
+- **Skill check (user item 0):** in this restarted session an Edit of
+  `pilots/cjson/experiments/e4_cjson_judge_sensitivity.py` was still refused ("File is in a directory that is denied
+  by your permission settings"), and an Edit of the repo-root `experiments/e1_c2rust_jsmn.py` was refused too.
+  `assets/settings.json:23` still reads `Edit(experiments/**)` (no commit changed it), so the rule matches nested
+  `experiments/` directories as well. The Skill fix has not taken effect or is not committed. The E4 script's `work/`
+  path was fixed by the user by hand.
+- **Next:** ticket 04: Stage 1 port with c2rust, one run per feature set, polish dry run on `cJSON_Utils`.
