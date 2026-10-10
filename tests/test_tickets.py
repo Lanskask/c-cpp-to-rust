@@ -25,7 +25,8 @@ def test_blocked_ticket_cannot_start_and_status_shows_ready(tmp_path: Path, caps
     ws = tmp_path / "p"
     run(ws, "init")
     assert run(ws, "mark", "02", "in_progress") == 1  # blocked by 01
-    assert run(ws, "mark", "01", "done") == 0
+    assert run(ws, "mark", "01", "done") == 1  # open tasks
+    assert run(ws, "mark", "01", "done", "--tick-all") == 0
     assert run(ws, "mark", "02", "in_progress") == 0
     run(ws, "status")
     rows = [ln.split("\t") for ln in capsys.readouterr().out.splitlines()]
@@ -50,9 +51,22 @@ def test_status_tasks_lists_checkboxes(tmp_path: Path, capsys) -> None:  # noqa:
     run(ws, "init")
     f = next((ws / "migration" / "tickets").glob("01-*.md"))
     f.write_text(f.read_text().replace("- [ ] inventory.tsv", "- [x] inventory.tsv", 1))
-    run(ws, "mark", "01", "done")
+    run(ws, "mark", "01", "done", "--tick-all")
+    f.write_text(f.read_text().replace("- [x] every config-macro", "- [ ] every config-macro", 1))
     run(ws, "status", "--tasks")
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "Ticket_01 done Mapping (Stage 0) (p)"
     assert lines[1].startswith("  - [x] inventory.tsv") and lines[2].startswith("  - [ ] every config-macro")
     assert any(ln == "Ticket_02 todo READY Stage 1 Judge (p)" for ln in lines)
+
+
+def test_done_requires_every_task_ticked(tmp_path: Path) -> None:
+    ws = tmp_path / "p"
+    run(ws, "init")
+    f = next((ws / "migration" / "tickets").glob("01-*.md"))
+    f.write_text(f.read_text().replace("- [ ] ", "- [x] "))
+    assert run(ws, "mark", "01", "done") == 0
+    f.write_text(f.read_text().replace("- [x] the user approved", "- [ ] the user approved", 1))
+    assert run(ws, "mark", "01", "done") == 1  # re-marking a done ticket with an open task is refused too
+    assert run(ws, "mark", "01", "done", "--tick-all") == 0
+    assert "- [ ]" not in f.read_text()

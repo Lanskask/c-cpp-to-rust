@@ -251,3 +251,7 @@ Each entry: decision, reason, who/what it came from. Newest last.
     matched `pilots/*/experiments/`, so the Translation session could not save its Pilot scripts there, against
     decision 45. A leading `/` means "relative to the project root" in Claude Code permission patterns; this is from
     the documentation and is confirmed only by the Translation session's next restart (WORK-LOG 32).
+
+49. **`tickets.py mark NN done` refuses while a task is `[ ]`; `--tick-all` is the explicit override.** _Reason:_ the
+    cJSON session marked tickets 01-03 done with every checkbox open, so the checklist said nothing; a skipped
+    criterion is written `- [x] <task> (skipped: <reason>)`.

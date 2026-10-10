@@ -495,3 +495,12 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Not verified:** that the anchored rule allows `pilots/cjson/experiments/` and still refuses repo-root
   `experiments/`. Only a restarted Translation session can show it.
 - **Next:** restart the cJSON session (`--settings` is read at start) and repeat the two Edit checks.
+
+## 34. Skill bug: tickets marked done with open tasks
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's "Fix it"
+- **Done:** `mark NN done` now fails and lists the open tasks; `--tick-all` ticks them after the governor checked
+  each; tests added (pytest and lint run before commit); decision 49; SKILL.md step 0 updated.
+- **Not done:** the cJSON tickets 01-03 are Translation-session data and were not edited here. The session should
+  tick what holds and, for ticket 03, write `(skipped: user decision)` on the criteria it did not meet.
+- **Next:** cJSON session: `make tickets TASKS=1`, then tick 01 and 02 (`mark NN done --tick-all` once checked).

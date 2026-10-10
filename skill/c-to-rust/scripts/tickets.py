@@ -7,7 +7,8 @@ A run on a Pilot is seven tickets in a chain (tracer-bullet phases, each demoabl
 `init` writes the files (refuses to overwrite unless `--force`); `status` prints each ticket's state and whether
 it is unblocked, and `status --tasks` also lists every checkbox task under its ticket (`[x]` done, `[ ]` open);
 `mark NN <todo|in_progress|done>` changes the `**Status:**` line and refuses `done`/`in_progress` while a blocker
-is not done. The governor reads `status` at the start of every session, next to `parts.tsv`.
+is not done, and `done` while a task is still `[ ]` (`--tick-all` ticks them after the governor has checked each).
+The governor reads `status` at the start of every session, next to `parts.tsv`.
 Exit code 0 on success, 1 on failure.
 """
 
@@ -184,10 +185,23 @@ def cmd_status(ws: Path, with_tasks: bool = False) -> int:
     return 0
 
 
-def cmd_mark(ws: Path, num: str, new: str) -> int:
+OPEN_TASK = re.compile(r"^- \[ \] (.*)$", re.M)
+
+
+def cmd_mark(ws: Path, num: str, new: str, tick_all: bool = False) -> int:
     tickets = load(ws)
     if num not in tickets:
         raise ValueError(f"no ticket {num}")
+    if new == "done":
+        open_tasks = OPEN_TASK.findall(tickets[num].read_text())
+        if open_tasks and not tick_all:
+            raise ValueError(
+                f"ticket {num} has {len(open_tasks)} open task(s); tick each `- [x]` once it holds "
+                f"(a skipped one: `- [x] <task> (skipped: <reason>)`), or pass --tick-all after checking them:\n  "
+                + "\n  ".join(open_tasks)
+            )
+        if tick_all:
+            tickets[num].write_text(re.sub(r"^- \[ \] ", "- [x] ", tickets[num].read_text(), flags=re.M))
     if new != "todo":
         open_blockers = [b for b in blockers(tickets[num]) if read_state(tickets[b]) != "done"]
         if open_blockers:
@@ -209,13 +223,14 @@ def main(argv: list[str] | None = None) -> int:
     m = sub.add_parser("mark")
     m.add_argument("num")
     m.add_argument("state", choices=STATES)
+    m.add_argument("--tick-all", action="store_true", help="with `done`: tick every open task (only after checking)")
     args = p.parse_args(argv)
     try:
         if args.cmd == "init":
             return cmd_init(args.ws, args.force)
         if args.cmd == "status":
             return cmd_status(args.ws, args.tasks)
-        return cmd_mark(args.ws, args.num, args.state)
+        return cmd_mark(args.ws, args.num, args.state, args.tick_all)
     except (ValueError, OSError) as e:
         print(f"tickets: {e}", file=sys.stderr)
         return 1
