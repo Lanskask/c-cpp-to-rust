@@ -92,6 +92,11 @@ next step.
 ## Rules that hold in every branch
 
 - **Done** = gate passed and the Part's commit exists. One commit per accepted Part.
+- Commands use absolute paths, `git -C <dir>`, or a subshell `( cd <dir> && ... )`; never leave the shell's cwd inside
+  `<ws>`. The guard finds the repo from `$CLAUDE_PROJECT_DIR`, so a stray `cd` no longer breaks it, but a build tool
+  with `<ws>` as cwd still loads untrusted code (judge.md §7).
+- Analysis scripts for a Pilot go to `<ws>/experiments/` (docstring: the question and the answer; commit them). The
+  repo-level `experiments/` belongs to the Skill-editing session and is read-only here.
 - Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).
 - The rulebook and the Judge are read-only during a batch. Judge changes (new corpus inputs from a
   review `GAP`) are their own commit: `tickets.py mark 04 todo` (or 06), make and commit the change, mark it

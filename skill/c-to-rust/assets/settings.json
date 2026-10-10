@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -I skill/c-to-rust/scripts/guard.py"
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/skill/c-to-rust/scripts/guard.py\""
           }
         ]
       }

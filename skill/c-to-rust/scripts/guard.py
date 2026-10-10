@@ -10,7 +10,8 @@ write them. A Judge change during fan-out means: `tickets.py mark 04 todo`, comm
 
 Bash commands are checked crudely: a command that names a protected path and contains a write marker (`>`, `tee`,
 `sed -i`, `mv`, `cp`, `rm`, `truncate`, `perl -i`) is refused. Writing through an interpreter (`python -c`) is not
-detected. Standalone on purpose (runs with `python3 -I`; decision 30). Errors fail closed (exit 2).
+detected. The repo root is `$CLAUDE_PROJECT_DIR` (else this script's location), not the shell's cwd. Standalone on purpose
+(runs with `python3 -I`; decision 30). Errors fail closed (exit 2).
 
 `guard.py check PATH` prints ALLOW or REFUSE for PATH (working directory = repo root) and exits 0 / 1.
 """
@@ -18,6 +19,7 @@ detected. Standalone on purpose (runs with `python3 -I`; decision 30). Errors fa
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -53,14 +55,22 @@ def protected_pilot(rel: str) -> str | None:
     return None
 
 
-def relative(path: str, root: Path) -> str:
+def project_root() -> Path:
+    """The repo root: CLAUDE_PROJECT_DIR, else this script's own location. Never the shell's cwd, which a plain
+    `cd pilots/x/src` moves (found in the first cJSON run: the relative hook path stopped resolving)."""
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    return Path(env) if env else Path(__file__).resolve().parents[3]
+
+
+def relative(path: str, root: Path, cwd: Path | None = None) -> str:
+    """`path` relative to `root`; a relative `path` is taken from `cwd` (default: the root)."""
     p = Path(path)
-    if p.is_absolute():
-        try:
-            return p.resolve().relative_to(root.resolve()).as_posix()
-        except ValueError:
-            return p.as_posix()
-    return Path(*p.parts).as_posix().removeprefix("./")
+    if not p.is_absolute():
+        p = (cwd or root) / p
+    try:
+        return Path(os.path.normpath(p)).relative_to(Path(os.path.normpath(root))).as_posix()
+    except ValueError:
+        return Path(os.path.normpath(p)).as_posix()
 
 
 def refusal(root: Path, rel: str) -> str | None:
@@ -73,12 +83,15 @@ def refusal(root: Path, rel: str) -> str | None:
     return None
 
 
-def check_call(root: Path, tool: str, tool_input: dict[str, object]) -> str | None:
+def check_call(root: Path, tool: str, tool_input: dict[str, object], cwd: Path | None = None) -> str | None:
     if tool == "Bash":
         cmd = str(tool_input.get("command", ""))
         if not WRITE_MARKERS.search(cmd):
             return None
-        for cand in PATH_IN_COMMAND.findall(cmd):
+        candidates = PATH_IN_COMMAND.findall(cmd)
+        # words with a slash or a protected file name, resolved from the shell's cwd (`../migration/RULEBOOK.md`)
+        candidates += [relative(w, root, cwd) for w in re.findall(r"[^\s'\"`;|&<>()]+", cmd) if "/" in w or "." in w]
+        for cand in candidates:
             msg = refusal(root, cand)
             if msg:
                 return msg
@@ -86,7 +99,7 @@ def check_call(root: Path, tool: str, tool_input: dict[str, object]) -> str | No
     for key in ("file_path", "notebook_path", "path"):
         value = tool_input.get(key)
         if isinstance(value, str):
-            msg = refusal(root, relative(value, root))
+            msg = refusal(root, relative(value, root, cwd))
             if msg:
                 return msg
     return None
@@ -97,14 +110,15 @@ def main(argv: list[str]) -> int:
         print("usage: guard.py [check PATH]   (hook mode: tool call JSON on stdin)\n\n" + str(__doc__))
         return 0
     if argv[:1] == ["check"] and len(argv) == 2:
-        root = Path.cwd()
-        msg = refusal(root, relative(argv[1], root))
+        root = project_root()
+        msg = refusal(root, relative(argv[1], root, Path.cwd()))
         print(msg or "ALLOW")
         return 1 if msg else 0
     try:
         data = json.load(sys.stdin)
-        root = Path(str(data.get("cwd") or Path.cwd()))
-        msg = check_call(root, str(data.get("tool_name", "")), data.get("tool_input") or {})
+        root = project_root()
+        cwd = Path(str(data.get("cwd") or root))
+        msg = check_call(root, str(data.get("tool_name", "")), data.get("tool_input") or {}, cwd)
     except Exception as e:  # fail closed: a broken guard must be noticed, not skipped
         print(f"guard: internal error, refusing: {e}", file=sys.stderr)
         return 2

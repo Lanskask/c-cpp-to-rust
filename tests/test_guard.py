@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,9 +11,10 @@ from pathlib import Path
 GUARD = Path(__file__).resolve().parent.parent / "skill" / "c-to-rust" / "scripts" / "guard.py"
 
 
-def call(root: Path, tool: str, **tool_input: str) -> subprocess.CompletedProcess[str]:
-    payload = json.dumps({"cwd": str(root), "tool_name": tool, "tool_input": tool_input})
-    return subprocess.run([sys.executable, "-I", str(GUARD)], input=payload, capture_output=True, text=True)
+def call(root: Path, tool: str, cwd: Path | None = None, **tool_input: str) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps({"cwd": str(cwd or root), "tool_name": tool, "tool_input": tool_input})
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
+    return subprocess.run([sys.executable, "-I", str(GUARD)], input=payload, capture_output=True, text=True, env=env)
 
 
 def ticket(root: Path, num: str, status: str, pilot: str = "p") -> None:
@@ -74,5 +76,25 @@ def test_check_subcommand(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         cwd=tmp_path,
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(tmp_path)},
     )
     assert r.returncode == 1 and "read-only" in r.stdout
+
+
+def test_shell_cwd_inside_a_pilot_does_not_break_or_bypass_the_guard(tmp_path: Path) -> None:
+    ticket(tmp_path, "04", "in_progress")
+    deep = tmp_path / "pilots" / "p" / "src"
+    deep.mkdir(parents=True)
+    # the project root comes from CLAUDE_PROJECT_DIR, so a cwd moved into the Pilot still finds the tickets
+    r = call(tmp_path, "Edit", cwd=deep, file_path="../migration/RULEBOOK.md")
+    assert r.returncode == 2 and "pilots/p/migration/RULEBOOK.md" in r.stderr
+    r = call(tmp_path, "Bash", cwd=deep, command="echo x > ../migration/RULEBOOK.md")
+    assert r.returncode == 2
+    assert call(tmp_path, "Bash", cwd=deep, command="ls ../migration").returncode == 0
+    assert call(tmp_path, "Edit", cwd=deep, file_path="../rust/src/lib.rs").returncode == 0
+
+
+def test_settings_hook_uses_an_absolute_project_path() -> None:
+    settings = json.loads((GUARD.parent.parent / "assets" / "settings.json").read_text())
+    cmd = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    assert "$CLAUDE_PROJECT_DIR" in cmd and "guard.py" in cmd

@@ -225,3 +225,11 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ the cJSON translation session found that static deny-rules block Mapping and the Judge build, which must
     write exactly those files, and the Skill never said how to switch them off inside one autonomous session. Two
     settings files would need a restart at every stage boundary.
+
+45. **The guard locates the repo from `$CLAUDE_PROJECT_DIR`, and Pilot analysis scripts live in `<ws>/experiments/`.**
+    The hook command is `python3 -I "$CLAUDE_PROJECT_DIR/skill/c-to-rust/scripts/guard.py"`; `guard.py` takes its root
+    from that variable (else its own location), never from the shell's cwd, and resolves relative paths (also in Bash
+    commands) from the cwd it is given. The repo-level `experiments/` stays read-only in Translation sessions.
+    _Reason:_ one `cd pilots/cjson/src` in a persistent shell made the relative hook path unresolvable, and a failing
+    hook blocked every Bash, Write and Edit call. The user's rule "save analysis scripts under `experiments/`" is met
+    per Pilot without letting a Translation session rewrite the Skill's own sensitivity experiments.
