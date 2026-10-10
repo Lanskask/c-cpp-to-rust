@@ -175,3 +175,43 @@ New disagreements C vs B: 2 (RP12, RP13; RP13 is minor). Every other difference 
 The differences B had on RP6-RP11 closed in C, so the rules did their job on a same-model run. One gap in the
 rulebook: the §4 marker table cannot say where a marker goes when one shared arm serves both strict and non-strict.
 Single run per translation; one more same-rulebook run would show whether RP12 is noise.
+
+## Stress test diff C vs D
+
+D: Sonnet 5.5, prompt rebuilt with RULEBOOK carrying RP1-RP13 (`stress/d/prompt.md`). C: same model, RP1-RP11. D
+`rust/src/lib.rs`: `cargo check` clean in all four feature sets, 0 warnings, 0 TODOs, trailer
+`stage=1 confidence=high todos=0 deviations=D3`. Marker counts: Q1 4, Q2 2, Q3 3, Q4 3, Q5 2, Q6 1, Q7 1, Q8 2, D3 2
+(match the §4 table).
+
+Gate (`python3 -I harness/run.py --crate stress/d/rust <set>`), exact lines:
+
+| set | upstream tests | harness |
+|---|---|---|
+| `""` | `original tests vs Rust [default]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+| `strict` | `original tests vs Rust [strict]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+| `parent-links` | `original tests vs Rust [parent-links]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+| `strict,parent-links` | `original tests vs Rust [strict,parent-links]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+
+| # | decision | C | D | class |
+|---|---|---|---|---|
+| 1 | `jsmntype_t`, `jsmntok_t.type_0`, `jsmn_parser` field types, `jsmn_parse`/`jsmn_init` signatures, `size_t` alias | `c_uint` + consts, `type_0`, `c_uint`/`c_uint`/`c_int`, C-typed params | identical | agree |
+| 2 | `jsmnerr` alias and type of `JSMN_ERROR_*` | alias emitted, constants typed `c_int` | alias emitted, constants typed `jsmnerr` | covered by RP13 (C predates the "typed `jsmnerr`" wording) |
+| 3 | strict/non-strict case labels in `jsmn_parse` | one `_` arm, `matches!` for the strict default, one tail | `#[cfg(strict)]` arm for `-`/digits/`t`/`f`/`n`, `#[cfg(not(strict))] _` arm, `#[cfg(strict)] _ => return INVAL`; tail written once per cfg'd arm | covered by RP12 (C predates; D follows) |
+| 4 | `:` in the primitive loop | or-pattern with `cfg!(not(strict))` guard | own `#[cfg(not(strict))] b':'` arm first, then the whitespace arm | covered by RP12 (D follows) |
+| 5 | Q5 marker sites | above the one shared `_` arm (and the `:` or-pattern) | above the `#[cfg]` line of each non-strict arm, strict arms unmarked | covered by RP12 / §4 Q5 row (D follows) |
+| 6 | `pos`/`toknext` arithmetic, `toknext - 1`, signed `int` values | `wrapping_*` on unsigned, plain on `int` | same | agree (RP6, RP7) |
+| 7 | `pos++` at loop tail, count-mode arms fall out | yes | yes | agree (RP8) |
+| 8 | primitive `found` flag, one tail, strict `PART` guarded by `!found` | yes | yes | agree (RP9) |
+| 9 | `}`/`]` scans share `i`, `i == -1`, final loop resumes on `i` | yes | yes | agree (RP10) |
+| 10 | error-path state (Q2, Q3, Q4, Q6, Q8), `unsafe` use (raw deref only), no `&mut` from raw pointer | reproduced | reproduced | agree (both pass 1188/1188 x 4) |
+| 11 | token field reset order in `jsmn_alloc_token` | `end` then `start` | `end` then `start` (`start = end`) | cosmetic |
+| 12 | `let c`/`let h` locals for the D3 byte checks vs repeated `*js.add(..) as u8`, `let mut type_0` vs `let type_0`, `let _ = found;`, `// found:` comment, `#![allow]` lines, doc header text | various | various | cosmetic |
+
+RP12-RP13 followed by D: RP12 (§2 C4 "`#ifdef` around `case` labels": separate cfg'd arms in C order, tail once per
+arm, no `matches!`/`cfg!` guard; `:` its own first arm in the primitive loop) yes. RP13 (§0: `pub type jsmnerr =
+c_int` emitted, `JSMN_ERROR_*` typed `jsmnerr`) yes. §4 marker table Q5 row (marker line above the `#[cfg]` line of
+the two non-strict arms, strict arms unmarked) yes. RP1-RP11 also still followed (rows 1, 6-10).
+
+New disagreements D vs C: 0. Every difference is covered by RP12-RP13 (C predates them) or cosmetic, so no RP14 is
+proposed. The lines the rulebook pins down (Stage 1 items, C4 `#ifdef` shape, marker table) produced the same
+observable shape in D as in B/the Faithful port. Single run per translation.
