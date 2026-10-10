@@ -195,3 +195,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Judge 23/23. The E2 mutant still fails (2 / 1 / 2 / 1 inputs). Spec detail wrong: `[[]]` is not yet a corpus case.
 - **Next:** Stage 2 attempt 2 in the deny-ruled session: implement `parse_with_limit` per RULEBOOK §6, switch the
   adapter's `Some(k)` path to it, gate with `make pilot-jsmn STAGE=2 MIN_TESTS=16` (must now pass 1201/1201).
+
+## 16. E3 Stage 2 on jsmn: `[[]]` added, Judge revalidated at 1202 inputs
+- **Date:** 2026-10-10 (after entry 15)
+- **Who:** Sonnet 5.5, governor session (`a60f56a`, `15d1760`)
+- **Done:** `[[]]` added to the corpus (spec said it was there; it was not). RULEBOOK §10 count and a §12 row
+  updated 1188 → 1202. All 16 validation runs repeated.
+- **Tells us:** Faithful port 1202/1202 in all 4 sets under both Judges; `35e87c3` fails 37 / 161 / 39 / 163
+  inputs (all in phase `shrink`); the E2 mutant fails 2 / 1 / 2 / 1. Opus spec errors found so far: one
+  (`[[]]`), so spec claims about corpus content should be checked by a script, not by reading.
+- **Next:** Stage 2 attempt 2 in a fresh deny-ruled session (command in the chat; fresh, not `--resume`).
