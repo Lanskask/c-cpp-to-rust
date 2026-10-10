@@ -50,10 +50,12 @@ def main() -> int:
                 i = rng.randrange(len(b))
                 b[i:i] = b[i : i + 3]
             cases.append(bytes(b))
-    # every byte value as a primitive, as a string char and as an escape char (boundary checks in jsmn)
+    # every byte value as a primitive start, as a string char, as an escape char, and as a primitive
+    # continuation (`[1<c>]`: in strict mode a leading byte outside [-0-9tfn] is rejected before the
+    # per-byte range check, so only a continuation position reaches it; found by E3 Stage 2 validation)
     for v in range(256):
         c = bytes([v])
-        cases += [b"[" + c + b"a]", b'["' + c + b'"]', b'["\\' + c + b'"]']
+        cases += [b"[" + c + b"a]", b'["' + c + b'"]', b'["\\' + c + b'"]', b"[1" + c + b"]"]
     for n, data in enumerate(cases):
         (out / f"case{n:03d}.json").write_bytes(data)
     print(f"make_inputs: {len(cases)} files in {out}", file=sys.stderr)
