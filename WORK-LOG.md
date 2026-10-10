@@ -292,3 +292,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `E3-stage2 | 05:30` rows written by the Stage 2 worker session: a double count of 25,297 output tokens, left as is.
 - **Next:** a fresh deny-ruled session starts E4 on cJSON from `/c-to-rust` (Stage 0 Mapping first, then the
   Deviations table for the user).
+
+## 22. E4 Pilot prepared: cJSON cloned and pinned
+- **Date:** 2026-10-10 (after entry 21)
+- **Who:** Sonnet 5.5 governor session (`git clone`, not the Skill: Pilot creation is outside the Skill)
+- **Done:** `pilots/cjson/src` cloned (git-ignored, untrusted), `pilots/cjson/UPSTREAM` pins commit
+  `6d9f2443ab071f86e5d9b43025a40929ec41c46c` (MIT). Sizes: `cJSON.c` 3206 lines, `cJSON_Utils.c` 1485,
+  `cJSON.h` 306: about 10x jsmn.
+- **Tells us:** E4 cost will not scale from jsmn's one 471-line Part linearly; the two `.c` files give the first
+  real multi-Part queue and the first dependency order.
+- **Next:** a fresh deny-ruled session runs `/c-to-rust` on `pilots/cjson` (Stage 0 Mapping), stops at the
+  Deviations table.
