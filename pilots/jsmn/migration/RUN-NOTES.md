@@ -332,3 +332,26 @@ Consequence: Stage 2 attempt 1 (`35e87c3`) must be redone for `lib.rs` (new meth
 `run`/`alloc_token`/`parse_string`/`parse_primitive`, Q9 and D2 markers) and the adapter (`parse_with_limit` on the
 whole buffer). Order: apply the patches, build and validate the extended Judge (it must fail on `35e87c3`), then run
 Stage 2 attempt 2.
+
+## Judge extension for Stage 2 attempt 2 (Sonnet, 2026-10-10, commit 63a6486)
+
+Spec: Opus `opus-judge-spec.md` (corpus +13, `dump.c`/`dump.rs` phases 5 "dirty" and 6 "shrink",
+adapter `poison_kinds`). Corpus 1188 → 1201. Numbers below are from commands run in this session, on scratch
+crates built from git history (Faithful port = `35e87c3^` lib.rs and Stage 1 adapter plus `poison_kinds`).
+
+| crate | Stage 1 Judge (C tests + harness) | Stage 2 Judge harness | notes |
+|---|---|---|---|
+| Faithful port (`35e87c3^`) | 1201/1201 in all 4 sets, `FAILED: 0` | 1201/1201 in all 4 sets | must pass: yes |
+| Stage 2 attempt 1 (`35e87c3`) | not applicable (no C ABI) | default 1165/1201, strict 1041/1201, parent-links 1163/1201, strict+parent-links 1039/1201 | must fail: yes. Every failing input differs first in phase `shrink` (RP14); `[]` and `{}` both fail, e.g. `{}`: C `shrink pos=2 toknext=1 toksuper=-1`, Rust `pos=1 toknext=1 toksuper=0` |
+| E2 mutant on Faithful port (`32..127` → `32..126`) | not re-run | default 1199/1201, strict 1200/1201, parent-links 1199/1201, strict+parent-links 1200/1201 | must fail: yes |
+
+Deviations from the spec, for Opus:
+
+- Spec §1 says `[[]]` is already in the corpus; it is not (no case has exactly that content). Phase 6 is
+  still reached by `[[],[]]` and `[1,[2,[3]]]`; `[[]]` can be added to `EXTRA` (corpus becomes 1202).
+- Spec §1 says G-S2-1..4 reproduce attempt 1 == C: confirmed, all four sets differ only in phase `shrink`, so
+  the 10 new G-S2-1..4 inputs add coverage without a known failure.
+- The Stage 2 adapter in the tree still uses `&mut self.buf[..n]`; only `poison_kinds` was added, as the spec
+  says. Making `parse(js, Some(k))` call `parse_with_limit` is the attempt-2 implementer's job.
+- Scratch crates for this validation are under the session scratchpad, not in the repo.
+- `make pilot-jsmn STAGE=2` now fails on the committed attempt 1 by design (RP14).
