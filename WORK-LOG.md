@@ -275,3 +275,20 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   complete; a missing row is invisible to it. Rows with `*` tags are still sent to every prompt (the jsmn stress
   prompt was 37 KB).
 - **Next:** first real use is E4 (cJSON); expect `fnptr`, `float-format`, `strtod` rows to be exercised there.
+
+## 21. E3 close-out: user answers applied (decisions 39-43)
+- **Date:** 2026-10-10 (after entry 20)
+- **Who:** Sonnet 5.5 governor session; scripts `spend.py`, `experiments/e3_md_reflow.py`,
+  `experiments/e3_idiom_verified_column.py`
+- **Done:** G18 (`SPEND-MODELS.tsv`, per-model input/output/cache); glossary: Mapping (Stage 0), Stub, Governor;
+  "referee" and "orchestrator" removed from the Skill docs; the Skill installed by name
+  (`.claude/skills/c-to-rust`); Markdown reflowed to 120 columns, word-for-word checked; PLAN order amended
+  (cJSON → tinyxml2); decisions 39-43 record the E4 go, its three allowed interventions, the 700k-token / $15 stop and
+  the pilot order.
+- **Tells us:** two of my own tools bit me, both caught before commit or repaired after: the reflow script turned a
+  lone `-` table cell into a separator row, and treated rows without a closing pipe as shorter (fixed, rerun
+  from the pre-reflow file); and a `make spend` with a guessed `SINCE` overlapped the previous row (removed from
+  `SPEND.md` and `SPEND-MODELS.tsv`). Use the last row's time, never a guess. `SPEND.md` also has two identical
+  `E3-stage2 | 05:30` rows written by the Stage 2 worker session: a double count of 25,297 output tokens, left as is.
+- **Next:** a fresh deny-ruled session starts E4 on cJSON from `/c-to-rust` (Stage 0 Mapping first, then the
+  Deviations table for the user).

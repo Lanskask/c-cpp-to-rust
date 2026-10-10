@@ -185,3 +185,32 @@ Each entry: decision, reason, who/what it came from. Newest last.
     has no `Agent`/`Task` rule, so it is not the cause and cannot fix it. The `--settings` file merges with the global
     one, so a Skill session started with it is still under auto mode. Measured: 2 refusals in 7 spawns (Haiku A
     accepted, Haiku B refused twice, Sonnet B/C/D and Opus x3 accepted); the exact trigger is not known.
+
+## 2026-10-10 — E3 close-out answers (user)
+
+39. **E4 (cJSON) is a go, measured against three allowed interventions and a budget.** The first fresh-session run on
+    cJSON may need the user for exactly: (a) starting the deny-ruled session, (b) approving the Deviations table,
+    (c) a budget check. Anything else the user had to do is logged in WORK-LOG as a Skill bug and fixed before E5.
+    Budget: stop and ask when SPEND.md shows 70% of 700k output tokens for E4 (about twice jsmn's 322k including
+    planning), and in any case if the cost is estimated above $15. No dollar meter exists, so the token cap is the proxy
+    and `SPEND-MODELS.tsv` (decision 40) is what turns tokens into an estimate.
+    _Reason:_ PLAN §8 asks the user after E3; jsmn alone is too small to extrapolate from (decision 19), so E4 is the
+    measurement.
+40. **`spend.py` also writes per-model usage to `SPEND-MODELS.tsv`** (input, output, cache create, cache read,
+    messages per model and logged phase). `SPEND.md` keeps its format.
+    _Reason:_ review gap G18: Haiku and Sonnet cost cannot be separated from output tokens alone, and the E4
+    extrapolation needs that split.
+41. **Pilot order is cJSON → tinyxml2; miniz only if budget remains; json-parser is dropped.** The PLAN's E5 is
+    amended accordingly.
+    _Reason:_ plan success requires tinyxml2 through Stage 1, and C++ is the largest unknown (the C++ idiom table is
+    empty), so it should be tested early.
+42. **Vocabulary decisions.** Stages are always written with number and name: Stage 0 Mapping, Stage 1 Faithful port,
+    Stage 2 Idiomatic pass. "Judge" is the only word for the acceptance of Same behaviour (not "referee"); the Gate
+    is the script that adds the Stage 2 acceptance rules. "Stub" and "Governor" are glossary terms; "orchestrator" is
+    replaced by "governor" in the Skill docs.
+    _Reason:_ the user wants every stage understandable by name; the E3 sessions showed that "Judge", "gate",
+    "adapter" and "orchestrator" were each used for two things.
+43. **The Skill is installed by name for this repo** (`.claude/skills/c-to-rust` → `../../skill/c-to-rust`,
+    force-added because `.claude` is ignored), and Markdown is kept at 120 columns by
+    `experiments/e3_md_reflow.py` (never joins lines, refuses a file if any word changes).
+    _Reason:_ a session can now call `/c-to-rust`; the E4 run is meant to start from the Skill, not from a prompt.

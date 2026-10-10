@@ -36,10 +36,11 @@ def pad(block: list[str]) -> list[str]:
     rows = [[c.strip() for c in PIPE.split(cells_of(ln))] for ln in block]
     n = max(len(r) for r in rows)
     rows = [r + [""] * (n - len(r)) for r in rows]
-    widths = [max([len(r[i]) for r in rows if not SEP.fullmatch(r[i])] or [3]) for i in range(n)]
+    widths = [max([len(r[i]) for r in rows if not all(SEP.fullmatch(c) for c in r)] or [3]) for i in range(n)]
     out = []
     for r in rows:
-        cells = [("-" * (w + 2)) if SEP.fullmatch(c) else f" {c.ljust(w)} " for c, w in zip(r, widths, strict=True)]
+        is_sep = all(SEP.fullmatch(c) for c in r)  # a lone `-` cell in a data row is data, not a separator
+        cells = [("-" * (w + 2)) if is_sep else f" {c.ljust(w)} " for c, w in zip(r, widths, strict=True)]
         out.append("|" + "|".join(cells) + "|")
     return out
 
