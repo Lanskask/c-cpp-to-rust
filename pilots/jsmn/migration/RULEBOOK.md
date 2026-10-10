@@ -1,6 +1,6 @@
 # RULEBOOK: jsmn (https://github.com/zserge/jsmn @ 25647e6)
 
-Status: deviations-approved (2026-10-10, user approved D1-D3). Stress test pending.
+Status: deviations-approved (2026-10-10, user approved D1-D3). Stress test incomplete: 1 of 2 translations (RUN-NOTES); provisional rules RP1-RP5 applied 2026-10-10 (§12).
 Idiom table: `skill/c-to-rust/references/idiom-table-c.md` (rows apply unless §2
 overrides them).
 Template: `skill/c-to-rust/references/rulebook-template.md`.
@@ -14,7 +14,16 @@ Template: `skill/c-to-rust/references/rulebook-template.md`.
   passes 12 checks. Any Stage 1 re-run (stress test) keeps the
   C ABI: `#[no_mangle] pub unsafe extern "C" fn jsmn_init/jsmn_parse`,
   `#[repr(C)]` `jsmntok_t` and
-  `jsmn_parser`, constants `JSMN_*` with the C values.
+  `jsmn_parser`, constants `JSMN_*` with the C values. Exact Stage 1 items
+  (match `rust/src/lib.rs`; the adapter depends on them):
+  - `pub type jsmntype_t = c_uint;` plus `pub const JSMN_UNDEFINED/OBJECT/ARRAY/STRING/PRIMITIVE: jsmntype_t`.
+    No Rust `enum` in Stage 1 (§2 T8).
+  - `jsmntok_t` fields: `type_0: jsmntype_t, start: c_int, end: c_int, size: c_int`,
+    `#[cfg(feature = "parent-links")] parent: c_int`. The field is `type_0`
+    (c2rust spelling), not `type_` or `r#type`.
+  - `pub unsafe extern "C" fn jsmn_parse(parser: *mut jsmn_parser, js: *const c_char, len: size_t, tokens: *mut jsmntok_t, num_tokens: c_uint) -> c_int`
+    and `pub unsafe extern "C" fn jsmn_init(parser: *mut jsmn_parser)`. Every
+    parameter has the C type of `jsmn.h`: `num_tokens` is `c_uint`, not `usize`.
 - Stage 2 (Idiomatic pass): the API in §6, zero `unsafe`, acceptance §10. Same
   behaviour on every
   harness input and every translated upstream test, in all four feature sets.
@@ -38,7 +47,7 @@ Template: `skill/c-to-rust/references/rulebook-template.md`.
 |-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
 | T4        | Input stays `&[u8]`, and a NUL byte ends the input even inside the slice (Q1)                                                                                   | defined behaviour of the original                                               |
 | T6        | `tokens == NULL` (count-only mode) becomes the separate method `Parser::count`; both methods share one private implementation taking `Option<&mut [Token]>`     | the mode is API behaviour; one implementation keeps the two modes from drifting |
-| T8        | `TokenKind` keeps the C discriminants 0, 1, 2, 4, 8 (`#[repr(i32)]`)                                                                                            | the dump prints `type=%d`                                                       |
+| T8        | Stage 1: the idiom-table Stage 1 column (`type jsmntype_t = c_uint` + `const`s), never a Rust `enum` in a `#[repr(C)]` field. Stage 2 only: `TokenKind` keeps the C discriminants 0, 1, 2, 4, 8 (`#[repr(i32)]`) | the dump prints `type=%d`; in Stage 1 C code writes the field, and a value outside 0, 1, 2, 4, 8 in a Rust enum is UB |
 | C1        | `goto found` in `jsmn_parse_primitive`: labelled block or early exit in Stage 2 (Stage 1 keeps the `found` flag)                                                | idiom C1                                                                        |
 | C4        | In `jsmn_parse`, the `{`/`[` arm with `tokens == NULL` leaves the `switch`, then `pos++` runs: in Rust advance `pos` and `continue` (as the Faithful port does) | `break` inside `switch` is not `break` of the loop                              |
 | I1        | Stage 2: positions are plain `usize`; `pos - 1` after a primitive cannot underflow (`pos > start` there); write that invariant as a comment                     | the Faithful port's `wrapping_*` is only needed for C's `unsigned int`          |
@@ -61,7 +70,11 @@ upstream tests are per-configuration.
 ## 4. Escape hatch and markers
 
 As in the template §4. Stage 1: `unsafe` only for pointer dereference in the
-C-ABI functions. Stage 2:
+C-ABI functions. Stage 1 accesses fields through the raw pointer
+(`(*parser).pos`) and does not create a `&mut` from a raw pointer
+(`let p = &mut *parser;`) that lives while the same pointer is passed to
+another function: two live `&mut`/`*mut` paths to one struct is aliasing UB.
+Stage 2:
 none, anywhere under `rust/src/`. Markers used here: `QUIRK(port): Q<n>`,
 `DEVIATION(port): D<n>`.
 
@@ -158,8 +171,10 @@ impl Parser {
 - Stage 1: `cargo check`, `cargo test`, upstream `test/tests.c` linked to the
   staticlib (16 tests,
   `FAILED: 0`), Differential harness (`harness/run.py`: C `dump.c` vs original,
-  932 inputs including every
-  byte value in three positions, decision 28).
+  1188 inputs including every
+  byte value in four positions, decision 28; the fourth, primitive
+  continuation `[1<c>]`, is the only one that reaches the per-byte check in
+  `strict` mode, see RUN-NOTES "Stage 2 Judge validation").
 - Stage 2: translated `rust/tests/upstream.rs` (all 16 upstream tests,
   `#[cfg(feature)]` where upstream
   uses `#ifdef`), Differential harness with `rust/examples/dump.rs` as the Rust
@@ -174,10 +189,18 @@ impl Parser {
 
 ## 11. Per-file obligations
 
-`rust/src/lib.rs` ends with
+`rust/src/lib.rs` starts with a `//!` doc comment naming the source
+(`jsmn.h` @ the commit in `UPSTREAM`) and copies no licence header: licence
+information lives in `UPSTREAM`. It ends with
 `// PORT STATUS: stage=<1|2> confidence=<...> todos=<N> deviations=<D-ids or ->`.
 
 ## 12. Amendments
 
 | date | proposer | section | proposal | decision |
 |------|----------|---------|----------|----------|
+| 2026-10-10 | E3 stress test (RUN-NOTES RP1) | §2 T8, §0 | Stage 1 keeps `jsmntype_t = c_uint` + consts; `TokenKind` enum is Stage 2 only | accepted: a Rust enum in a C-written field is UB the Judge cannot see |
+| 2026-10-10 | E3 stress test (RP2) | §0 | exact Stage 1 `jsmn_parse` signature, `num_tokens: c_uint` | accepted: `usize` for a 32-bit C parameter reads undefined upper bits |
+| 2026-10-10 | E3 stress test (RP3) | §4 | Stage 1 uses raw-pointer field access, no long-lived `&mut *ptr` | accepted: avoids aliasing `&mut` alongside `*mut` passed to helpers |
+| 2026-10-10 | E3 stress test (RP4) | §11 | `//!` doc header naming the source; no copied licence block | accepted: removes a free choice; licence is in `UPSTREAM` |
+| 2026-10-10 | E3 stress test (RP5) | §0 | `jsmntok_t` field is `type_0` | accepted: the adapter reads `t.type_0` |
+| 2026-10-10 | E3-prep Judge validation | §10 | corpus 932 → 1188 inputs (primitive-continuation byte class) | accepted: 932-input corpus missed the E2 mutant in both `strict` sets |

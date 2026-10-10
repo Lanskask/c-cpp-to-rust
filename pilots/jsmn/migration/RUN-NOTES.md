@@ -24,7 +24,7 @@ primitive must start with one of `-0-9tfn`, so a byte placed at the *start* of a
 primitive position the corpus covered) is rejected before the per-byte range check; `~` is only reached as a
 *continuation* (`[1~]`). Fix: `make_inputs.py` adds `[1<c>]` for every byte value (+256 inputs, 1188 total).
 Lesson for judge.md §3 item 3: enumerate each byte class in every position **per feature set**, not once.
-Not yet applied to RULEBOOK §10 (still says 932 inputs); Opus to update.
+Applied to RULEBOOK §10 (2026-10-10, §12 amendments).
 
 ## Stress test (SKILL.md step 2): INCOMPLETE, one of two translations
 
@@ -55,3 +55,7 @@ two-agent diff, so each is a candidate only; they still need B (or a second A-ru
 
 `tests/adapter`, `examples`, `tests/upstream.rs` and `make_inputs.py` changed in commit `222bd79`. From now on the
 deny-rules in `assets/settings.json` protect `tests/upstream.rs` and `examples/`.
+
+Review (Opus, 2026-10-10): RP1-RP5 checked against `rust/src/lib.rs` and `tests/adapter/mod.rs`; all accepted and
+applied to RULEBOOK §0, §2 T8, §4, §11 (amendments in §12). Status stays short of `stress-tested`: translation B
+and the A/B diff are still missing (SKILL.md step 2 "done when ... RUN-NOTES records the diffs").
