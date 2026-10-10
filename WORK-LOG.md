@@ -349,3 +349,17 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   overlap in the same window: rows are attributable to a phase only when one session runs at a time.
 - **Next:** restart the Translation session with the new proof step; it resumes at ticket 01 from the regenerated
   Mapping files.
+
+## 26. E4 cJSON: RULEBOOK drafted (ticket 01), Deviations table awaiting the user
+- **Date:** 2026-10-10 (after entry 25)
+- **Who:** Sonnet 5.5 governor; Opus subagent drafted `pilots/cjson/migration/RULEBOOK.md`
+- **Done:** RULEBOOK status `draft`: §3 has 18 rows, checked by script against the 18 distinct `config-macro` tags
+  of `inventory.tsv` (none missing); §8 has D1-D20, all `proposed`; §9 has Q1-Q24. No prose line over 120 columns.
+  Spend row `E4-rulebook`: 10,017 output tokens in the window (E4 total 51,829; budget gate 490k not reached).
+- **Open for Opus (marked TODO in the file):** Stage 1 engine (c2rust or LLM); 12 of 21 upstream tests use static
+  internals through `#include "../cJSON.c"`, so Stage 1 must export them under a cfg or those tests run only
+  against the C original; Stage 2 API (cycles, references, hooks). Q15 and Q20 are traced by reading, not run.
+- **Skill bug:** the spend window counts 499 Opus output tokens while the subagent reported 192,943 tokens used in
+  total (mostly input/cache); the subagent's sidechain output may not be in `spend.py`'s per-session sum
+  (unverified). Check before the E4 extrapolation.
+- **Next:** user approves or vetoes D1-D20; then ticket 01 closes and the stress test (ticket 03) follows.
