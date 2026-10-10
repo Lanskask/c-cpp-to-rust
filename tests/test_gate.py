@@ -86,3 +86,12 @@ def test_also_paths_are_restored_with_the_target(tmp_path: Path) -> None:
     assert (adapter / "mod.rs").read_text() == "// adapter v1\n"
     assert not (adapter / "extra.rs").exists()
     assert (crate / "src" / "lib.rs").read_text() == "pub fn f() -> i32 { 1 }\n"
+
+
+def test_snapshots_are_per_stage(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    base = ["p", "--crate", str(crate), "--parts", str(parts), "--snapshot"]
+    assert gate.main([*base, "--stage", "1"]) == 0
+    assert gate.main([*base, "--stage", "2"]) == 0
+    names = sorted(f.name for f in (tmp_path / "migration" / "gate").iterdir())
+    assert names == ["p.stage1.json", "p.stage2.json"]

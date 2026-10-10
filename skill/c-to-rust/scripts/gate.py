@@ -159,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     root = parts.resolve().parent.parent  # workspace root = parent of migration/
     crate = Path(args.crate)
     feature_sets: list[str] = args.features if args.features is not None else [""]
-    snap = parts.resolve().parent / "gate" / f"{args.part}.json"
+    snap = parts.resolve().parent / "gate" / f"{args.part}.stage{args.stage}.json"
     try:
         target = target_of(parts, args.part)
         if args.snapshot:
