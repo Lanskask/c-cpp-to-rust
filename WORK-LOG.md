@@ -235,3 +235,16 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Review gap G-new: `make pilot-jsmn-snapshot` should be taken before the Judge extension or ignore Judge checks;
   now enforced by the script instead of by procedure. Attempt 2's gate PASS must show 1202/1202 in the harness.
 - **Next:** the Stage 2 session re-gates attempt 2 with the fixed gate (script is read at run time).
+
+## 18. E3 Stage 2 on jsmn: attempt 2 reviewed, committed, done
+- **Date:** 2026-10-10 (after entry 17)
+- **Who:** Sonnet 5.5 subagent (reviewer); Sonnet 5.5 governor
+- **Done:** `gate.py` fix and `dump.rs` rustfmt were committed by the user session (`5b07c46`); gate re-run: PASS 23/23,
+  harness 1202/1202 in all 4 sets. Review: accept, 0 BLOCK, 0 RULE, 1 NIT, 2 GAP. Committed `3dcdbda` (lib.rs +
+  adapter); `jsmn` marked `done` (attempts 2); `verify` ok. 0 `unsafe`, 0 `unwrap`/`expect`, 0 `TODO(port)`.
+- **Tells us:** RP14 is fixed and the Judge now sees it. Reviewer GAPs (unverified, by code reading only): phase 6 tests
+  one `k` (`toknext/2`); `num_tokens > tokens.len()` (the D2 `NoMem` amendment) is unreachable by the Judge because the
+  adapter asserts `n <= CAPACITY`.
+- **Open:** user confirmation of the D2 amendment (RULEBOOK §8 still says "awaits user confirmation"); optional Judge
+  additions (phase 6 for k in {0, toknext-1, toknext}).
+- **Next:** user confirms D2; then E4 (not started).
