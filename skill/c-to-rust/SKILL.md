@@ -1,0 +1,81 @@
+---
+name: c-to-rust
+description: Port a C or C++ project to Rust in two gated stages (Faithful port, then Idiomatic pass), resumable from files and git. Use when translating, porting or migrating C/C++ code to Rust, or when resuming such a port from a `migration/` directory.
+---
+
+# c-to-rust
+
+Translate a Source project into Rust **Part by Part**, each Part accepted only when the **Judge**
+passes. Vocabulary (Part, Faithful port, Idiomatic pass, Same behaviour, Judge, Differential harness):
+the project's `CONTEXT.md`. State lives on disk; this session's memory is never the source of truth.
+
+Paths below are relative to the repository root; `<ws>` is the Pilot workspace (`pilots/<name>`),
+`S` is `skill/c-to-rust/scripts`. Run every script as `python3 -I $S/<script>.py`; every script has
+`--help`. Never make `<ws>` the working directory of a build tool or interpreter (untrusted code).
+
+## Start of every session: find where you are
+
+Run `python3 -I $S/workqueue.py --parts <ws>/migration/parts.tsv verify` and `status` (and the same for
+`parts-stage2.tsv` if it exists), read `<ws>/migration/RUN-NOTES.md`, then take the **first** branch
+below whose condition holds. `verify` failing means a Part marked `done` has no file or no commit: run
+`verify --fix` and continue.
+
+### 1. `<ws>/migration/` is absent → Stage 0 (map and rules)
+1. `make spend-now`; note the timestamp.
+2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] --out <ws>/migration/inventory.tsv`
+3. `depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`
+4. `tier.py <ws>/migration/inventory.tsv <ws>/migration/order.txt --out <ws>/migration/parts.tsv`
+5. Build the Judge and prove it can fail: `references/judge.md`.
+6. Draft `<ws>/migration/RULEBOOK.md` from `references/rulebook-template.md` and
+   `references/idiom-table-c.md` (Opus). Every `config-macro:` tag gets a §3 row; every UB or platform
+   behaviour gets a §8 Deviation row with status `proposed`.
+
+**Stop.** Show the user the Deviations table and wait. Done when every §8 row is `approved` or
+`vetoed` by the user and the rulebook status line says `deviations-approved`.
+
+### 2. Rulebook approved, no stress test recorded → stress test (Opus reviews)
+Translate the 3 hardest `judgment` Parts (fewer if the Pilot has fewer) **twice** each with
+`references/stage1-prompt.md`, into scratch copies of the crate (never into the accepted target).
+Diff the two translations of each Part. Every difference that two agents decided differently is a
+missing rule: propose it under `## Rule proposals` in `RUN-NOTES.md`; Opus applies accepted ones.
+Done when the rulebook status line says `stress-tested (<date>)` and RUN-NOTES records the diffs.
+
+### 3. `parts.tsv` has `todo`, `in_progress` or `failed` Parts → Stage 1 (Faithful port)
+1. Install deny-rules: the fan-out session is started from the repo root with
+   `claude --settings skill/c-to-rust/assets/settings.json`. **Verify** them first: an `Edit` of
+   `<ws>/migration/RULEBOOK.md` must be refused. If it is not refused, stop and tell the user.
+2. `workqueue.py next --batch N`; for each Part run the loop in `references/stage1-prompt.md`
+   (snapshot → implementer → gate → review with `references/review-prompt.md` → commit → mark).
+   Parts with no unfinished deps may run in parallel; each Part writes only its own `target_path`.
+3. After each batch: `make spend PHASE=<phase> SINCE=<timestamp> NOTE="..."`.
+
+Done when every row is `done` or `stubbed` and `verify` passes.
+
+### 4. All Stage 1 Parts `done`/`stubbed` → Stage 2 (Idiomatic pass)
+1. Rulebook §6 (Stage 2 API) must be filled (Opus). If empty, stop and ask for it.
+2. Build and validate the Stage 2 Judge (adapter, Rust driver, translated tests, planted mutant):
+   `references/judge.md` §5. This runs **without** the deny-rules, in its own commit.
+3. Create `<ws>/migration/parts-stage2.tsv` (copy of `parts.tsv`, all `todo`, attempts 0, no commit).
+4. Run the loop of step 3 with `references/stage2-prompt.md`, gate `--stage 2`.
+
+Done when every Stage 2 row is `done` and the gate passes at Stage 2 for every feature set (PLAN §6).
+
+### 5. Everything `done` → report
+Report: Parts done / stubbed / failed per stage; the Deviations table with statuses; open `TODO(port)`
+count (`grep -rn "TODO(port)" <ws>/rust/src`); tokens from `SPEND.md` for this Pilot; one recommended
+next step.
+
+## Models
+
+- Opus: rulebook, Deviations, Stage 2 API, stress-test diff review, first review per Pilot.
+- Sonnet: orchestration (this file), Judge building, reviews, escalated retries.
+- Haiku: Part bodies and fixes (the implementer prompts).
+- Scripts: everything mechanical. If a step repeats by hand twice, it belongs in a script.
+
+## Rules that hold in every branch
+
+- **Done** = gate passed and the Part's commit exists. One commit per accepted Part.
+- Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).
+- The rulebook and the Judge are read-only during a batch. Judge changes (new corpus inputs from a
+  review `GAP`) are their own commit, made outside the fan-out session, then the Part is re-gated.
+- Report numbers only from commands actually run; failing results are reported, not retried silently.
