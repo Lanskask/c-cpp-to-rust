@@ -75,6 +75,7 @@ def test_tier_and_deps(tmp_path: Path) -> None:
     assert rows["lib/a"]["deps"] == "lib/b"
     assert rows["lib/util"]["tier"] == "judgment"  # SQR is a function-like macro
     assert all(r["state"] == "todo" for r in rows.values())
+    assert rows["lib/util"]["target_path"] == "rust/src/util.rs"  # distinct stems keep <stem>.rs
 
 
 def test_tm_build_and_search(tmp_path: Path) -> None:

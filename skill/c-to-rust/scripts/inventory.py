@@ -5,10 +5,16 @@ Columns: symbol, kind (function|record|enum|typedef|macro|variable), file (relat
 lines (start-end), tags (comma-separated; empty if none).
 Tags: virtual template goto union setjmp varargs macro-fn static-global errno malloc, and
 `config-macro:NAME` for every #if/#ifdef macro that guards or appears inside the symbol (decision 24).
+Risky-construct tags (G15): fnptr bitfield float-format strtod qsort ctype long asm signal thread.
+`new`/`delete` count as `malloc` only with `--lang cpp`.
 
 Engine: with `--compile-commands` and `clang` on PATH, `clang -Xclang -ast-dump=json` gives exact
 declarations; otherwise (or if clang fails on a file) a regex pass over comment-stripped text is used.
-The engine actually used is printed on stderr and recorded as the first line of the TSV (`# engine: ...`).
+The regex pass also always runs on files parsed by clang: its `config-macro`/`macro-fn` tags are merged
+into the clang symbols by (file, line span), `#define` macros become `kind=macro` rows, and symbols in
+`#if`-disabled code that clang never saw are added (G14).
+The engine actually used is printed on stderr and recorded as the first line of the TSV (`# engine: ...`),
+followed by the exact command line (`# cmd: ...`).
 Exit code 0 on success, 1 on failure.
 """
 
@@ -36,8 +42,29 @@ TAG_PATTERNS: dict[str, re.Pattern[str]] = {
     "setjmp": re.compile(r"\b(setjmp|longjmp|sigsetjmp|siglongjmp)\b"),
     "varargs": re.compile(r"\.\.\.|\bva_(start|arg|end|list)\b"),
     "errno": re.compile(r"\berrno\b"),
-    "malloc": re.compile(r"\b(malloc|calloc|realloc|free|strdup|new|delete)\b"),
+    "malloc": re.compile(r"\b(malloc|calloc|realloc|free|strdup)\b"),
+    "strtod": re.compile(r"\b(strtod|atof|strtof|strtold)\b"),
+    "qsort": re.compile(r"\b(qsort|qsort_r|qsort_s)\b"),
+    "ctype": re.compile(
+        r"\b(isalnum|isalpha|isblank|iscntrl|isdigit|isgraph|islower|isprint|ispunct|isspace|isupper|isxdigit"
+        r"|tolower|toupper)\b"
+    ),
+    "long": re.compile(r"\blong\b"),
+    "asm": re.compile(r"\b(asm|__asm__|__asm|_asm)\b"),
+    "signal": re.compile(r"\b(signal|raise)\s*\(|\bsigaction\b"),
+    "thread": re.compile(r"\b(pthread_\w+|thrd_\w+|_Thread_local|thread_local|__thread)\b"),
 }
+MALLOC_CPP = re.compile(r"\b(malloc|calloc|realloc|free|strdup|new|delete)\b")
+# function-pointer declarator/typedef `(*name)(` or `(*name[N])(`; in C also a call through a member `a->f(` / `a.f(`
+FNPTR_DECL = re.compile(r"\(\s*\*[\s\w\[\]>.-]*\)\s*\(")
+FNPTR_MEMBER_CALL = re.compile(r"->\s*[A-Za-z_]\w*\s*\(|(?<![.\d])\.\s*[A-Za-z_]\w*\s*\(")
+# `type name : N;` / `type : N;` as a struct member (line start or after `{` `;`); never a ternary, case label or return
+BITFIELD = re.compile(
+    r"(?:^|(?<=[{;]))\s*(?!case\b|return\b|default\b|goto\b)[A-Za-z_][\w \t*]*?[ \t]+\*?\w*[ \t]*:[ \t]*\w+[ \t]*[,;]",
+    re.MULTILINE,
+)
+PRINTF_CALL = re.compile(r"\b\w*printf\s*\(")
+FLOAT_CONV = re.compile(r"%[-+ #0]*(?:\d+|\*)?(?:\.(?:\d+|\*)?)?(?:hh|h|ll|l|L|j|z|t)?[fFgGeEaA]")
 COND = re.compile(r"^\s*#\s*(if|ifdef|ifndef|elif)\b(.*)$")
 DEFINE = re.compile(r"^\s*#\s*define\s+([A-Za-z_]\w*)(\()?")
 IDENT = re.compile(r"[A-Za-z_]\w*")
@@ -53,8 +80,10 @@ class Symbol:
     tags: list[str]
 
 
-def strip_comments_and_strings(text: str) -> str:
-    """Blank out comments and string/char literals but keep every newline so line numbers survive."""
+def strip_comments_and_strings(text: str, keep_strings: bool = False) -> str:
+    """Blank out comments and string/char literals but keep every newline so line numbers survive.
+
+    With `keep_strings` the literals are kept (needed to see printf formats)."""
     out: list[str] = []
     i, n = 0, len(text)
     while i < n:
@@ -75,6 +104,10 @@ def strip_comments_and_strings(text: str) -> str:
             while j < n and text[j] != c and text[j] != "\n":
                 j += 2 if text[j] == "\\" else 1
             j = min(j + 1, n)
+            if keep_strings:
+                out.append(text[i:j])
+                i = j
+                continue
             out.append(c + " " * (j - i - 2) + c if j - i >= 2 else c)
             i = j
         else:
@@ -87,8 +120,34 @@ def macro_names(cond_text: str) -> list[str]:
     return [m for m in IDENT.findall(cond_text) if m not in KEYWORDS and m != "__cplusplus"]
 
 
-def collect_tags(span_text: str, kind: str, cond: list[str]) -> list[str]:
-    tags = [t for t, pat in TAG_PATTERNS.items() if pat.search(span_text)]
+def has_float_format(text: str) -> bool:
+    """True if a printf-family call in `text` (strings kept) has a %f %g %e %a conversion."""
+    for m in PRINTF_CALL.finditer(text):
+        end = text.find(";", m.end())
+        stmt = text[m.end() : len(text) if end < 0 else end].replace("%%", "")
+        if FLOAT_CONV.search(stmt):
+            return True
+    return False
+
+
+def has_bitfield(text: str) -> bool:
+    return any("?" not in m.group(0) for m in BITFIELD.finditer(text))
+
+
+def collect_tags(span_text: str, kind: str, cond: list[str], lang: str = "c", fmt_text: str | None = None) -> list[str]:
+    """Tags of one symbol. `span_text` has comments and strings blanked; `fmt_text` keeps string literals."""
+    tags = []
+    for t, pat in TAG_PATTERNS.items():
+        if t == "malloc" and lang == "cpp":
+            pat = MALLOC_CPP
+        if pat.search(span_text):
+            tags.append(t)
+    if FNPTR_DECL.search(span_text) or (lang == "c" and FNPTR_MEMBER_CALL.search(span_text)):
+        tags.append("fnptr")
+    if has_bitfield(span_text):
+        tags.append("bitfield")
+    if has_float_format(span_text if fmt_text is None else fmt_text):
+        tags.append("float-format")
     if kind == "macro-fn":
         tags.append("macro-fn")
     for m in sorted(set(cond)):
@@ -96,9 +155,12 @@ def collect_tags(span_text: str, kind: str, cond: list[str]) -> list[str]:
     return tags
 
 
-def scan_regex(text: str, rel: str) -> list[Symbol]:
+def scan_regex(text: str, rel: str, lang: str = "c") -> list[Symbol]:
     clean = strip_comments_and_strings(text)
     lines = clean.split("\n")
+    kept = strip_comments_and_strings(text, keep_strings=True).split("\n")
+    if len(kept) != len(lines):
+        kept = lines
     syms: list[Symbol] = []
     # --- preprocessor pass: macros, conditional stack, per-line condition names
     cond_stack: list[list[str]] = []
@@ -135,7 +197,7 @@ def scan_regex(text: str, rel: str) -> list[Symbol]:
             if d and d.group(1) != guard:
                 kind = "macro-fn" if d.group(2) else "macro"
                 flat = [n for names in cond_stack for n in names]
-                syms.append(Symbol(d.group(1), "macro", rel, start_ln + 1, ln + 1, collect_tags(raw, kind, flat)))
+                syms.append(Symbol(d.group(1), "macro", rel, start_ln + 1, ln + 1, collect_tags(raw, kind, flat, lang)))
             for _ in range(start_ln, ln + 1):
                 line_cond.append([n for names in cond_stack for n in names])
                 code_lines.append("")
@@ -159,6 +221,7 @@ def scan_regex(text: str, rel: str) -> list[Symbol]:
         a += len(code[a:]) - len(code[a:].lstrip())  # skip whitespace left over from the previous declaration
         sl, el = line_of(a), line_of(b)
         span = "\n".join(code_lines[sl - 1 : el])
+        fmt = "\n".join(kept[i] if code_lines[i] else "" for i in range(sl - 1, min(el, len(code_lines))))
         cond = list(line_cond[sl - 1]) if sl - 1 < len(line_cond) else []
         for k in range(sl, el + 1):
             cond += inline_cond.get(k, [])
@@ -166,7 +229,7 @@ def scan_regex(text: str, rel: str) -> list[Symbol]:
         for k in range(sl - 1, min(el, len(lines))):
             cond += line_cond[k] if k < len(line_cond) else []
             cond += inline_cond.get(k + 1, [])
-        syms.append(Symbol(name, kind, rel, sl, el, collect_tags(span, kind, cond)))
+        syms.append(Symbol(name, kind, rel, sl, el, collect_tags(span, kind, cond, lang, fmt)))
 
     def classify(header: str) -> tuple[str, str] | None:
         h = " ".join(header.split())
@@ -250,13 +313,16 @@ def scan_regex(text: str, rel: str) -> list[Symbol]:
     return syms
 
 
-def scan_clang(db_entry: dict[str, object], root: Path) -> list[Symbol] | None:
+def scan_clang(db_entry: dict[str, object], root: Path, lang: str = "c") -> list[Symbol] | None:
     """Parse one translation unit with clang's JSON AST; None if clang fails (caller falls back)."""
     args = db_entry.get("arguments") or shlex.split(str(db_entry.get("command", "")))
     assert isinstance(args, list)
     cmd = [str(a) for a in args if a not in ("-c",)]
     cmd = [a for i, a in enumerate(cmd) if not (a == "-o" or (i > 0 and cmd[i - 1] == "-o"))]
-    r = subprocess.run([*cmd, "-fsyntax-only", "-Xclang", "-ast-dump=json"], capture_output=True, text=True)
+    directory = Path(str(db_entry.get("directory") or root))
+    r = subprocess.run(
+        [*cmd, "-fsyntax-only", "-Xclang", "-ast-dump=json"], capture_output=True, text=True, cwd=directory
+    )
     if r.returncode != 0 or not r.stdout.strip():
         return None
     tree = json.loads(r.stdout)
@@ -285,7 +351,7 @@ def scan_clang(db_entry: dict[str, object], root: Path) -> list[Symbol] | None:
             continue
         file, a, b = where
         try:
-            rel = str(Path(file).resolve().relative_to(root.resolve()))
+            rel = str((directory / file).resolve().relative_to(root.resolve()))
         except ValueError:
             continue  # system header or outside the source root
         kind_map = {
@@ -310,7 +376,9 @@ def scan_clang(db_entry: dict[str, object], root: Path) -> list[Symbol] | None:
             continue
         text = (root / rel).read_text(errors="replace").split("\n")[a - 1 : b]
         span = "\n".join(text)
-        tags = collect_tags(strip_comments_and_strings(span), k, [])
+        tags = collect_tags(
+            strip_comments_and_strings(span), k, [], lang, strip_comments_and_strings(span, keep_strings=True)
+        )
         if node.get("kind", "").endswith("TemplateDecl") and "template" not in tags:
             tags.append("template")
         if k == "variable" and node.get("storageClass") == "static":
@@ -324,6 +392,27 @@ def source_files(root: Path, lang: str) -> list[Path]:
     return sorted(p for p in root.rglob("*") if p.suffix in exts and p.is_file() and not (SKIP_DIRS & set(p.parts)))
 
 
+def overlaps(a: Symbol, b: Symbol) -> bool:
+    return a.start <= b.end and b.start <= a.end
+
+
+def merge_regex(clang_syms: list[Symbol], rx: list[Symbol]) -> list[Symbol]:
+    """G14: add config-macro/macro-fn tags from the regex pass to clang symbols (same file, overlapping
+    line span; same name preferred), add `#define` macros, and add regex symbols clang never saw
+    (code disabled by `#if`)."""
+    code = [r for r in rx if r.kind != "macro"]
+    for s in clang_syms:
+        cands = [r for r in code if overlaps(s, r)]
+        same = [r for r in cands if r.name == s.name] or cands
+        for r in same:
+            for t in r.tags:
+                if (t.startswith("config-macro:") or t == "macro-fn") and t not in s.tags:
+                    s.tags.append(t)
+    extra = [r for r in code if not any(overlaps(r, s) for s in clang_syms)]
+    macros = [r for r in rx if r.kind == "macro"]
+    return macros + sorted([*clang_syms, *extra], key=lambda s: (s.start, s.end))
+
+
 def inventory(root: Path, lang: str, db: Path | None) -> tuple[list[Symbol], str]:
     syms: list[Symbol] = []
     engine = "regex"
@@ -335,12 +424,14 @@ def inventory(root: Path, lang: str, db: Path | None) -> tuple[list[Symbol], str
     for f in source_files(root, lang):
         rel = str(f.relative_to(root))
         entry = entries.get(str(f.resolve())) or entries.get(str(f))
-        got = scan_clang(entry, root) if entry else None
+        got = scan_clang(entry, root, lang) if entry else None
+        text = f.read_text(errors="replace")
+        rx = scan_regex(text, rel, lang)
         if got is not None:
             used_clang = True
-            syms += [s for s in got if s.file == rel]
+            syms += merge_regex([s for s in got if s.file == rel], rx)
         else:
-            syms += scan_regex(f.read_text(errors="replace"), rel)
+            syms += rx
     if used_clang:
         engine = "clang-ast+regex-fallback" if entries else "clang-ast"
     return syms, engine
@@ -356,7 +447,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    argv_list = sys.argv[1:] if argv is None else list(argv)
+    cmd = shlex.join([Path(sys.argv[0]).name if argv is None else "inventory.py", *argv_list])
+    args = build_parser().parse_args(argv_list)
     root = Path(args.source_root)
     if not root.is_dir():
         print(f"inventory: {root} is not a directory", file=sys.stderr)
@@ -365,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     rows = [f"{s.name}\t{s.kind}\t{s.file}\t{s.start}-{s.end}\t{','.join(dict.fromkeys(s.tags))}" for s in syms]
-    out.write_text(f"# engine: {engine}\nsymbol\tkind\tfile\tlines\ttags\n" + "\n".join(rows) + "\n")
+    out.write_text(f"# engine: {engine}\n# cmd: {cmd}\nsymbol\tkind\tfile\tlines\ttags\n" + "\n".join(rows) + "\n")
     print(f"inventory: {len(syms)} symbols, engine={engine} -> {out}", file=sys.stderr)
     return 0
 
