@@ -485,3 +485,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `experiments/` directories as well. The Skill fix has not taken effect or is not committed. The E4 script's `work/`
   path was fixed by the user by hand.
 - **Next:** ticket 04: Stage 1 port with c2rust, one run per feature set, polish dry run on `cJSON_Utils`.
+
+## 33. Skill bug: unanchored `Edit(experiments/**)` deny rule (from entry 32)
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's "Fix it"
+- **Done:** `assets/settings.json` deny rules for `skill/`, `docs/`, `experiments/` anchored with a leading `/`;
+  JSON loads; pytest passes; decision 48. The first attempt (a Bash `sed`) was refused by the auto-mode classifier as
+  self-modification; this edit went through the Edit tool after the user asked for it.
+- **Not verified:** that the anchored rule allows `pilots/cjson/experiments/` and still refuses repo-root
+  `experiments/`. Only a restarted Translation session can show it.
+- **Next:** restart the cJSON session (`--settings` is read at start) and repeat the two Edit checks.

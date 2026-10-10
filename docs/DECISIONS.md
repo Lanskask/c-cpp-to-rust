@@ -245,3 +245,9 @@ Each entry: decision, reason, who/what it came from. Newest last.
     global deny rule `Read(./build/**)` (`~/.claude/settings.json`) made Bash commands containing a `build/` path fail
     in the Translation session, so the Judge could not run. A Skill-side rename works on any machine with that rule and
     needs no change to the user's global settings.
+
+48. **Path deny-rules for repo-level folders are anchored with a leading `/`.** `assets/settings.json` now reads
+    `Edit(/skill/**)`, `Edit(/docs/**)`, `Edit(/experiments/**)`. _Reason:_ the unanchored `Edit(experiments/**)` also
+    matched `pilots/*/experiments/`, so the Translation session could not save its Pilot scripts there, against
+    decision 45. A leading `/` means "relative to the project root" in Claude Code permission patterns; this is from
+    the documentation and is confirmed only by the Translation session's next restart (WORK-LOG 32).
