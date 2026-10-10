@@ -70,3 +70,28 @@ def test_done_requires_every_task_ticked(tmp_path: Path) -> None:
     assert run(ws, "mark", "01", "done") == 1  # re-marking a done ticket with an open task is refused too
     assert run(ws, "mark", "01", "done", "--tick-all") == 0
     assert "- [ ]" not in f.read_text()
+
+
+def test_tick_needs_exactly_one_match(tmp_path: Path) -> None:
+    ws = tmp_path / "p"
+    run(ws, "init")
+    assert run(ws, "tick", "01", "config-macro") == 0
+    assert run(ws, "tick", "01", "config-macro") == 1  # already ticked: no open match
+    assert run(ws, "tick", "01", "every") == 1  # several matches
+    text = next((ws / "migration" / "tickets").glob("01-*.md")).read_text()
+    assert "- [x] every config-macro" in text and "- [ ] inventory.tsv" in text
+
+
+def test_init_writes_migration_makefile_that_runs(tmp_path: Path) -> None:
+    import subprocess
+
+    ws = tmp_path / "pilots" / "p"
+    run(ws, "init")
+    mk = ws / "migration" / "Makefile"
+    assert mk.is_file()
+    scripts = Path(tickets.__file__).resolve().parent
+    for target, needle in (("tickets", "Ticket_01 todo READY"), ("status", "== tickets")):
+        out = subprocess.run(
+            ["make", "-s", "-C", str(ws / "migration"), target, f"SCRIPTS={scripts}"], capture_output=True, text=True
+        )
+        assert out.returncode == 0 and needle in out.stdout, out.stderr

@@ -4,11 +4,12 @@
 A run on a Pilot is seven tickets in a chain (tracer-bullet phases, each demoable on its own):
   01 Mapping (Stage 0) -> 02 Stage 1 Judge -> 03 Stress test -> 04 Stage 1 Faithful port ->
   05 Stage 2 Judge -> 06 Stage 2 Idiomatic pass -> 07 Report.
-`init` writes the files (refuses to overwrite unless `--force`); `status` prints each ticket's state and whether
-it is unblocked, and `status --tasks` also lists every checkbox task under its ticket (`[x]` done, `[ ]` open);
-`mark NN <todo|in_progress|done>` changes the `**Status:**` line and refuses `done`/`in_progress` while a blocker
-is not done, and `done` while a task is still `[ ]` (`--tick-all` ticks them after the governor has checked each).
-The governor reads `status` at the start of every session, next to `parts.tsv`.
+`init` writes the files and `<ws>/migration/Makefile` (`status`, `tickets`); it refuses to overwrite unless `--force`.
+`makefile` rewrites only the Makefile. `status` prints each ticket's state and whether it is unblocked; `status
+--tasks` also lists every checkbox task (`[x]` done, `[ ]` open). `tick NN TEXT` ticks the one open task of ticket NN
+whose text contains TEXT. `mark NN <todo|in_progress|done>` changes the `**Status:**` line and refuses
+`done`/`in_progress` while a blocker is not done, and `done` while a task is still `[ ]` (`--tick-all` ticks them
+after the governor has checked each). The governor reads `status` at the start of every session.
 Exit code 0 on success, 1 on failure.
 """
 
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 STATES = ("todo", "in_progress", "done")
+OPEN_TASK = re.compile(r"^- \[ \] (.*)$", re.M)
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,31 @@ def load(ws: Path) -> dict[str, Path]:
     return {f.name[:2]: f for f in files}
 
 
+def write_makefile(ws: Path) -> Path:
+    """`<ws>/migration/Makefile` with `status` and `tickets`, scripts addressed by absolute path."""
+    template = Path(__file__).resolve().parent.parent / "assets" / "migration.Makefile"
+    target = ws / "migration" / "Makefile"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(template.read_text())
+    return target
+
+
+def cmd_tick(ws: Path, num: str, text: str) -> int:
+    tickets = load(ws)
+    if num not in tickets:
+        raise ValueError(f"no ticket {num}")
+    body = tickets[num].read_text()
+    hits = [t for t in OPEN_TASK.findall(body) if text.lower() in t.lower()]
+    if len(hits) != 1:
+        open_tasks = OPEN_TASK.findall(body)
+        raise ValueError(
+            f"ticket {num}: {len(hits)} open tasks match {text!r} (need exactly 1); open: {open_tasks or 'none'}"
+        )
+    tickets[num].write_text(body.replace(f"- [ ] {hits[0]}", f"- [x] {hits[0]}", 1))
+    print(f"tickets: {num} ticked: {hits[0]}", file=sys.stderr)
+    return 0
+
+
 def cmd_init(ws: Path, force: bool) -> int:
     out = ticket_dir(ws)
     if out.exists() and any(out.glob("*.md")) and not force:
@@ -156,7 +183,8 @@ def cmd_init(ws: Path, force: bool) -> int:
     out.mkdir(parents=True, exist_ok=True)
     for spec in CHAIN:
         (out / f"{spec.num}-{spec.slug}.md").write_text(render(spec, ws.name))
-    print(f"tickets: wrote {len(CHAIN)} tickets to {out}", file=sys.stderr)
+    mk = write_makefile(ws)
+    print(f"tickets: wrote {len(CHAIN)} tickets to {out} and {mk}", file=sys.stderr)
     return 0
 
 
@@ -183,9 +211,6 @@ def cmd_status(ws: Path, with_tasks: bool = False) -> int:
     done = sum(s == "done" for s in state.values())
     print(f"tickets: {done}/{len(state)} done", file=sys.stderr)
     return 0
-
-
-OPEN_TASK = re.compile(r"^- \[ \] (.*)$", re.M)
 
 
 def cmd_mark(ws: Path, num: str, new: str, tick_all: bool = False) -> int:
@@ -220,6 +245,10 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--force", action="store_true")
     st = sub.add_parser("status")
     st.add_argument("--tasks", action="store_true", help="also list each ticket's checkbox tasks with [x] / [ ]")
+    sub.add_parser("makefile", help="(re)write <ws>/migration/Makefile with the status and tickets targets")
+    t = sub.add_parser("tick", help="tick the one open task of ticket NN whose text contains TEXT")
+    t.add_argument("num")
+    t.add_argument("text")
     m = sub.add_parser("mark")
     m.add_argument("num")
     m.add_argument("state", choices=STATES)
@@ -228,6 +257,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "init":
             return cmd_init(args.ws, args.force)
+        if args.cmd == "makefile":
+            print(f"tickets: wrote {write_makefile(args.ws)}", file=sys.stderr)
+            return 0
+        if args.cmd == "tick":
+            return cmd_tick(args.ws, args.num, args.text)
         if args.cmd == "status":
             return cmd_status(args.ws, args.tasks)
         return cmd_mark(args.ws, args.num, args.state, args.tick_all)

@@ -255,3 +255,9 @@ Each entry: decision, reason, who/what it came from. Newest last.
 49. **`tickets.py mark NN done` refuses while a task is `[ ]`; `--tick-all` is the explicit override.** _Reason:_ the
     cJSON session marked tickets 01-03 done with every checkbox open, so the checklist said nothing; a skipped
     criterion is written `- [x] <task> (skipped: <reason>)`.
+
+50. **Every run gets `<ws>/migration/Makefile` (`status`, `tickets`) and a `tickets.py tick` command.** `init` writes
+    the Makefile from `assets/migration.Makefile`; `tickets.py makefile` adds it to older runs. `tick NN TEXT` ticks
+    the one open task whose text contains TEXT, so the governor ticks a criterion the moment its evidence exists.
+    _Reason:_ the user asked for one command per migration folder to see where the run stands, and cJSON tickets
+    were marked done with every box open (decision 49); a one-line `tick` makes ticking cheaper than skipping it.

@@ -504,3 +504,15 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Not done:** the cJSON tickets 01-03 are Translation-session data and were not edited here. The session should
   tick what holds and, for ticket 03, write `(skipped: user decision)` on the criteria it did not meet.
 - **Next:** cJSON session: `make tickets TASKS=1`, then tick 01 and 02 (`mark NN done --tick-all` once checked).
+
+## 35. Per-migration Makefile (`status`, `tickets`) and `tickets.py tick`
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's request
+- **Done:** `assets/migration.Makefile`; `tickets.py init` and the new `makefile` subcommand write it to
+  `<ws>/migration/Makefile`; `status` prints the Rulebook status line, tickets and Parts per stage, `tickets` prints
+  every task. `tickets.py tick NN TEXT` added. Makefiles written for jsmn (no tickets yet: prints a hint) and cJSON.
+  SKILL.md step 0 tells the governor to tick each task as its evidence appears. Tests added; pytest 95 passed,
+  1 skipped; `make lint` clean; both Makefiles run. Decision 50.
+- **Note:** the first Makefile version put an inline comment after `SCRIPTS ?=`, which Make keeps as trailing
+  whitespace and broke the path; fixed and covered by the test that runs `make`.
+- **Next:** cJSON session: `make -C pilots/cjson/migration tickets`; tick ticket 04's tasks as Parts finish.

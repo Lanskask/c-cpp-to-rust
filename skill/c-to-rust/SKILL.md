@@ -24,12 +24,17 @@ below whose condition holds. `verify` failing means a Part marked `done` has no 
 
 ### 0. Tickets (every session)
 
-`python3 -I $S/tickets.py --ws <ws> status` (add `--tasks` for every checkbox task; tick a task `[x]` in the ticket file
-when its criterion is met; `mark NN done` refuses while a task is still `[ ]`). If `<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws>
-init` first: it writes the seven tickets of the run (Mapping, Stage 1 Judge, stress test, Stage 1 Faithful port,
-Stage 2 Judge, Stage 2 Idiomatic pass, report) with their blocking edges. Work the `READY` ticket, `tickets.py mark NN
-in_progress` when you start it and `mark NN done` when its acceptance list holds. The ticket state and `parts.tsv`
-are the resume points; commit ticket changes with the step they belong to.
+`make -C <ws>/migration status` (rulebook line, tickets, Parts per stage) and `make -C <ws>/migration tickets` (every
+ticket with its tasks); they wrap `tickets.py --ws <ws> status [--tasks]` and `workqueue.py status`. If
+`<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws> init` first: it writes the seven tickets of the run
+(Mapping, Stage 1 Judge, stress test, Stage 1 Faithful port, Stage 2 Judge, Stage 2 Idiomatic pass, report) with their
+blocking edges, and the Makefile. For a run started before the Makefile existed: `tickets.py --ws <ws> makefile`.
+
+Work the `READY` ticket: `tickets.py mark NN in_progress` when you start it. **Tick each task yourself the moment its
+evidence exists**, not at the end: `tickets.py --ws <ws> tick NN "<text of the task>"` (the text must match exactly one
+open task). A task you decide not to do is edited to `- [x] <task> (skipped: <reason>)`. `mark NN done` refuses while a
+task is `[ ]`. The ticket state and `parts.tsv` are the resume points; commit ticket changes with the step they belong
+to.
 
 ### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
 1. `make spend-now`; note the timestamp.
