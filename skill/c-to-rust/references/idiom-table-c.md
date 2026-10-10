@@ -51,11 +51,11 @@ structure, C ABI, `unsafe` allowed), `Stage 2` (Idiomatic pass: zero `unsafe`, d
 
 | id | C | Stage 1 | Stage 2 | trap | tags | verified |
 |---|---|---|---|---|---|---|
-| C1 | `goto found` / forward jump out of a loop | boolean flag or labelled block `'found: { .. break 'found; }` | labelled block or early `return` | c2rust emits a `current_block` state machine; rewrite it in Stage 1 only if the Judge still passes | goto | no |
+| C1 | `goto found` / forward jump out of a loop | boolean flag or labelled block `'found: { .. break 'found; }`; the code after the label is written once, after the loop, never copied to each jump site | labelled block or early `return` | c2rust emits a `current_block` state machine; rewrite it in Stage 1 only if the Judge still passes | goto | no |
 | C2 | `goto cleanup` (single exit, frees resources) | keep structure, flag + one exit | RAII (`Drop`, owned values) + `?` | the cleanup order may be observable (output flushed on close) | goto | no |
 | C3 | `goto retry` / backward jump | `loop { .. continue; }` | same | — | goto | no |
 | C4 | `switch` with fallthrough | `match` with combined arms; duplicate the fallthrough body if arms differ | same | a `break` inside `switch` inside a loop leaves the `switch`, not the loop (jsmn's `{` arm) | * | no |
-| C5 | `for (i = n - 1; i >= 0; i--)` with signed `i` | same with `c_int` | `(0..n).rev()` or `while let` | with an unsigned index the C loop never ends; check the original's type | * | no |
+| C5 | `for (i = n - 1; i >= 0; i--)` with signed `i` | `while i >= 0 { ..; i -= 1; }` with `i: c_int`; keep tests on the exit value (`i == -1`) and a later loop that resumes from the same `i`; no `.rev()` range, no extra flag |  `(0..n).rev()` or `while let` | with an unsigned index the C loop never ends; check the original's type | * | no |
 | C6 | `setjmp` / `longjmp` | **unknown tier**: ask the user or stub | `Result` + `?` (if the jump is error escape) | cannot be translated mechanically | setjmp | no |
 | C7 | `assert()` | `assert!` / `debug_assert!` matching `NDEBUG` use | `debug_assert!` for invariants; `Result` if input-driven (decision 10) | an `assert` with side effects disappears under `NDEBUG` | * | no |
 | C8 | `abort()`, `exit()` inside a library | same via `libc` / `std::process` | return `Err`; never exit from library code | changes observable behaviour on bad input: Deviation | * | no |

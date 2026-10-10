@@ -43,6 +43,10 @@ HARD RULES
 6. Allowed check: cargo check --manifest-path <crate>/Cargo.toml [--features <set>] for each feature set
    in rulebook §3. Finish when it is clean for all of them; acceptance is decided by the gate.
 7. End the file with the PORT STATUS trailer from rulebook §11.
+8. The Stage 1 column keeps the C shape even where a Rust rewrite looks equivalent. A goto to a
+   shared label: one flag (or labelled block) and one copy of the label's code, never a copy per
+   jump. A C index loop: same index variable and type, same exit-value tests, later loops resume
+   from the same index; no .rev() ranges or added flags.
 
 C2RUST OUTPUT (if not "none": start from it; merge the per-configuration variants into one file with
 #[cfg(feature)] guards; keep its semantics, replace current_block state machines only where the

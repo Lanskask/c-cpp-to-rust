@@ -24,6 +24,24 @@ Template: `skill/c-to-rust/references/rulebook-template.md`.
   - `pub unsafe extern "C" fn jsmn_parse(parser: *mut jsmn_parser, js: *const c_char, len: size_t, tokens: *mut jsmntok_t, num_tokens: c_uint) -> c_int`
     and `pub unsafe extern "C" fn jsmn_init(parser: *mut jsmn_parser)`. Every
     parameter has the C type of `jsmn.h`: `num_tokens` is `c_uint`, not `usize`.
+  - `jsmn_parser` fields: `pos: c_uint, toknext: c_uint, toksuper: c_int`
+    (`jsmn.h`: `unsigned int`, `unsigned int`, `int`). Not `c_int` or `usize`
+    for `pos`/`toknext`.
+  - Input bytes are read as `u8` (`*js.add(pos as usize) as u8`), as the
+    Faithful port does; this is D3.
+  - Arithmetic, per site (idiom I1, prompt rule 4):
+    - `wrapping_*` on every `+`, `-`, `++`, `--` of `pos` or `toknext` and on
+      every expression built from them (`pos + 1`, `toknext - 1`): C
+      `unsigned int` arithmetic wraps by definition, and `toknext - 1` with
+      `toknext == 0` is reached by the Judge (`:` or a closing bracket before
+      any token; C gives `(int)(0u - 1) == -1`). Write
+      `(*parser).toknext.wrapping_sub(1) as c_int`.
+    - Plain operators on the `int` values `count`, `size`, `start + 1` and the
+      loop indices `i`: C signed overflow is UB and needs ≥ 2³¹ bytes or
+      tokens (D1, not reachable by the Judge). Plain operators match the
+      Faithful port and c2rust; do not write `wrapping_*` there.
+    - `unsigned int` → `int` assignments (`start = pos`, `end = pos + 1`,
+      `toksuper = toknext - 1`) are `as c_int` casts.
 - Stage 2 (Idiomatic pass): the API in §6, zero `unsafe`, acceptance §10. Same
   behaviour on every
   harness input and every translated upstream test, in all four feature sets.
@@ -49,7 +67,7 @@ Template: `skill/c-to-rust/references/rulebook-template.md`.
 | T6        | `tokens == NULL` (count-only mode) becomes the separate method `Parser::count`; both methods share one private implementation taking `Option<&mut [Token]>`     | the mode is API behaviour; one implementation keeps the two modes from drifting |
 | T8        | Stage 1: the idiom-table Stage 1 column (`type jsmntype_t = c_uint` + `const`s), never a Rust `enum` in a `#[repr(C)]` field. Stage 2 only: `TokenKind` keeps the C discriminants 0, 1, 2, 4, 8 (`#[repr(i32)]`) | the dump prints `type=%d`; in Stage 1 C code writes the field, and a value outside 0, 1, 2, 4, 8 in a Rust enum is UB |
 | C1        | `goto found` in `jsmn_parse_primitive`: labelled block or early exit in Stage 2 (Stage 1 keeps the `found` flag)                                                | idiom C1                                                                        |
-| C4        | In `jsmn_parse`, the `{`/`[` arm with `tokens == NULL` leaves the `switch`, then `pos++` runs: in Rust advance `pos` and `continue` (as the Faithful port does) | `break` inside `switch` is not `break` of the loop                              |
+| C4        | In `jsmn_parse` a C `break` leaves the `switch`, then the `for` increment `pos++` runs. Stage 1 keeps that shape: one `pos` increment, at the tail of the `while` body; an arm whose C code `break`s (the `{`/`[` and `}`/`]` arms with `tokens == NULL`) reaches the end of its `match` arm (put the rest of the arm in `if !tokens.is_null() { .. }`). No `continue`, no `pos` increment inside an arm, no Rust `break` for a C `break`. The Faithful port's `{`/`[` arm (`pos += 1; continue`) behaves the same but is not the model | matches the C control flow (prompt: "keep the C structure"); a Rust `break` inside `match` leaves the loop; per-arm increments drift between arms |
 | I1        | Stage 2: positions are plain `usize`; `pos - 1` after a primitive cannot underflow (`pos > start` there); write that invariant as a comment                     | the Faithful port's `wrapping_*` is only needed for C's `unsigned int`          |
 | E1        | `enum Error { NoMem, Inval, Part }`, `code()` = −1, −2, −3                                                                                                      | dump and tests print / compare the codes                                        |
 
@@ -77,6 +95,21 @@ another function: two live `&mut`/`*mut` paths to one struct is aliasing UB.
 Stage 2:
 none, anywhere under `rust/src/`. Markers used here: `QUIRK(port): Q<n>`,
 `DEVIATION(port): D<n>`.
+
+Stage 1 markers are fixed: exactly these, each as one comment line directly
+above the site, and no other `QUIRK`/`DEVIATION` comments.
+
+| marker | sites |
+|---|---|
+| `QUIRK(port): Q1` | each loop whose condition tests the NUL byte: `jsmn_parse` main loop, `jsmn_parse_primitive` loop, `jsmn_parse_string` loop, `\u` hex loop (4) |
+| `QUIRK(port): Q2` | the field resets in `jsmn_alloc_token`; the strict `{`/`[` `return JSMN_ERROR_INVAL` (2) |
+| `QUIRK(port): Q3` | each `return JSMN_ERROR_NOMEM`: `{`/`[` arm, `jsmn_parse_string`, `jsmn_parse_primitive` (3) |
+| `QUIRK(port): Q4` | each count-mode (`tokens == NULL`) test: `}`/`]` arm, string closing quote, primitive `found` tail (3) |
+| `QUIRK(port): Q5` | the non-strict `default` arm of `jsmn_parse`; the non-strict `:` case in `jsmn_parse_primitive` (2) |
+| `QUIRK(port): Q6` | the strict `return JSMN_ERROR_PART` after the primitive loop (1) |
+| `QUIRK(port): Q7` | `count` initialised from `toknext` (1) |
+| `QUIRK(port): Q8` | the `}`/`]` arm; the `,` arm (2) |
+| `DEVIATION(port): D3` | the primitive `c < 32 \|\| c >= 127` check; the `\u` hex check (2) |
 
 ## 5. Naming and paths
 
@@ -192,7 +225,12 @@ impl Parser {
 `rust/src/lib.rs` starts with a `//!` doc comment naming the source
 (`jsmn.h` @ the commit in `UPSTREAM`) and copies no licence header: licence
 information lives in `UPSTREAM`. It ends with
-`// PORT STATUS: stage=<1|2> confidence=<...> todos=<N> deviations=<D-ids or ->`.
+`// PORT STATUS: stage=<1|2> confidence=<high|medium|low> todos=<N> deviations=<D-ids or ->`.
+Values are fixed: `confidence=high` when `cargo check` is clean in all four
+feature sets and `todos=0`; `medium` when clean with `TODO(port)` markers;
+`low` otherwise. `todos` counts `TODO(port)` markers. `deviations` is `D3` in
+Stage 1 (bytes read as `u8`, §0; Stage 1 keeps C's D1/D2 behaviour) and
+`D1,D2,D3` in Stage 2.
 
 ## 12. Amendments
 
@@ -203,4 +241,8 @@ information lives in `UPSTREAM`. It ends with
 | 2026-10-10 | E3 stress test (RP3) | §4 | Stage 1 uses raw-pointer field access, no long-lived `&mut *ptr` | accepted: avoids aliasing `&mut` alongside `*mut` passed to helpers |
 | 2026-10-10 | E3 stress test (RP4) | §11 | `//!` doc header naming the source; no copied licence block | accepted: removes a free choice; licence is in `UPSTREAM` |
 | 2026-10-10 | E3 stress test (RP5) | §0 | `jsmntok_t` field is `type_0` | accepted: the adapter reads `t.type_0` |
+| 2026-10-10 | E3 stress test (RP6) | §0 | exact `jsmn_parser` fields `pos: c_uint, toknext: c_uint, toksuper: c_int` | accepted: `jsmn.h` declares `unsigned int pos, toknext`; A's `c_int` changed every cast and comparison |
+| 2026-10-10 | E3 stress test (RP7) | §0 | per-site arithmetic: `wrapping_*` on `pos`/`toknext` expressions, plain operators on `int` `count`/`size`/`start + 1`/`i`, `as c_int` for unsigned→int | accepted with change: RP7 asked for `wrapping_*` on signed sites too; C signed overflow is UB (D1), so plain operators match the Faithful port. `toknext - 1` at 0 is Judge-reachable and must wrap |
+| 2026-10-10 | E3 stress test (RP8) | §2 C4 | one `pos` increment at the loop tail; count-mode arms fall out of the `match`; no `continue` | accepted: the C `break` + `for` increment shape; replaces the old C4 text that asked for `pos += 1; continue` and conflicted with "keep the C structure" |
+| 2026-10-10 | E3 stress test (RP11) | §4, §11 | fixed Stage 1 marker sites (Q1-Q8, D3) and fixed PORT STATUS values | accepted: §9 "Where" is too vague to place markers; A and B both differed from the rulebook |
 | 2026-10-10 | E3-prep Judge validation | §10 | corpus 932 → 1188 inputs (primitive-continuation byte class) | accepted: 932-input corpus missed the E2 mutant in both `strict` sets |
