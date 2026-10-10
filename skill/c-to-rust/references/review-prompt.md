@@ -46,7 +46,7 @@ VERDICT: accept | fix | escalate
 
 ---
 
-## What the orchestrator does with the report
+## What the governor does with the report
 
 - `BLOCK` → back to the implementer as `{previous}` (counts as an attempt).
 - `GAP` → add the proposed inputs to the corpus generator or the translated tests (a Judge change, so

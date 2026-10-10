@@ -25,7 +25,7 @@ Idiom table: skill/c-to-rust/references/idiom-table-c.md (rows apply unless §2 
 - Stage 2 (Idiomatic pass): the API in §6, zero `unsafe`, acceptance rules in §10. Same behaviour, not
   same API.
 - Engine for Stage 1: [c2rust fast path | LLM]. [If c2rust: one run per configuration in §3, merged by hand.]
-- Run `cargo check` in the inner loop; `gate.py` is the only referee for acceptance.
+- Run `cargo check` in the inner loop; `gate.py` alone decides acceptance.
 
 ## 1. Dependencies and ecosystem
 

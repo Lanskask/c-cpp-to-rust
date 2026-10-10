@@ -22,7 +22,7 @@ below whose condition holds. `verify` failing means a Part marked `done` has no 
 `<ws>/migration/gate-passed.tsv` (written by `gate.py`); for Parts accepted before that file existed pass
 `--no-gate-record` (jsmn Stage 1).
 
-### 1. `<ws>/migration/` is absent → Stage 0 (map and rules)
+### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
 1. `make spend-now`; note the timestamp.
 2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] --out <ws>/migration/inventory.tsv`
 3. `depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`
@@ -70,7 +70,7 @@ next step.
 ## Models
 
 - Opus: rulebook, Deviations, Stage 2 API, stress-test diff review, first review per Pilot.
-- Sonnet: orchestration (this file), Judge building, reviews, escalated retries.
+- Sonnet: governing (this file: the governor session), Judge building, reviews, escalated retries.
 - Haiku: Part bodies and fixes (the implementer prompts).
 - Scripts: everything mechanical. If a step repeats by hand twice, it belongs in a script.
 

@@ -1,6 +1,6 @@
 # Stage 1 prompt (Faithful port, one Part)
 
-The orchestrator (Sonnet) fills the `{...}` slots and sends the result to the implementer (Haiku; a retry
+The governor (Sonnet) fills the `{...}` slots and sends the result to the implementer (Haiku; a retry
 after 2 failures may escalate to Sonnet). The slots are the **only** context the implementer gets (PLAN §5): no other
 files, no chat history. Fill each slot from the named source:
 
@@ -82,7 +82,7 @@ NOTE: <one line: what was hard, or the open question if blocked>
 
 ---
 
-## Orchestrator loop for one Part (not sent to the implementer)
+## Governor loop for one Part (not sent to the implementer)
 
 1. `workqueue.py mark <part> in_progress`; `gate.py <part> --snapshot ...` (records HEAD + baseline).
 2. Send the prompt. The implementer writes `{target_path}`.

@@ -1,6 +1,6 @@
 # Building the Judge
 
-The Judge is the referee for every Part (CONTEXT.md): original tests where they can link to the Rust
+The Judge decides Same behaviour for every Part (CONTEXT.md): original tests where they can link to the Rust
 crate, a Differential harness, and tests translated into Rust. **No Judge, no translation**: build it,
 then prove it can fail, before any Part is accepted. Worked example: `pilots/jsmn/migration/harness/`.
 

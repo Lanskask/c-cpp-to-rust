@@ -1,6 +1,6 @@
 # Stage 2 prompt (Idiomatic pass, one Part)
 
-Prerequisites, checked by the orchestrator before the first Stage 2 Part (SKILL.md step 4):
+Prerequisites, checked by the governor before the first Stage 2 Part (SKILL.md step 4):
 rulebook §6 (Stage 2 API) is filled; the Stage 2 Judge (adapter, Rust driver, translated tests) is
 committed and validated on the Faithful port, including the planted-mutant check (`judge.md` §5).
 
@@ -83,7 +83,7 @@ NOTE: <one line>
 
 ---
 
-## Orchestrator notes
+## Governor notes
 
 - Queue: Stage 2 uses `migration/parts-stage2.tsv` (copy of `parts.tsv` with every Part `todo`,
   `attempts=0`, `commit` empty), so Stage 1 history stays intact.

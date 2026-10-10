@@ -32,6 +32,13 @@ _Avoid_: tool, pipeline, script
 
 ### Stages
 
+Every stage is written with its number and its name.
+
+**Mapping**:
+Stage 0. Before any Part is translated: inventory the Source project, map its dependencies, sort Parts into tiers, and
+draft the Rulebook. Ends when the user has approved the Deviations.
+_Avoid_: analysis, setup, preparation
+
 **Faithful port**:
 Stage 1. A Rust version of the Source project that behaves identically to it and keeps its structure, even if it is
 C-shaped or `unsafe`. May keep the C ABI.
@@ -46,6 +53,11 @@ _Avoid_: refactor, cleanup, rewrite, redesign
 For the same input the Rust version gives the same output, including malformed-input cases and error positions. API
 shape may differ after the Idiomatic pass. The only permitted exceptions are Deviations.
 _Avoid_: same functionality, parity, equivalence
+
+**Stub**:
+A Part given up on after five Attempts: real signatures, `todo!()` bodies, and an entry in RUN-NOTES.md. The Gate checks
+all three.
+_Avoid_: mock, placeholder, skeleton
 
 **Attempt**:
 One run of an implementer on one Part, ended by the Gate. A Part gets at most five; then it is stubbed.
@@ -97,3 +109,11 @@ _Avoid_: bug, wart, oddity
 The shared list of C constructs with their Rust mapping at each stage and the trap in each. A row is verified only when a
 test exercises it.
 _Avoid_: cheat sheet, mapping table
+
+### People and sessions
+
+**Governor**:
+The Claude Code session that runs the Skill's decision tree for a Pilot: starts each step, hands Parts to implementers
+and reviewers, re-checks every report by running the Gate or tests itself, logs spend and the work log, and stops only
+for the user's decisions. It never edits the Judge or the Rulebook during a batch.
+_Avoid_: orchestrator, coordinator, manager
