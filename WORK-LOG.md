@@ -331,3 +331,21 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Skill bug:** the Skill's Stage 0 steps 5-6 write `migration/harness/**` and `RULEBOOK.md`, but the deny-ruled
   session the user asked for refuses `Edit`/`Write` to exactly those paths, so Stage 0 cannot finish inside it.
 - **Next:** user decides how to write the Judge and rulebook (see the stop message of this session).
+
+## 25. Skill bugs from the first cJSON run fixed (tickets 08, 09, 10)
+- **Date:** 2026-10-10 (after entry 24)
+- **Who:** Sonnet 5.5, Skill-editing session; scripts `guard.py`, `inventory.py`, `depmap.py`, `tier.py`
+- **Done:** (08) `guard.py` PreToolUse hook: Rulebook, `parts*.tsv`, Judge files, `Cargo.toml` are read-only only while
+  the Pilot's ticket 04 or 06 is `in_progress`; `assets/settings.json` keeps the always-protected paths; SKILL.md step
+  3.1, README and decision 44 updated; 6 tests. (09) `inventory.py`/`depmap.py` skip vendored directories and take
+  `--exclude GLOB`; fuzz dirs are not Parts. (10) The cJSON ↔ cJSON_Utils cycle was a real script bug, not a real
+  edge: `static enum E f(...)` was classified as the definition of `E`, which desynchronised brace tracking in
+  `cJSON_Utils.c`, produced symbols named `if` and `return`, and every function "called" `if`. Fixed and tested.
+  `pilots/cjson/migration/` regenerated with the fixed scripts: 2 Parts (`cJSON`, `cJSON_Utils`), 0 cycles.
+- **Tells us:** a name-based call graph is only as good as the declaration scanner under it; the cJSON run found in
+  one afternoon what jsmn's 471 lines could not. The guard is unit-tested but its hook has not yet fired in a real
+  session (ticket 08 stays open on that point until the Translation session proves it). `spend.py` sums every
+  session of the project directory, so a Skill-editing session and a Translation session that run at the same time
+  overlap in the same window: rows are attributable to a phase only when one session runs at a time.
+- **Next:** restart the Translation session with the new proof step; it resumes at ticket 01 from the regenerated
+  Mapping files.

@@ -5,9 +5,9 @@ SKILL.md says how a non-library file (a root `test.c`, examples) is excluded fro
 
 **Blocked by:** None (can start immediately)
 
-**Status:** todo
+**Status:** done (2026-10-10)
 
-- [ ] `inventory.py` skips `--exclude` globs and a default list (`tests/unity`, `third_party`, `vendor`, `fuzzing`)
-- [ ] `tier.py` marks root-level test and example files as non-Parts
-- [ ] cJSON inventory yields only `cJSON` and `cJSON_Utils`
-- [ ] tests with a fixture tree
+- [x] `inventory.py` skips `--exclude` globs and a default list (`tests/unity`, `third_party`, `vendor`, `fuzzing`)
+- [x] `tier.py` marks root-level test and example files as non-Parts
+- [x] cJSON inventory yields only `cJSON` and `cJSON_Utils`
+- [x] tests with a fixture tree
