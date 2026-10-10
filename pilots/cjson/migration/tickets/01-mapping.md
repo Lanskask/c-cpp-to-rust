@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in_progress
+**Status:** done
 
 - [ ] inventory.tsv, edges.tsv, order.txt, parts.tsv exist
 - [ ] every config-macro has a RULEBOOK §3 row

@@ -384,3 +384,16 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   script could not be saved to `experiments/` as the user's rules ask; it stays in the scratchpad until the line is
   dropped or another directory is named (user decision pending). (c) c2rust has not been run on cJSON yet.
 - **Next:** user approves or vetoes D1-D20; then ticket 01 closes, `tickets.py mark 04 in_progress` and the guard proof.
+
+## 28. E4 cJSON: Deviations D1-D20 approved, ticket 01 done
+- **Date:** 2026-10-10 (after entry 27)
+- **Who:** Sonnet 5.5 governor; the user approved all 20 rows in chat
+- **Done:** RULEBOOK §8 rows D1-D20 `approved`, status line `deviations-approved (2026-10-10)`;
+  `tickets.py mark 01 done` (1/7); proof scripts saved to `pilots/cjson/experiments/` (`cjson_q15_q20.py`,
+  `q20_direct.c`) on the user's instruction to keep experiments in the Pilot workspace, not the Skill's folder.
+  No subagent ran, so no spend row.
+- **Tells us:** ticket 02 (Stage 1 Judge) must link the upstream tests "to the Rust crate", but the crate only exists
+  after ticket 04, which 02 blocks. With the c2rust engine the resolution is a c2rust run per feature set first
+  (a raw transpile, not an accepted Part); the Skill does not say so. Skill gap for the skill-editing chat.
+- **Next:** ticket 02: one c2rust run per feature set into a scratch crate, then the Judge (driver, corpus,
+  planted mutant), then 03 (stress test), then `mark 04 in_progress` and the guard proof.
