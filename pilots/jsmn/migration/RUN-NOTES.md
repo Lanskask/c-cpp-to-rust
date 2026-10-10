@@ -252,3 +252,47 @@ Limits of this result:
 - The Judge is blind to style: all four translations pass 1188/1188 × 4 sets, so every disagreement above was found
   by reading the diffs, not by the Judge. Rules that fix shape (RP8-RP12) are enforced only by review.
 - Translations A and B differ in model (Haiku vs Sonnet) as well as rules; C and D are same-model (Sonnet 5.5).
+
+## Stage 2 attempt 1: gate and review (Sonnet governor, 2026-10-10)
+
+Implementer: Sonnet 5.5 subagent, attempt 1. Gate `make pilot-jsmn STAGE=2 MIN_TESTS=16`: PASS, 23 checks (check, test,
+harness, clippy, fmt in each of the four feature sets, plus unsafe, unwrap, allow). `src/lib.rs` has 0 `unsafe`
+tokens, 0 `TODO(port)`, trailer `stage=2 confidence=high todos=0 deviations=D1,D2,D3`.
+
+Review (Sonnet subagent, `review-prompt.md`): verdict `accept`, no `BLOCK`. Findings below are the reviewer's;
+I have not reproduced them by running the inputs, so treat them as unverified until a Judge run shows them.
+
+### Judge gaps (Judge files are protected: proposals only, own commit outside the fan-out)
+
+- **G-S2-1** Q2 (`alloc_token` does not reset `kind`) is invisible: every phase starts from a zero-filled buffer.
+  Proposed dump phase on a dirty buffer: parse `["x","y"]`, `reset()`, then parse `{{` in a strict set; C token 1
+  keeps `kind=4`. Also hides `Token::default` `start=None` against C `memset` `start=0`.
+- **G-S2-2** `\u` hex loop never stops on NUL in the corpus. Inputs: `"\u12\x00"` (bytes `22 5c 75 31 32 00 22`) and
+  `["\u1\x00]`; C returns `PART`.
+- **G-S2-3** parent-links `}`/`]` arm with a closed root token and `toksuper != -1` (Q8, feature-dependent result).
+  Inputs: `{}:}` and `[]:]` in all four sets.
+- **G-S2-4** `,` with no open container and a non-container `toksuper`. Inputs: `"a":,` and `1:,` (default keeps
+  `toksuper=0`, parent-links gives `-1`).
+- **G-S2-5** `parse` with a smaller `num_tokens` than an earlier call on the same parser (see RP14).
+
+### Rule proposals (Opus or user decides; rulebook is deny-protected here)
+
+- **RP14 (needs a decision, may be a new Deviation)** The reviewer says Rust differs from C where C is defined: the
+  Rust slice length is `num_tokens`, so `parse(b"[", Some(8))` then `parse(b"[]", Some(0))` without reset gives
+  `Err(Inval)` at `]` where C returns 1 (C uses `num_tokens` only as an allocation guard). §8 D2 covers only a token
+  array shorter than `toknext`/`toksuper`. Proposed D2 text: add "or `num_tokens` smaller than `toknext`/`toksuper`
+  of a reused parser while the real array is larger (defined in C)", Rust: slice length is `num_tokens`, first access
+  at an index `>= tokens.len()` returns `Err(Error::Inval)`. If the user does not accept this difference, the API in
+  §6 needs a separate `num_tokens` argument instead.
+- **RP15** §4 markers: Stage 2 code carries 10 `DEVIATION(port): D2` markers (each `get`/`get_mut(..).ok_or(Inval)`)
+  that no table lists; D1 has no marker site (carried by `usize` field types). Add a §4 row for both.
+- **RP16** Idiom C5 Stage 2 column: add `slice.iter().rposition(pred)` (and `slice[..i].iter().rposition(pred)` for a
+  scan that resumes from `i`).
+- **RP17** Idiom I1: new row for unsigned `x - 1` stored into a `-1` sentinel: `checked_sub(1)` giving
+  `Option<usize>` (`:` arm at `toknext == 0`).
+- **RP18** New idiom row for `arr[i]` with unchecked `i`: plain `arr[i]` with an invariant comment when `i` was just
+  validated; `arr.get(i).ok_or(err)?` plus a Deviation when `i` derives from caller state.
+
+NITs (not blocking): `parse_primitive` `self.pos -= 1` comment should name the caller contract (terminators are
+handled in earlier arms); add "`toknext >= 1`, checked above" to the parent-links `}` arm; re-wrap the adapter `//!`
+line to 120 columns; one-line doc comments on `pos`/`toknext`/`toksuper`/`code`.

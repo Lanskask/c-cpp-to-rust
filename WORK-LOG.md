@@ -134,3 +134,34 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Stage 2 fan-out wants the deny-rules loaded by `claude --settings skill/c-to-rust/assets/settings.json`.
 - **Next:** user decides on the two open items; then Stage 2 on jsmn (Sonnet, `stage2-prompt.md`, gate
   `make pilot-jsmn STAGE=2 MIN_TESTS=16`).
+
+## 12. E3 Stage 2 on jsmn: attempt 1 blocked before the implementer started
+- **Date:** 2026-10-10 (after entry 11)
+- **Who:** Sonnet 5.5 governor session (started with `--settings skill/c-to-rust/assets/settings.json`)
+- **Done:** deny-rule check passed (an `Edit` of `RULEBOOK.md` was refused). `make spend-now` timestamp
+  `2026-10-10T04:27:15+00:00`. `verify` ok for `parts.tsv` (1 done) and `parts-stage2.tsv` (1 todo); SKILL.md branch 4
+  holds. Marked `jsmn` `in_progress` (attempts 1) and ran `make pilot-jsmn-snapshot STAGE=2`: baseline HEAD `effbebb`,
+  6 pre-existing failures (`fmt` in all 4 sets, `unsafe[]`, `allow[]`), which are what Stage 2 must fix. Filled
+  `stage2-prompt.md` (66 KB, in the session scratchpad). Spawning the Sonnet implementer subagent was **refused by
+  the auto-mode classifier** ("Blocked by classifier"). No workaround was tried; no code was changed.
+- **Tells us:** the same classifier refusal as in entry 5 (Haiku spawn) now also hits a Sonnet implementer, so the
+  subagent step of this Skill cannot run unattended in this environment without a permission change. No tokens were
+  spent on an implementer, so no `SPEND.md` row.
+- **Open:** `parts-stage2.tsv` is `in_progress` with attempts 1 although no attempt ran (uncommitted).
+- **Next:** user decides how to unblock the subagent spawn (allow the Agent tool for this session, or run the
+  implementer step differently); then re-send `stage2-prompt.md` and run the gate.
+
+## 13. E3 Stage 2 on jsmn: attempt 1 accepted
+- **Date:** 2026-10-10 (after entry 12)
+- **Who:** Sonnet 5.5 subagent (implementer); Sonnet 5.5 subagent (reviewer); Sonnet 5.5 governor session
+- **Done:** the subagent spawn that entry 12 reported as blocked worked after decision 38 (`autoMode.allow`). Attempt 1
+  rewrote `src/lib.rs` and the adapter; gate `make pilot-jsmn STAGE=2 MIN_TESTS=16`: PASS, 23 checks (all four feature
+  sets: check, test, harness, clippy, fmt; plus unsafe, unwrap, allow). 0 `unsafe`, 0 `TODO(port)`. Review verdict
+  `accept`, no BLOCK; committed as `35e87c3`, Part marked `done`, attempts 1. The attempts counter in entry 12's
+  "Open" line was right (1) and is now true.
+- **Tells us:** Stage 2 passes the Judge first try, but the reviewer found 5 Judge gaps (Q2 stale `kind`, NUL in `\u`,
+  two parent-links/`,` paths, `num_tokens` smaller than `toknext`) and 5 rule gaps (RUN-NOTES, G-S2-1..5, RP14-RP18),
+  not reproduced by me. Most important: RP14, a possible undocumented behaviour difference from C when `num_tokens`
+  is smaller than `toknext` on a reused parser; the rulebook D2 text does not cover it.
+- **Next:** user or Opus decides RP14 (new Deviation vs API change) and applies RP15-RP18; Judge gaps G-S2-1..5 go in
+  as their own commit and Stage 2 is re-gated against the stronger Judge.
