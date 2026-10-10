@@ -7,7 +7,7 @@ whose Deviations table the user can approve.
 
 **Status:** done
 
-- [ ] inventory.tsv, edges.tsv, order.txt, parts.tsv exist
-- [ ] every config-macro has a RULEBOOK §3 row
-- [ ] every UB or platform behaviour has a §8 Deviation row
-- [ ] the user approved or vetoed every Deviation
+- [x] inventory.tsv, edges.tsv, order.txt, parts.tsv exist
+- [x] every config-macro has a RULEBOOK §3 row
+- [x] every UB or platform behaviour has a §8 Deviation row
+- [x] the user approved or vetoed every Deviation

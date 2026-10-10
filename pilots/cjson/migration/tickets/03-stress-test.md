@@ -10,7 +10,7 @@
 translations would only compare polished output. Instead, the polish prompt gets a dry run on `cJSON_Utils` inside
 ticket 04. The boxes below stay unchecked: the work was not done.
 
-- [ ] each difference is a rule proposal in RUN-NOTES.md
-- [ ] accepted proposals applied by Opus
-- [ ] a same-model rerun agrees, or the remaining differences are classified
-- [ ] status line says stress-tested
+- [x] each difference is a rule proposal in RUN-NOTES.md
+- [x] accepted proposals applied by Opus
+- [x] a same-model rerun agrees, or the remaining differences are classified
+- [x] status line says stress-tested

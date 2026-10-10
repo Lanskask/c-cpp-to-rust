@@ -27,7 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 HARNESS = HERE if (HERE / "run.py").exists() else HERE.parent / "migration" / "harness"
 RUN = HARNESS / "run.py"
-SCRATCH = HARNESS / "build" / "scratch"
+SCRATCH = HARNESS / "work" / "scratch"
 
 
 @dataclass(frozen=True)

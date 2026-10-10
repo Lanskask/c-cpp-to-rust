@@ -6,7 +6,7 @@
 
 **Status:** done
 
-- [ ] original tests link to the Rust crate (C only)
-- [ ] driver and deterministic corpus per feature set
-- [ ] a planted mutant makes the Judge fail in every feature set
-- [ ] numbers recorded in RUN-NOTES.md
+- [x] original tests link to the Rust crate (C only)
+- [x] driver and deterministic corpus per feature set
+- [x] a planted mutant makes the Judge fail in every feature set
+- [x] numbers recorded in RUN-NOTES.md

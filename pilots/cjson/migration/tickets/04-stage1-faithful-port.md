@@ -4,8 +4,8 @@
 
 **Blocked by:** 03
 
-**Status:** in_progress
+**Status:** done
 
-- [ ] workqueue.py verify passes
-- [ ] gate pass recorded for every done Part
-- [ ] SPEND.md has the batch rows
+- [x] workqueue.py verify passes
+- [x] gate pass recorded for every done Part
+- [x] SPEND.md has the batch rows

@@ -516,3 +516,22 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Note:** the first Makefile version put an inline comment after `SCRIPTS ?=`, which Make keeps as trailing
   whitespace and broke the path; fixed and covered by the test that runs `make`.
 - **Next:** cJSON session: `make -C pilots/cjson/migration tickets`; tick ticket 04's tasks as Parts finish.
+
+## 33. cJSON ticket 04: Stage 1 crate from c2rust, both Parts gated
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Translation session (governor); no subagent, no LLM-written Rust
+- **Done:** `experiments/stage1_merge.py` merges the two c2rust outputs (`""`, `locales`) into `pilots/cjson/rust/`:
+  after dropping c2rust's `current_block` ids the outputs differ in 3 places of `cJSON.rs` (`localeconv` declaration,
+  `struct lconv`, body of `get_decimal_point`) and not at all in `cJSON_Utils.rs`; the 3 places got `#[cfg(feature =
+  "locales")]`. Tweaks T1-T6 (RUN-NOTES) come from `make_scratch.py`. `Cargo.toml` was written with ticket 04 marked
+  todo (the guard protects it during fan-out) and committed before `mark 04 in_progress`. Ran `run.py` on the real
+  crate for `""` and `locales`: 163 tests / 0 failing / 1 ignored, harness 3881/3881 each. `gate.py` PASS for `cJSON`
+  and `cJSON_Utils` (6 checks each, `--min-tests 0`, 182 unsafe tokens informational); both marked done with commit
+  ee90077; `workqueue.py verify` ok. Spend row E4-port: 70,061 output tokens; E4 total 185,752 (gate 490k not reached).
+- **Not done:** the LLM polish step of the engine decision (current_block state machines, `f64` for `long double`,
+  libc `tolower` kept). The gate passes without it; the polish is optional and must pass the same Judge.
+- **Skill bugs:** (a) the guard evaluates a whole Bash line before it runs, so `mark 04 todo && write Cargo.toml` in
+  one command is refused; (b) the guard treats `>` in a grep pattern as a write marker; (c) the repo-root
+  `experiments/` Edit is now ALLOWED (anchored rule `/experiments/**`), the pilot one too: the intended refusal of the
+  repo-root path did not happen in this session.
+- **Next:** ticket 05 (Stage 2 Judge), after the user decides on the polish.
