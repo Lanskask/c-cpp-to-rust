@@ -67,6 +67,37 @@ def count_unsafe(crate: Path) -> int:
     return total
 
 
+UNWRAP = re.compile(r"\.unwrap\(\)|\.expect\(")
+ALLOW = re.compile(r"#!?\[allow\(([^)]*)\)\]")
+
+
+def find_unwraps(crate: Path) -> list[str]:
+    """`file:line` of every `.unwrap()`/`.expect(` in src/ not justified by `// invariant:` (same or previous line)."""
+    found: list[str] = []
+    for p in sorted((crate / "src").rglob("*.rs")):
+        prev = ""
+        for no, line in enumerate(p.read_text().splitlines(), 1):
+            code = line.split("//", 1)[0]
+            if UNWRAP.search(code) and "// invariant:" not in line and "// invariant:" not in prev:
+                found.append(f"{p.name}:{no}")
+            prev = line
+    return found
+
+
+def find_blanket_allows(crate: Path, permitted: list[str]) -> list[str]:
+    """`file:line lint` of every `#[allow(lint)]` in src/ whose lint is not in `permitted`."""
+    found: list[str] = []
+    for p in sorted((crate / "src").rglob("*.rs")):
+        for no, line in enumerate(p.read_text().splitlines(), 1):
+            for m in ALLOW.finditer(line.split("//", 1)[0]):
+                found += [
+                    f"{p.name}:{no} {lint}"
+                    for lint in (x.strip() for x in m.group(1).split(","))
+                    if lint not in permitted
+                ]
+    return found
+
+
 def cargo_cmd(sub: list[str], crate: Path, features: str, toolchain: str | None) -> list[str]:
     cmd = ["cargo"] + ([f"+{toolchain}"] if toolchain else []) + sub + ["--manifest-path", str(crate / "Cargo.toml")]
     if features:
@@ -82,6 +113,7 @@ def run_checks(
     toolchain: str | None,
     baseline: set[str],
     stop_on_regression: bool,
+    permitted_lints: list[str] | None = None,
 ) -> list[Result]:
     results: list[Result] = []
 
@@ -110,6 +142,17 @@ def run_checks(
     if stage == 2:
         n = count_unsafe(crate)
         record(Result("unsafe", "", "pass" if n == 0 else "fail", f"{n} unsafe token(s)" if n else ""))
+        unwraps = find_unwraps(crate)
+        record(
+            Result(
+                "unwrap",
+                "",
+                "fail" if unwraps else "pass",
+                ", ".join(unwraps[:5]) + f" ({len(unwraps)} unjustified)" if unwraps else "",
+            )
+        )
+        allows = find_blanket_allows(crate, permitted_lints or [])
+        record(Result("allow", "", "fail" if allows else "pass", "; ".join(allows[:5]) if allows else ""))
     else:
         record(Result("unsafe", "", "skip", f"{count_unsafe(crate)} unsafe token(s) (Stage 1: informational)"))
     return results
@@ -146,6 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--parts", default="migration/parts.tsv")
     p.add_argument("--features", action="append", help="feature set to check; repeat for a matrix")
     p.add_argument("--harness-cmd", help="shell command; {features} is replaced; exit 0 = pass")
+    p.add_argument("--allow-lint", action="append", default=[], help="lint a Stage 2 `#[allow]` may name; repeatable")
     p.add_argument("--toolchain", help="rustup toolchain name for cargo, e.g. nightly-2023-04-15")
     p.add_argument("--also", action="append", default=[], help="extra path restored with the target; repeatable")
     p.add_argument("--snapshot", action="store_true", help="record HEAD and baseline, change nothing")
@@ -182,7 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         baseline = set(saved["failing"])
         paths = list(dict.fromkeys([target, *saved.get("paths", []), *args.also]))
-        results = run_checks(crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, baseline, True)
+        results = run_checks(
+            crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, baseline, True, args.allow_lint
+        )
     except (ValueError, RuntimeError, OSError) as e:
         print(f"gate: {e}", file=sys.stderr)
         return 1

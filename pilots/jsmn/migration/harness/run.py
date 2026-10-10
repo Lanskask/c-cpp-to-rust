@@ -56,8 +56,21 @@ def stage2(crate: Path, feats: str, defines: list[str], build: Path, inputs: Pat
     if r.returncode:
         print(f"run: driver build failed\n{r.stderr}", file=sys.stderr)
         return 1
-    r = sh([sys.executable, "-I", str(HARNESS), "--orig", str(orig), "--rust", str(rust),
-            "--inputs", str(inputs), "--out", str(build / "harness-report.tsv")])
+    r = sh(
+        [
+            sys.executable,
+            "-I",
+            str(HARNESS),
+            "--orig",
+            str(orig),
+            "--rust",
+            str(rust),
+            "--inputs",
+            str(inputs),
+            "--out",
+            str(build / "harness-report.tsv"),
+        ]
+    )
     print(r.stderr.strip())
     return r.returncode
 
@@ -104,7 +117,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"run: compiling upstream tests failed\n{r.stderr}", file=sys.stderr)
         return 1
     r = sh([str(tests)])
-    print(f"original tests vs Rust [{feats or 'default'}]: {r.stdout.strip().splitlines()[-1] if r.stdout else r.stderr}")
+    print(
+        f"original tests vs Rust [{feats or 'default'}]: {r.stdout.strip().splitlines()[-1] if r.stdout else r.stderr}"
+    )
     if r.returncode != 0 or "FAILED: 0" not in r.stdout:
         return 1
 
@@ -119,8 +134,21 @@ def main(argv: list[str] | None = None) -> int:
         if r.returncode:
             print(f"run: driver build failed\n{r.stderr}", file=sys.stderr)
             return 1
-    r = sh([sys.executable, "-I", str(HARNESS), "--orig", str(orig), "--rust", str(rust),
-            "--inputs", str(inputs), "--out", str(build / "harness-report.tsv")])
+    r = sh(
+        [
+            sys.executable,
+            "-I",
+            str(HARNESS),
+            "--orig",
+            str(orig),
+            "--rust",
+            str(rust),
+            "--inputs",
+            str(inputs),
+            "--out",
+            str(build / "harness-report.tsv"),
+        ]
+    )
     print(r.stderr.strip())
     return r.returncode
 

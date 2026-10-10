@@ -95,3 +95,36 @@ def test_snapshots_are_per_stage(tmp_path: Path) -> None:
     assert gate.main([*base, "--stage", "2"]) == 0
     names = sorted(f.name for f in (tmp_path / "migration" / "gate").iterdir())
     assert names == ["p.stage1.json", "p.stage2.json"]
+
+
+def test_find_unwraps_requires_invariant_comment(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "lib.rs").write_text(
+        "fn a(x: Option<u8>) -> u8 { x.unwrap() }\n"
+        "// invariant: x is Some\nfn b(x: Option<u8>) -> u8 { x.unwrap() }\n"
+        'fn c(x: Option<u8>) -> u8 { x.expect("y") } // invariant: checked above\n'
+        "// x.unwrap() in a comment\n"
+    )
+    assert gate.find_unwraps(tmp_path) == ["lib.rs:1"]
+
+
+def test_find_blanket_allows_respects_permitted_list(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "lib.rs").write_text(
+        "#![allow(dead_code)]\n#[allow(clippy::too_many_arguments, unused)]\nfn f() {}\n"
+    )
+    assert gate.find_blanket_allows(tmp_path, []) == [
+        "lib.rs:1 dead_code",
+        "lib.rs:2 clippy::too_many_arguments",
+        "lib.rs:2 unused",
+    ]
+    assert gate.find_blanket_allows(tmp_path, ["dead_code", "unused"]) == ["lib.rs:2 clippy::too_many_arguments"]
+
+
+def test_stage2_unwrap_check_fails_and_is_baselinable(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    (crate / "src" / "lib.rs").write_text("pub fn f(x: Option<i32>) -> i32 {\n    x.unwrap()\n}\n")
+    out = gate.run_checks(crate, 2, [""], None, None, set(), False)
+    unwrap = next(r for r in out if r.check == "unwrap")
+    assert unwrap.status == "fail" and "lib.rs:2" in unwrap.detail
+    assert unwrap.key == "unwrap[]"  # no feature suffix: baselined by that key like any other check
