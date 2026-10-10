@@ -50,6 +50,12 @@ two-agent diff, so each is a candidate only; they still need B (or a second A-ru
 | RP3 | §4: Stage 1 does not turn raw pointers into `&mut` references that live across calls (use raw-pointer field access) | A binds `let parser_mut = &mut *parser;` in every function (4 sites) | creates aliasing `&mut` while helper functions also receive `*mut` to the same struct |
 | RP4 | §11 / prompt rule 7: copy no licence header into `lib.rs`; the crate header is the `//!` doc comment naming the source commit | A copied the 21-line MIT block from `jsmn.h` | cosmetic, but two agents will differ; the crate already carries licence info in `UPSTREAM` |
 | RP5 | §2: field `type` is named `type_0` (c2rust spelling, used by the adapter and rulebook examples) | A named it `type_` | the adapter (`tests/adapter/mod.rs`) reads `t.type_0`; a different name breaks the Judge build, not behaviour |
+| RP6 | §0: add the exact `jsmn_parser` fields to the Stage 1 items: `pos: c_uint, toknext: c_uint, toksuper: c_int` (as in C), like the `jsmntok_t` list | A: `pos: c_int, toknext: c_int`; B: `c_uint` (from `jsmn.h`). Layout is identical, signedness and every comparison/cast differ | the adapter and C tests read these fields; `c_int` makes `pos as usize` sign-extend and turns `+= 1` into signed overflow (see RP7) |
+| RP7 | §0 or prompt rule 4: in Stage 1 every `+`/`-` on `pos`, `toknext`, `count`, `size`, `start + 1`, `toknext - 1`, `pos + 1` uses `wrapping_*`; a plain operator is not allowed | A: plain `+= 1`, `-= 1`, `toknext - 1`, `pos + 1`, `start + 1` everywhere. B: `wrapping_*` at every site (including signed `count`, `size`) | the Judge runs debug builds, where plain overflow is a panic; rule 4 says "unsigned wraps", "signed follows §8", and §8 D1 is a Stage 2 statement, so signed sites are left to the agent |
+| RP8 | §2 C4: resolve the conflict with "keep the C structure". State: the `for` increment `pos++` is written once at the loop tail, `{`/`[`/`}`/`]` arms with `tokens == NULL` fall out of the `match` (no `continue`, no per-arm `pos += 1`) | A: `pos += 1` copied into 6 arms plus `continue` (what C4 says literally). B: one increment at the tail, no `continue` | both behave the same here, but A's shape drops the C control flow and gets an arm wrong easily; the rulebook text currently asks for A's shape and the prompt asks for B's |
+| RP9 | §2 C1: say "one `found` flag, one shared tail after the loop; the strict-mode `PART` return is guarded by `!found`". C1 already says Stage 1 keeps the flag, so this is a restatement | A: no flag, the `found` tail (count-mode, alloc, fill, parent, `pos--`) is written three times in `match` arms and at loop end | three copies can drift; B has one copy. The rule exists, A did not follow it |
+| RP10 | idiom C5 Stage 1 (already "same with `c_int`"): `jsmn_parse` keeps `i: c_int` and two sequential `while i >= 0` scans in the `}`/`]` arm; no `for .. in (..).rev()`, no extra `found` bool or nested scan | A: `for i in (0..toknext).rev()` with a nested `for j in (0..i).rev()` and a `found` flag; B: C's two scans sharing `i`, `if i == -1` | the C code's `i == -1` test and "second scan starts at the same `i`" are the structure to keep; A's rewrite is equivalent here but is the Stage 2 form |
+| RP11 | §4 and §11: Stage 1 annotations are fixed. Place `QUIRK(port): Q<n>` only at the sites in §9 "Where"; `// PORT STATUS: stage=1 confidence=<high\|medium\|low> todos=<N> deviations=<ids that apply to this file>` | A: Q-markers at three sites, one wrong (Q1 on the `c < 32` check), `confidence=draft`, `deviations=D1,D2,D3`. B: no markers at all, `confidence=high`, `deviations=-` | markers and the trailer are free text today; neither file is right by the rulebook (B omitted markers the prompt asked for; D3 applies to B's `u8` compares) |
 
 ## Judge changes need their own commit
 
@@ -59,3 +65,45 @@ deny-rules in `assets/settings.json` protect `tests/upstream.rs` and `examples/`
 Review (Opus, 2026-10-10): RP1-RP5 checked against `rust/src/lib.rs` and `tests/adapter/mod.rs`; all accepted and
 applied to RULEBOOK §0, §2 T8, §4, §11 (amendments in §12). Status stays short of `stress-tested`: translation B
 and the A/B diff are still missing (SKILL.md step 2 "done when ... RUN-NOTES records the diffs").
+
+## Stress test diff A vs B
+
+B: produced by Sonnet 5.5 from the same prompt builder output but with RULEBOOK already carrying RP1-RP5 (the prompt
+shows them in §0/§2/§4/§11). A: Haiku, produced without RP1-RP5. So the two differ in model and in rules; the table
+separates what RP1-RP5 already fix from what is still open. B `rust/src/lib.rs`: 4 `cargo check` sets clean, 0 TODOs.
+
+Gate (`run.py --crate stress/b/rust <set>`), all four sets, same lines shape:
+
+| set | upstream tests | harness |
+|---|---|---|
+| `""` | FAILED: 0 | 1188/1188 inputs match |
+| `strict` | FAILED: 0 | 1188/1188 inputs match |
+| `parent-links` | FAILED: 0 | 1188/1188 inputs match |
+| `strict,parent-links` | FAILED: 0 | 1188/1188 inputs match |
+
+Both translations pass the Judge in all four sets. The Judge does not see any of the disagreements below as
+behaviour; they are differences in type choices, shape and annotation.
+
+| # | decision | A | B | class |
+|---|---|---|---|---|
+| 1 | `jsmntype_t` | `#[repr(i32)] enum` used as a `#[repr(C)]` field | `type jsmntype_t = c_uint` + `JSMN_*` consts | covered by RP1 |
+| 2 | token field name | `type_` | `type_0` | covered by RP5 |
+| 3 | `jsmn_parse` `js` param | `*const c_int` (cast to `*const u8` inside) | `*const c_char` | covered by RP2 |
+| 4 | `jsmn_parse` `num_tokens` | `c_int` (cast to `usize`) | `c_uint` | covered by RP2 |
+| 5 | `&mut *parser`, `&mut *tokens.offset(..)` references | in every function, live across calls to helpers | raw-pointer field access only | covered by RP3 |
+| 6 | licence header | 21-line MIT block | `//!` doc comment | covered by RP4 |
+| 7 | `jsmn_parser.pos` / `toknext` type | `c_int` | `c_uint` | new: RP6 |
+| 8 | overflow policy | plain `+=`, `-=`, `+ 1`, `- 1` | `wrapping_*` at every site | new: RP7 |
+| 9 | loop-increment placement, count-mode arm | `pos += 1` in each arm, `continue` | one `pos++` at loop tail, arm falls out | new: RP8 |
+| 10 | primitive `found` exit | no flag, tail written 3 times | `found` flag, one tail | new: RP9 (existing C1 not followed by A) |
+| 11 | `}`/`]` scan | `for .. .rev()` + nested scan + `found` bool | two `while i >= 0` scans sharing `i`, `i == -1` test | new: RP10 (existing C5 Stage 1 not followed by A) |
+| 12 | markers / PORT STATUS | 3 QUIRK markers (one misplaced), `draft`, `D1,D2,D3` | no markers, `high`, `-` | new: RP11 |
+| 13 | public signatures otherwise | `jsmn_init`, `jsmn_parse` names, `#[no_mangle] extern "C"`, `len: usize` | same | agree |
+| 14 | error-path state (Q2, Q3, Q4, Q6, Q8) | reproduced | reproduced | agree (both pass 1188/1188 x 4) |
+| 15 | `unsafe` use | everywhere raw deref, plus `&mut` (row 5) | raw deref only | covered by RP3 |
+| 16 | helper `js` type, `size_t` alias, `std::os::raw` vs `core::ffi`, `offset` vs `add`, `#![allow]` lines, `derive(Debug)`, `b'0'` vs `48` | various | various | cosmetic |
+
+New disagreements: 6 (RP6-RP11). Two of them (RP9, RP10) restate an existing rulebook row that A did not follow,
+so they are prompt-emphasis issues rather than missing rules. RP6-RP8 and RP11 are gaps in the rulebook.
+Not shown by this test: whether two agents with the same model and the same rulebook agree (one A-run with
+RP1-RP5 would show it).
