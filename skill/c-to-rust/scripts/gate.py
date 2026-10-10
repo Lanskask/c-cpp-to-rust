@@ -71,6 +71,14 @@ UNWRAP = re.compile(r"\.unwrap\(\)|\.expect\(")
 ALLOW = re.compile(r"#!?\[allow\(([^)]*)\)\]")
 
 
+TEST_RESULT = re.compile(r"^test result: \w+\. (\d+) passed", re.M)
+
+
+def count_passed(output: str) -> int:
+    """Sum of `N passed` over every `test result:` line (lib, each tests/*.rs binary, doctests)."""
+    return sum(int(n) for n in TEST_RESULT.findall(output))
+
+
 def find_unwraps(crate: Path) -> list[str]:
     """`file:line` of every `.unwrap()`/`.expect(` in src/ not justified by `// invariant:` (same or previous line)."""
     found: list[str] = []
@@ -114,6 +122,7 @@ def run_checks(
     baseline: set[str],
     stop_on_regression: bool,
     permitted_lints: list[str] | None = None,
+    min_tests: int = 0,
 ) -> list[Result]:
     results: list[Result] = []
 
@@ -137,6 +146,8 @@ def run_checks(
             code, out = run(cmd)
             status = "pass" if code == 0 else "fail"
             detail = "" if code == 0 else summarize_rustc(out)
+            if name == "test" and code == 0 and count_passed(out) < min_tests:
+                status, detail = "fail", f"{count_passed(out)} test(s) passed, need at least {min_tests}"
             if record(Result(name, feats, status, detail)):
                 return results
     if stage == 2:
@@ -189,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--parts", default="migration/parts.tsv")
     p.add_argument("--features", action="append", help="feature set to check; repeat for a matrix")
     p.add_argument("--harness-cmd", help="shell command; {features} is replaced; exit 0 = pass")
+    p.add_argument("--min-tests", type=int, default=0, help="fail `cargo test` if fewer tests pass (per feature set)")
     p.add_argument("--allow-lint", action="append", default=[], help="lint a Stage 2 `#[allow]` may name; repeatable")
     p.add_argument("--toolchain", help="rustup toolchain name for cargo, e.g. nightly-2023-04-15")
     p.add_argument("--also", action="append", default=[], help="extra path restored with the target; repeatable")

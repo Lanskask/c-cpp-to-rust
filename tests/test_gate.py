@@ -128,3 +128,21 @@ def test_stage2_unwrap_check_fails_and_is_baselinable(tmp_path: Path) -> None:
     unwrap = next(r for r in out if r.check == "unwrap")
     assert unwrap.status == "fail" and "lib.rs:2" in unwrap.detail
     assert unwrap.key == "unwrap[]"  # no feature suffix: baselined by that key like any other check
+
+
+def test_count_passed_sums_every_test_binary() -> None:
+    out = "test result: ok. 3 passed; 0 failed\ntest result: ok. 16 passed; 0 failed\ntest result: ok. 0 passed\n"
+    assert gate.count_passed(out) == 19
+
+
+def test_min_tests_rejects_vacuous_test_pass(tmp_path: Path) -> None:
+    crate, _ = make_workspace(tmp_path)
+    (crate / "src" / "lib.rs").write_text("#[test]\nfn one() {}\n")
+    ok = gate.run_checks(crate, 1, [""], None, None, set(), False, None, 1)
+    assert next(r for r in ok if r.check == "test").status == "pass"
+    bad = gate.run_checks(crate, 1, [""], None, None, set(), False, None, 2)
+    t = next(r for r in bad if r.check == "test")
+    assert t.status == "fail" and "1 test(s) passed, need at least 2" in t.detail
+    (crate / "src" / "lib.rs").write_text("pub fn f() {}\n")  # no tests at all: cargo passes, the gate must not
+    none = gate.run_checks(crate, 1, [""], None, None, set(), False, None, 1)
+    assert next(r for r in none if r.check == "test").status == "fail"

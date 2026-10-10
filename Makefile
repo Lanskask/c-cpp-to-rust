@@ -31,14 +31,15 @@ spend:
 	python3 -I $(SCRIPTS)/spend.py log --phase "$(PHASE)" --since "$(SINCE)" --note "$(NOTE)"
 
 # Judge for one Pilot: gate the Part over every upstream-tested feature set.
-# Usage: make pilot-jsmn [STAGE=1] [PART=jsmn]
+# Usage: make pilot-jsmn [STAGE=1] [PART=jsmn] [MIN_TESTS=16]   (MIN_TESTS: translated tests, Stage 2)
 STAGE ?= 1
+MIN_TESTS ?= 0
 PART ?= jsmn
 pilot-jsmn:
-	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \
+	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) --min-tests $(MIN_TESTS) \
 	  --parts pilots/jsmn/migration/parts.tsv \
 	  --features "" --features strict --features parent-links --features strict,parent-links \
-	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py {features}"
+	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py --stage $(STAGE) {features}"
 
 pilot-jsmn-snapshot:  ## record HEAD + baseline before editing the Part
 	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \
