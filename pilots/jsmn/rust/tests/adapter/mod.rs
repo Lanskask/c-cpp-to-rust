@@ -1,12 +1,10 @@
 //! Judge adapter (judge.md §5): the only test-side file that calls the `jsmn` crate.
 //!
-//! Stage 1 version: calls the C-ABI functions of the Faithful port inside `unsafe` blocks (`tests/` is outside
-//! the zero-`unsafe` scope of `src/`). Stage 2 replaces the *body* of this file with calls to the RULEBOOK §6
-//! API; the types and method signatures below must not change (decision 32). Sentinels are the C values:
+//! Stage 2 version: calls the RULEBOOK §6 API; the types and method signatures below must not change (decision 32). Sentinels are the C values:
 //! `None` count mode = `parse(js, None)`; unset position = `-1`; errors = `-1`, `-2`, `-3`.
 #![allow(dead_code)]
 
-use jsmn::{jsmn_init, jsmn_parse, jsmn_parser, jsmntok_t};
+use jsmn::{Parser, Token};
 
 pub const OBJECT: i32 = 1;
 pub const ARRAY: i32 = 2;
@@ -38,46 +36,44 @@ pub struct State {
 }
 
 pub struct P {
-    parser: jsmn_parser,
-    buf: Vec<jsmntok_t>,
+    parser: Parser,
+    buf: Vec<Token>,
+}
+
+fn sentinel(v: Option<usize>) -> i64 {
+    v.map_or(-1, |v| v as i64)
 }
 
 impl P {
     pub fn new() -> P {
-        // SAFETY: both are plain C structs of integers; all-zero is a valid value. `jsmn_init` sets the parser.
-        let mut parser: jsmn_parser = unsafe { core::mem::zeroed() };
-        unsafe { jsmn_init(&mut parser) };
-        let buf = vec![unsafe { core::mem::zeroed::<jsmntok_t>() }; CAPACITY];
-        P { parser, buf }
+        P {
+            parser: Parser::new(),
+            buf: vec![Token::default(); CAPACITY],
+        }
     }
 
     /// `jsmn_init` on the existing parser; the token buffer keeps its contents.
     pub fn reset(&mut self) {
-        unsafe { jsmn_init(&mut self.parser) };
+        self.parser = Parser::new();
     }
 
     /// Zero the whole token buffer (the C driver's `memset`).
     pub fn clear_tokens(&mut self) {
-        self.buf.fill(unsafe { core::mem::zeroed::<jsmntok_t>() });
+        self.buf.fill(Token::default());
     }
 
     /// `None` = count mode (`tokens == NULL`); `Some(n)` = use the first `n` slots of the persistent buffer.
     pub fn parse(&mut self, js: &[u8], tokens: Option<usize>) -> i32 {
-        let (ptr, n) = match tokens {
-            None => (core::ptr::null_mut(), 0),
+        let result = match tokens {
+            None => self.parser.count(js),
             Some(n) => {
                 assert!(n <= CAPACITY, "adapter buffer holds {CAPACITY} tokens");
-                (self.buf.as_mut_ptr(), n)
+                self.parser.parse(js, &mut self.buf[..n])
             }
         };
-        unsafe {
-            jsmn_parse(
-                &mut self.parser,
-                js.as_ptr().cast(),
-                js.len(),
-                ptr,
-                n as u32,
-            )
+        match result {
+            Ok(count) => count as i32,
+            Err(e) => e.code(),
         }
     }
 
@@ -86,12 +82,12 @@ impl P {
         self.buf[..n]
             .iter()
             .map(|t| Tok {
-                kind: t.type_0 as i32,
-                start: t.start as i64,
-                end: t.end as i64,
+                kind: t.kind as i32,
+                start: sentinel(t.start),
+                end: sentinel(t.end),
                 size: t.size as i64,
                 #[cfg(feature = "parent-links")]
-                parent: t.parent as i64,
+                parent: sentinel(t.parent),
                 #[cfg(not(feature = "parent-links"))]
                 parent: -1,
             })
@@ -100,9 +96,9 @@ impl P {
 
     pub fn state(&self) -> State {
         State {
-            pos: self.parser.pos as u64,
-            toknext: self.parser.toknext as u64,
-            toksuper: self.parser.toksuper as i64,
+            pos: self.parser.pos() as u64,
+            toknext: self.parser.toknext() as u64,
+            toksuper: sentinel(self.parser.toksuper()),
         }
     }
 }
