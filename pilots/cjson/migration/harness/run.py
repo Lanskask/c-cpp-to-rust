@@ -2,11 +2,15 @@
 """Stage 1 Judge for the cJSON Pilot, one feature set (judge.md §4): original tests -> Rust crate, then the
 Differential harness. Exit 0 = pass.
 
-Usage: python3 -I run.py [--crate DIR | --scratch] [FEATURES]
+Usage: python3 -I run.py [--crate DIR | --scratch] [--stage 1|2] [FEATURES]
        FEATURES = comma list; the only macro feature is `locales` (ENABLE_LOCALES). Default: none.
        --crate   crate to judge (default: pilots/cjson/rust, the accepted Stage 1 target)
        --scratch use the c2rust SCRATCH crate for the feature set (work/scratch/<default|locales>/, made by
                  make_scratch.py on first use). Ticket 02 validates the Judge on these; they are not the target.
+       --stage   1 (default): the steps below. 2: the Stage 2 Judge of judge.md section 5: `cargo test` of the
+                 translated tests (rust/tests/upstream.rs through rust/tests/adapter/mod.rs), then the original
+                 C driver vs `cargo build --example dump` (rust/examples/dump.rs) on the same corpus. No C ABI
+                 and no `test-internals` needed. Outputs under work/run/<crate-tag>/<set>-stage2/.
 Steps (outputs under work/<crate-tag>/<features>/, git-ignored):
   0. regenerate inputs/ (make_inputs.py, fixed seed);
   1. cargo build the crate twice: with `test-internals` (upstream tests only) and without (the driver);
@@ -83,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("features", nargs="?", default="")
     ap.add_argument("--crate", type=Path, default=DEFAULT_CRATE)
     ap.add_argument("--scratch", action="store_true")
-    ap.add_argument("--stage", type=int, choices=[1], default=1)
+    ap.add_argument("--stage", type=int, choices=[1, 2], default=1)
     ap.add_argument("--skip-tests", action="store_true",
                     help="diagnostic: skip the upstream tests, run only the Differential harness (judge.md §6)")
     args = ap.parse_args(argv)
@@ -106,9 +110,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         crate = args.crate.resolve()
         tag = "default" if crate == DEFAULT_CRATE.resolve() else f"{crate.name}-{hashlib.sha1(str(crate).encode()).hexdigest()[:8]}"
-    build = HERE / "work" / "run" / tag / setname
-    shutil.rmtree(build, ignore_errors=True)
-    build.mkdir(parents=True)
+    if args.stage == 2:
+        if args.scratch:
+            print("run: --stage 2 judges the real crate; --scratch is Stage 1 only", file=sys.stderr)
+            return 2
+        build = HERE / "work" / "run" / tag / f"{setname}-stage2"
+        build.mkdir(parents=True, exist_ok=True)  # keeps cargo-target between runs (incremental builds)
+    else:
+        build = HERE / "work" / "run" / tag / setname
+        shutil.rmtree(build, ignore_errors=True)
+        build.mkdir(parents=True)
     print(f"judge: crate={crate} features=[{','.join(feats) or 'default'}]")
 
     # 0. corpus
@@ -118,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
         print(r.stderr, file=sys.stderr)
         return 1
     print(f"judge: {r.stdout.strip()}")
+
+    if args.stage == 2:
+        return stage2(crate, feats, defines, build, inputs, args.skip_tests)
 
     # 1. staticlibs
     lib_tests = None if args.skip_tests else cargo_build(crate, [*feats, "test-internals"], build / "cargo-target-tests")
@@ -206,6 +220,61 @@ def main(argv: list[str] | None = None) -> int:
     return differential(inputs, build, defines, lib_plain)
 
 
+ADAPTER = "tests/adapter/mod.rs"
+
+
+def stage2_test_numbers(out: str) -> tuple[int, int, int]:
+    """(passed, failed, ignored) summed over every `test result:` line of a cargo test run."""
+    p = f = i = 0
+    for m in re.finditer(r"test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored", out):
+        p, f, i = p + int(m.group(1)), f + int(m.group(2)), i + int(m.group(3))
+    return p, f, i
+
+
+def stage2(crate: Path, feats: list[str], defines: list[str], build: Path, inputs: Path, skip_tests: bool) -> int:
+    """Stage 2 Judge (judge.md section 5.4): translated tests, then the C driver vs the Rust example driver."""
+    tdir = build / "cargo-target"
+    base = ["--manifest-path", str(crate / "Cargo.toml"), "--target-dir", str(tdir)]
+    if feats:
+        base += ["--features", ",".join(feats)]
+    adapter_src = (crate / ADAPTER).read_text()
+    m = re.search(r"pub const HOOKS: bool = (true|false);", adapter_src)
+    if m is None:
+        print(f"run: {ADAPTER} has no `pub const HOOKS: bool = ...;`", file=sys.stderr)
+        return 1
+    hooks = m.group(1) == "true"
+    layout = re.search(r"pub const C_LAYOUT: bool = (true|false);", adapter_src)
+    print(f"judge: stage 2, adapter HOOKS={m.group(1)} C_LAYOUT={layout.group(1) if layout else '?'}")
+
+    if not skip_tests:
+        r = sh(["cargo", "test", *base, "--", "--nocapture"])
+        out = r.stdout + r.stderr
+        p, f, i = stage2_test_numbers(out)
+        skipped = sorted({ln.strip() for ln in out.splitlines() if ln.startswith("SKIPPED: ")})
+        print(f"translated tests [{','.join(feats) or 'default'}]: {p} passed, {f} failed, {i} ignored, "
+              f"{len(skipped)} skipped step kind(s)")
+        for ln in skipped:
+            print(f"  {ln}")
+        if r.returncode or f or p == 0:
+            fails = [ln for ln in out.splitlines() if ln.startswith("test ") and ln.endswith("FAILED")]
+            print("\n".join(fails) or out[-3000:], file=sys.stderr)
+            return 1
+
+    r = sh(["cargo", "build", "-q", "--example", "dump", *base])
+    if r.returncode:
+        print(f"run: cargo build --example dump failed\n{r.stderr[-3000:]}", file=sys.stderr)
+        return 1
+    rust = tdir / "debug" / "examples" / "dump"
+    orig = build / "dump_orig"
+    cmd = ["cc", *CFLAGS, f"-I{SRC}", *defines, *([] if hooks else ["-DDUMP_NO_HOOKS"]), str(HERE / "dump.c"),
+           str(SRC / "cJSON.c"), str(SRC / "cJSON_Utils.c"), "-lm", "-o", str(orig)]
+    r = sh(cmd)
+    if r.returncode:
+        print(f"run: driver build failed\n{r.stderr[-2000:]}", file=sys.stderr)
+        return 1
+    return run_harness(inputs, build, orig, rust)
+
+
 def differential(inputs: Path, build: Path, defines: list[str], lib_plain: Path) -> int:
     """Step 4: the same dump.c, original C vs Rust staticlib (public headers only), harness.py --repeat 2."""
     orig, rust = build / "dump_orig", build / "dump_rust"
@@ -218,6 +287,10 @@ def differential(inputs: Path, build: Path, defines: list[str], lib_plain: Path)
         if r.returncode:
             print(f"run: driver build failed\n{r.stderr[-2000:]}", file=sys.stderr)
             return 1
+    return run_harness(inputs, build, orig, rust)
+
+
+def run_harness(inputs: Path, build: Path, orig: Path, rust: Path) -> int:
     r = sh([
         sys.executable, "-I", str(HARNESS), "--orig", str(orig), "--rust", str(rust), "--inputs", str(inputs),
         "--out", str(build / "harness-report.tsv"), "--repeat", "2",

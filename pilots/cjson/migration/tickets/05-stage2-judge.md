@@ -4,8 +4,8 @@
 
 **Blocked by:** 04
 
-**Status:** todo
+**Status:** done
 
-- [ ] passes on the Faithful port in every feature set
-- [ ] mutant goes red
-- [ ] parts-stage2.tsv created
+- [x] passes on the Faithful port in every feature set
+- [x] mutant goes red
+- [x] parts-stage2.tsv created

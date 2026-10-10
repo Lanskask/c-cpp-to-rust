@@ -8,3 +8,4 @@ date	phase	model	input	output	cache_create	cache_read	messages
 2026-10-10 16:16	E4-judge	claude-sonnet-5-5	268	26874	531842	20696093	131
 2026-10-10 20:30	E4-port	<synthetic>	0	0	0	0	1
 2026-10-10 20:30	E4-port	claude-sonnet-5-5	218	70061	506190	9839154	109
+2026-10-10 21:25	E5-stage2-judge	claude-sonnet-5-5	300	54934	1293175	23544262	149

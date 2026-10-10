@@ -921,7 +921,9 @@ int main(int argc, char **argv)
     run_document("A", a, la);
     if (sep != NULL)
         run_document("B", b, lb);
+#ifndef DUMP_NO_HOOKS /* run.py --stage 2 defines it when the Stage 2 adapter has no allocator hooks (D1) */
     hooks_pass(a, la);
+#endif
     pair_ops(a, b);
     locale_pass(a);
     constructors();

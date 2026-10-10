@@ -535,3 +535,22 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `experiments/` Edit is now ALLOWED (anchored rule `/experiments/**`), the pilot one too: the intended refusal of the
   repo-root path did not happen in this session.
 - **Next:** ticket 05 (Stage 2 Judge), after the user decides on the polish.
+
+## 34. cJSON ticket 05: Stage 2 Judge built by a Sonnet subagent, verified by the governor
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5 subagent (about 41 min, 360,897 subagent tokens, 73 tool calls), Sonnet 5.5 governor
+- **Done:** `rust/tests/adapter/mod.rs` (Stage 1 adapter, interface contract with `HOOKS`/`C_LAYOUT` capability
+  constants), `rust/examples/dump.rs`, `rust/tests/upstream.rs` (164 tests: 163 upstream + 1 extra), `run.py --stage 2`,
+  `dump.c` guarded by `DUMP_NO_HOOKS`, `experiments/e5_cjson_stage2_judge_sensitivity.py`, `parts-stage2.tsv`,
+  RUN-NOTES "Stage 2 Judge" and "Rule proposals" P1-P5. Governor re-ran: Stage 2 `""` and `locales`: 162 passed / 0
+  failed / 2 ignored, harness 3881/3881 each; Stage 1 `""` and `locales`: 163 tests, 0 failing, 3881/3881 each; the
+  `array-index-digit` mutant: red in both sets (34 of 3881 inputs, harness only; translated tests pass); `git diff` of
+  `rust/src` empty. The other 3 mutants (whitespace, hex digit, string escape) are the subagent's report only.
+- **Incident:** the subagent mistyped a `--probe` argument, which ran the whole mutation experiment in the background
+  while it reran Stage 1; it killed it mid-mutant, restored `cJSON.rs` by hand (`<= 31` back to `<= 32`), discarded the
+  polluted runs and reran. Confirmed by `git diff`: nothing left in `rust/src`.
+- **Skill gaps:** (a) a runaway experiment needs a restore guard (the script now restores on SIGTERM and rejects
+  unknown arguments); (b) each Judge run is slow (see user question): no cached C baseline, full rebuilds.
+- **Open:** the Stage 2 adapter paths (`HOOKS = false`, `C_LAYOUT = false`) are reasoned about, not run, because
+  RULEBOOK section 6 is `TODO`; P1-P5 must be decided before ticket 06.
+- **Next:** decide the RULEBOOK section 6 (Stage 2 API) from P1-P5, then ticket 06.
