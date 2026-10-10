@@ -568,3 +568,18 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Gate timing. The 62.6 s first measurement overlapped one other process on the machine; the second, cleaner run
   gave 62.6 s again.
 - **Next:** cJSON session re-reads judge.md §6 before ticket 06.
+
+## 35. Opus review of the Stage 2 rule proposals P1-P5
+- **Date:** 2026-10-10
+- **Who:** Opus 5.5 subagent (134,746 subagent tokens, 37 tool calls); governor verified two claims in the C source
+- **Done:** `pilots/cjson/experiments/stage2_proposals_review.md` (210 lines): all five proposals "modify". User
+  priority recorded: the rewrite stays as close to the C behaviour as possible (memory `rewrite-stay-close-to-c`).
+- **Verified by the governor:** `cJSON_ParseWithOpts(NULL)` returns at `cJSON.c:1135-1138`, before the error reset in
+  `cJSON_ParseWithLengthOpts` (`1153-1154`), so P5's claim "Parse(NULL) sets the error pointer to NULL" is wrong:
+  the previous error stays (new quirk Q26 proposed). The guard `item != parent->child && item->prev == NULL` at
+  `cJSON.c:2260` is a public-API-reachable case, so D14's "guards removed" needs narrowing. The Opus run of the
+  C driver over the corpus (2946 `err=-1`, 1842 `err=outside`) is the subagent's report only.
+- **Decisions pending (user):** D1 (hook seam `AllocHooks` without unsafe, or keep D1 as dropped), D11 (node store with
+  `Copy` handles, so the circular case is representable), new D21 (writes through the returned `char *`).
+- **Next:** apply the user's answers to RULEBOOK §6, §9 (Q26) and §10, make the Judge changes the review lists, rerun
+  Stage 1 and 2, then ticket 06.
