@@ -6,6 +6,9 @@ Claude Code writes every API response into `~/.claude/projects/<project>/*.jsonl
 `message.usage`; one message is split over several lines that repeat the same
 usage, so totals are de-duplicated by `message.id` (decision 22).
 
+`log` also appends one line per model (all four counters) to SPEND-MODELS.tsv next to SPEND.md, so the input
+side of Haiku vs Sonnet cost can be separated (G18). SPEND.md keeps its format.
+
 Subcommands:
   now                       print the current UTC timestamp (mark a phase start)
   sum --since T [--until T] print totals as JSON
@@ -39,6 +42,8 @@ class Totals:
     cache_read: int = 0
     messages: int = 0
     by_model: dict[str, int] = field(default_factory=dict)  # model -> output tokens
+    # model -> all four counters + messages (G18: Haiku vs Sonnet cost needs the input side too)
+    usage_by_model: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def add(self, model: str, usage: dict[str, Any]) -> None:
         out = int(usage.get("output_tokens") or 0)
@@ -48,6 +53,14 @@ class Totals:
         self.cache_read += int(usage.get("cache_read_input_tokens") or 0)
         self.messages += 1
         self.by_model[model] = self.by_model.get(model, 0) + out
+        per = self.usage_by_model.setdefault(
+            model, {"input": 0, "output": 0, "cache_create": 0, "cache_read": 0, "messages": 0}
+        )
+        per["input"] += int(usage.get("input_tokens") or 0)
+        per["output"] += out
+        per["cache_create"] += int(usage.get("cache_creation_input_tokens") or 0)
+        per["cache_read"] += int(usage.get("cache_read_input_tokens") or 0)
+        per["messages"] += 1
 
 
 def default_transcripts_dir(cwd: Path) -> Path:
@@ -87,12 +100,27 @@ def sum_usage(root: Path, since: datetime, until: datetime) -> Totals:
     return totals
 
 
+def append_model_rows(path: Path, phase: str, totals: Totals) -> None:
+    """One line per model and logged phase: date, phase, model, input, output, cache_create, cache_read, messages."""
+    new = not path.exists() or path.stat().st_size == 0
+    stamp = f"{datetime.now(UTC):%Y-%m-%d %H:%M}"
+    with path.open("a", encoding="utf-8") as fh:
+        if new:
+            fh.write("date\tphase\tmodel\tinput\toutput\tcache_create\tcache_read\tmessages\n")
+        for model, u in sorted(totals.usage_by_model.items()):
+            fh.write(
+                f"{stamp}\t{phase}\t{model}\t{u['input']}\t{u['output']}\t{u['cache_create']}"
+                f"\t{u['cache_read']}\t{u['messages']}\n"
+            )
+
+
 def append_row(out: Path, phase: str, part: str, totals: Totals, note: str) -> None:
     models = ", ".join(f"{m}:{n}" for m, n in sorted(totals.by_model.items()))
     row = (
         f"| {datetime.now(UTC):%Y-%m-%d %H:%M} | {phase} | {part} | {totals.input} | {totals.output} "
         f"| {totals.cache_create} | {totals.cache_read} | {totals.messages} | {models} | {note} |\n"
     )
+    append_model_rows(out.with_name("SPEND-MODELS.tsv"), phase, totals)
     new = not out.exists() or out.stat().st_size == 0
     with out.open("a", encoding="utf-8") as fh:
         if new:

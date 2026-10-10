@@ -54,3 +54,28 @@ def test_bad_inputs(tmp_path: Path) -> None:
 def test_default_dir_naming() -> None:
     d = spend.default_transcripts_dir(Path("/Users/a1/My_Projects/settlers_to_rust"))
     assert d.name == "-Users-a1-My-Projects-settlers-to-rust"
+
+
+def test_per_model_usage_has_all_counters_and_goes_to_sidecar(tmp_path: Path) -> None:
+    write(
+        tmp_path / "s.jsonl",
+        [
+            line("2026-10-09T10:00:00Z", "a", 5),
+            line("2026-10-09T10:01:00Z", "b", 3, "claude-opus-5-5"),
+            line("2026-10-09T10:02:00Z", "c", 4),
+        ],
+    )
+    t = spend.sum_usage(tmp_path, datetime(2026, 10, 9, 9, tzinfo=UTC), datetime(2026, 10, 9, 11, tzinfo=UTC))
+    assert t.usage_by_model["claude-haiku-5-5"] == {
+        "input": 2,
+        "output": 9,
+        "cache_create": 20,
+        "cache_read": 200,
+        "messages": 2,
+    }
+    assert t.usage_by_model["claude-opus-5-5"]["input"] == 1
+    out = tmp_path / "SPEND.md"
+    spend.append_row(out, "E9", "-", t, "note")
+    side = (tmp_path / "SPEND-MODELS.tsv").read_text().splitlines()
+    assert side[0].startswith("date\tphase\tmodel\tinput")
+    assert any(ln.split("\t")[2:] == ["claude-haiku-5-5", "2", "9", "20", "200", "2"] for ln in side[1:])
