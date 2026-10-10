@@ -119,3 +119,18 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   the Judge cannot see any of these differences as behaviour; only jsmn (one Part, 471 lines) was tested.
 - **Next:** Opus reads the RUN-NOTES D-vs-C section and, if it agrees, sets the rulebook status line to
   `stress-tested (2026-10-10)`; then the Stage 2 queue (`parts-stage2.tsv`) and the first Stage 2 batch.
+
+## 11. E3 Stage 1 stress test closed; Stage 2 queue created
+- **Date:** 2026-10-10 (after entry 10)
+- **Who:** Opus 5.5 subagent (`65e9705`); Sonnet 5.5 (this session) checked commit, status line, `pytest`, and
+  created `migration/parts-stage2.tsv` with `workqueue.py status`
+- **Done:** Opus read the C-vs-D diff itself: 16 hunks, 85 lines; 10 cosmetic, 6 covered by RP12/RP13, 0 semantic.
+  RULEBOOK status line now `stress-tested (2026-10-10)`; RUN-NOTES has "Stress test closed". Stage 2 queue: one
+  Part `jsmn`, `todo`, attempts 0.
+- **Tells us:** the Stage 1 rules are stable for jsmn. Limits stay: n = 2 per rule set, one Part, the Judge is
+  blind to style (RP8-RP12 are enforced only by review), and A vs B also differed in model.
+- **Open:** the working tree has uncommitted formatting edits to PLAN.md, README.md, SPEND.md and jsmn
+  RULEBOOK.md that no agent of this session made (Opus noted a split list item under RULEBOOK §0).
+  Stage 2 fan-out wants the deny-rules loaded by `claude --settings skill/c-to-rust/assets/settings.json`.
+- **Next:** user decides on the two open items; then Stage 2 on jsmn (Sonnet, `stage2-prompt.md`, gate
+  `make pilot-jsmn STAGE=2 MIN_TESTS=16`).
