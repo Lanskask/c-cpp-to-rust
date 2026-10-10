@@ -12,8 +12,6 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skill" / "c-to-rust" / "scri
 ALL = sorted(p.name for p in SCRIPTS.glob("*.py"))
 STUB_ARGS = {
     "depmap.py": ["inv.tsv"],
-    "gate.py": ["p", "--crate", ".", "--stage", "1"],
-    "harness.py": ["--orig", "a", "--rust", "b"],
     "inventory.py": [".", "--lang", "c"],
     "tier.py": ["inv.tsv", "order.txt"],
     "tm.py": ["build"],
