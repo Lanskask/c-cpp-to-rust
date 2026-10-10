@@ -22,6 +22,14 @@ below whose condition holds. `verify` failing means a Part marked `done` has no 
 `<ws>/migration/gate-passed.tsv` (written by `gate.py`); for Parts accepted before that file existed pass
 `--no-gate-record` (jsmn Stage 1).
 
+### 0. Tickets (every session)
+
+`python3 -I $S/tickets.py --ws <ws> status`. If `<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws>
+init` first: it writes the seven tickets of the run (Mapping, Stage 1 Judge, stress test, Stage 1 Faithful port,
+Stage 2 Judge, Stage 2 Idiomatic pass, report) with their blocking edges. Work the `READY` ticket, `tickets.py mark NN
+in_progress` when you start it and `mark NN done` when its acceptance list holds. The ticket state and `parts.tsv`
+are the resume points; commit ticket changes with the step they belong to.
+
 ### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
 1. `make spend-now`; note the timestamp.
 2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] --out <ws>/migration/inventory.tsv`

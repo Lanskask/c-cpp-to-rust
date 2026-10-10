@@ -303,3 +303,15 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   real multi-Part queue and the first dependency order.
 - **Next:** a fresh deny-ruled session runs `/c-to-rust` on `pilots/cjson` (Stage 0 Mapping), stops at the
   Deviations table.
+
+## 23. Ticket sets: this chat's polish tickets; the Skill writes the run's tickets itself
+- **Date:** 2026-10-10 (after entry 22)
+- **Who:** Sonnet 5.5 governor session; script `skill/c-to-rust/scripts/tickets.py`
+- **Done:** seven polish tickets for the Skill-building chat in `.scratch/skill-polish/issues/` (01 ticket generator
+  done; 02 script gaps G6/G13/G17/G19; 03 spend overlap guard; 04 resume dry run on jsmn; 05 WORK-LOG numbering;
+  06 fold cJSON findings; 07 E6 preparation). `tickets.py init|status|mark` writes and tracks the seven-ticket chain of
+  a run in `<ws>/migration/tickets/`; SKILL.md step 0 makes every session read it. 4 new tests; suite 80 passed, 1
+  skipped.
+- **Tells us:** the run's phases are now machine-readable state, so a fresh session resumes from `tickets.py status`
+  plus `parts.tsv` instead of from prose. Not yet exercised on a real Pilot; ticket 04 does that on jsmn.
+- **Next:** start the cJSON run from the Skill; its first action creates the cJSON tickets.

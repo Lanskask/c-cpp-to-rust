@@ -47,7 +47,7 @@ def pad(block: list[str]) -> list[str]:
 
 def wrap(line: str) -> list[str]:
     m = LIST.match(line)
-    prefix = m.group(1) if m else re.match(r"\s*", line).group(0)  # type: ignore[union-attr]
+    prefix = m.group(1) if m else line[: len(line) - len(line.lstrip())]
     cont = " " * len(prefix) if not prefix.strip().startswith(">") else prefix
     words = TOKEN.findall(line[len(prefix) :])
     out: list[str] = []
