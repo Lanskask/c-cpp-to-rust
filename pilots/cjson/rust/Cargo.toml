@@ -1,0 +1,20 @@
+[package]
+name = "cjson"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "cJSON 1.7.19 (6d9f244), Stage 1 faithful port: c2rust output, C ABI, one cargo feature per C macro"
+
+[lib]
+name = "cjson"
+path = "src/lib.rs"
+crate-type = ["staticlib", "rlib"]
+
+[features]
+default = []
+# ENABLE_LOCALES: decimal point from localeconv() (cJSON.c:48-50,281-286); RULEBOOK section 3
+locales = []
+# Stage 1 only: makes the static items the upstream tests need `pub` + `#[no_mangle]` (RULEBOOK sections 3, 10)
+test-internals = []
+
+[workspace]
