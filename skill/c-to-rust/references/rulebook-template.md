@@ -6,7 +6,7 @@ two-stage C/C++ → Rust port with a per-Part gate. Filled example: `pilots/jsmn
 
 **Meta-rule: if two agents could answer a question differently, the answer goes in the rulebook.**
 Every implementer, reviewer and fixer reads the sections their prompt names before touching code.
-Inside a batch the rulebook is **read-only**: amendments go to §12 as proposals and are applied by Opus
+Inside a batch the rulebook is **read-only**: proposals go to `migration/RUN-NOTES.md` under `## Rule proposals` (the deny-rules in `assets/settings.json` block edits to `RULEBOOK.md`) and are applied to §12 by Opus
 (or the user) between batches.
 
 ---
@@ -52,7 +52,7 @@ Every `config-macro:NAME` tag in `inventory.tsv` gets one row.
 ## 4. Escape hatch and markers
 - Stage 1: `unsafe` wherever the C code dereferences pointers; each `unsafe` block or fn that is not a
   direct pointer translation carries `// SAFETY: <why>`.
-- Stage 2: none. If a construct seems to need `unsafe`, stop and propose a rule (§12).
+- Stage 2: none. If a construct seems to need `unsafe`, stop and propose a rule (`RUN-NOTES.md`, `## Rule proposals`).
 - Greppable markers, exact spelling (they are the queue for later work):
   `TODO(port): <open question>`, `PERF(port): <faster version>`, `BUG(port): <repro>` (defective
   original behaviour reproduced on purpose), `QUIRK(port): <rule id>` (defined but surprising behaviour
@@ -103,7 +103,7 @@ Every translated file ends with:
 `// PORT STATUS: stage=<1|2> confidence=<high|medium|low> todos=<N> deviations=<D-ids or ->`
 
 ## 12. Amendments
-Proposals from reviewers and fixers, appended during a batch; applied between batches.
+Accepted rule changes, applied between batches from `RUN-NOTES.md` `## Rule proposals`.
 | date | proposer | section | proposal | decision |
 |---|---|---|---|---|
 ```

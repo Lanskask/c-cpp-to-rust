@@ -88,4 +88,4 @@ NOTE: <one line: what was hard, or the open question if blocked>
 4. After 5 attempts the Part is `stubbed`: write real signatures with `todo!()` bodies so the crate
    compiles, commit, and add a `## <part>` section to `RUN-NOTES.md` with the last error.
 5. Two failures with the same rustc code → escalate the next attempt to Sonnet and look for a missing
-   rulebook rule (propose it in rulebook §12).
+   rulebook rule (propose it in `RUN-NOTES.md` under `## Rule proposals`).

@@ -51,6 +51,6 @@ VERDICT: accept | fix | escalate
 - `BLOCK` → back to the implementer as `{previous}` (counts as an attempt).
 - `GAP` → add the proposed inputs to the corpus generator or the translated tests (a Judge change, so
   it is its own commit, and the Part is re-gated against the stronger Judge).
-- `RULE` → append to rulebook §12 as a proposal; applied by Opus or the user between batches.
+- `RULE` → append to `migration/RUN-NOTES.md` under `## Rule proposals`; Opus or the user applies it to rulebook §12 between batches.
 - `accept` with no `BLOCK` → commit the Part.
 - Two reviewers disagreeing on a `BLOCK` → escalate to Opus with both reports.
