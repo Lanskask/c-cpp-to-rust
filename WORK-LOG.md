@@ -95,3 +95,27 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   per rule set, so RP12 may be a real gap or noise.
 - **Next:** Opus decides RP12 (§2 C4 or §4) and RP13 (§0) in the rulebook; one more Sonnet translation (D) with
   that rulebook; if D agrees with C, Opus may set the status line to `stress-tested (2026-10-10)`.
+
+## 9. E3 stress test: RP12 and RP13 decided
+- **Date:** 2026-10-10 (after entry 8)
+- **Who:** Opus 5.5 subagent (`cf0181b`, `3493eda`); Sonnet 5.5 (this session) checked commits, `pytest` (36 passed,
+  1 skipped) and that the status line was untouched
+- **Done:** RP12: each group of C case labels inside an `#ifdef` becomes its own `#[cfg]` match arm, shared tail
+  written once per arm, Q5 marker above the `#[cfg(not(feature = "strict"))]` line of two arms (count stays 2).
+  RP13: `pub type jsmnerr = c_int` is emitted. Rationale per Opus: `jsmn.h` has `#ifdef JSMN_STRICT` around exactly
+  those labels, and the Faithful port and c2rust emit the alias.
+- **Tells us:** both were free choices the Judge cannot see (behaviour is identical); the rule only removes
+  variation between runs.
+- **Next:** translation D, same model and rules as C, diffed against C.
+
+## 10. E3 stress test: translation D and diff D vs C
+- **Date:** 2026-10-10 (after entry 9)
+- **Who:** Sonnet 5.5 subagent (translation, gate, diff; `5b27d60`); Sonnet 5.5 (this session) re-ran the 4 gates
+- **Done:** D gated in all 4 feature sets: `FAILED: 0` and 1188/1188 harness inputs each (re-run, same numbers);
+  0 TODO(port); trailer `stage=1 confidence=high todos=0 deviations=D3`. D vs C: 0 new disagreements reported.
+- **Tells us:** the rulebook (RP1-RP13) produced the same shape in two same-model runs with no new rule gap.
+  Limits: n = 2 per rule set; C and D are still not byte-identical (85 differing lines by `diff`, which the
+  subagent classified as cosmetic: field-reset order, local `let`s, comments; I did not re-read those lines);
+  the Judge cannot see any of these differences as behaviour; only jsmn (one Part, 471 lines) was tested.
+- **Next:** Opus reads the RUN-NOTES D-vs-C section and, if it agrees, sets the rulebook status line to
+  `stress-tested (2026-10-10)`; then the Stage 2 queue (`parts-stage2.tsv`) and the first Stage 2 batch.
