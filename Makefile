@@ -36,13 +36,13 @@ STAGE ?= 1
 MIN_TESTS ?= 0
 PART ?= jsmn
 pilot-jsmn:
-	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) --min-tests $(MIN_TESTS) \
+	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) --min-tests $(MIN_TESTS) --also rust/tests/adapter \
 	  --parts pilots/jsmn/migration/parts.tsv \
 	  --features "" --features strict --features parent-links --features strict,parent-links \
 	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py --stage $(STAGE) {features}"
 
 pilot-jsmn-snapshot:  ## record HEAD + baseline before editing the Part
 	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \
-	  --parts pilots/jsmn/migration/parts.tsv --snapshot \
+	  --parts pilots/jsmn/migration/parts.tsv --snapshot --also rust/tests/adapter \
 	  --features "" --features strict --features parent-links --features strict,parent-links \
-	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py {features}"
+	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py --stage $(STAGE) {features}"
