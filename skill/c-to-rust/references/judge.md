@@ -6,12 +6,12 @@ then prove it can fail, before any Part is accepted. Worked example: `pilots/jsm
 
 ## 1. Pieces and when each applies
 
-| Piece | Stage 1, C | Stage 1, C++ | Stage 2 |
-|---|---|---|---|
-| Original tests linked to the crate's C ABI (staticlib, test-only: decision 20) | yes | no (decision 5) | no (the C ABI is gone) |
-| Differential harness, C driver built twice (original source vs Rust staticlib) | yes | — | — |
-| Differential harness, Rust driver (`rust/examples/dump.rs`) vs original C/C++ driver | optional | yes | yes |
-| Translated tests `rust/tests/*.rs` | optional | yes | yes (decision 6) |
+| Piece                                                                                | Stage 1, C | Stage 1, C++    | Stage 2                |
+|--------------------------------------------------------------------------------------|------------|-----------------|------------------------|
+| Original tests linked to the crate's C ABI (staticlib, test-only: decision 20)       | yes        | no (decision 5) | no (the C ABI is gone) |
+| Differential harness, C driver built twice (original source vs Rust staticlib)       | yes        | —               | —                      |
+| Differential harness, Rust driver (`rust/examples/dump.rs`) vs original C/C++ driver | optional   | yes             | yes                    |
+| Translated tests `rust/tests/*.rs`                                                   | optional   | yes             | yes (decision 6)       |
 
 All pieces run for **every feature set** in the rulebook §3 (decision 24).
 
@@ -32,19 +32,21 @@ observable. Keep it tiny and dumb; the same printing code must exist on both sid
 ## 3. The corpus (`migration/harness/inputs/`, generated, git-ignored)
 
 A generator script (`make_inputs.py`, fixed seed) writes the corpus so it is reproducible and diffable:
+
 1. Hand-written valid inputs covering each grammar feature.
 2. Hand-written broken inputs: every truncation point class, unmatched delimiters, bad escapes, empty
    input, control bytes, high bytes, NUL inside the data.
 3. **Every byte value 0..255 in every syntactic position** the parser treats differently (jsmn: as a
-   primitive, as a string character, after a backslash). Decision 28: without this the E2 mutant
-   (`~` rejected) passed a 164-input hand-picked corpus and all 16 upstream tests.
+   primitive, as a string character, after a backslash). Decision 28: without this the E2 mutant (`~` rejected) passed a
+   164-input hand-picked corpus and all 16 upstream tests.
 4. Seeded mutations (flip, cut, insert, duplicate) of the valid inputs.
-5. Only deterministic inputs: run the original driver twice and drop inputs whose output differs
-   (`rand`, `time`, uninitialised memory). Record dropped inputs in `RUN-NOTES.md`.
+5. Only deterministic inputs: run the original driver twice and drop inputs whose output differs (`rand`, `time`,
+   uninitialised memory). Record dropped inputs in `RUN-NOTES.md`.
 
 ## 4. Stage 1 runner (`migration/harness/run.py [FEATURES]`, exit 0 = pass)
 
 Per feature set, in a per-feature build dir under `migration/harness/build/` (git-ignored):
+
 1. `cargo build --manifest-path <crate> --target-dir <build>/cargo-target --features <set>` (staticlib).
 2. C only: compile the upstream tests with the header in declarations-only mode (jsmn: `-DJSMN_HEADER`)
    plus the config defines; link the staticlib; require the upstream success line (`FAILED: 0`).
@@ -64,9 +66,9 @@ replacement is written **before** Stage 2 touches `src/`, and validated on the F
    `new()`, `parse(&[u8], Option<usize>) -> i32` (`None` = count mode, `Some(n)` = use the first `n`
    slots of a persistent 512-token buffer), `tokens(n) -> Vec<Tok>`, `state() -> State`). Sentinels are
    converted back to the C values (`None` → `-1`, `Err(e)` → `e.code()`).
-   - Stage 1 version: calls the C-ABI functions in `unsafe` blocks (allowed: `tests/` is outside the
-     zero-`unsafe` scope of `src/`).
-   - Stage 2 version: calls the §6 API. **This is the only test-side file Stage 2 may change.**
+    - Stage 1 version: calls the C-ABI functions in `unsafe` blocks (allowed: `tests/` is outside the
+      zero-`unsafe` scope of `src/`).
+    - Stage 2 version: calls the §6 API. **This is the only test-side file Stage 2 may change.**
 2. **Rust driver** `rust/examples/dump.rs`: a line-for-line port of the C driver's printing, through the
    adapter (`#[path = "../tests/adapter/mod.rs"] mod adapter;`). Built with
    `cargo build --example dump --manifest-path <crate> --features <set>`.
@@ -76,6 +78,7 @@ replacement is written **before** Stage 2 touches `src/`, and validated on the F
    C driver vs `target/.../examples/dump`.
 
 **Validation, before Stage 2 starts** (record the numbers in `RUN-NOTES.md`):
+
 - On the Faithful port, `run.py --stage 2` passes for every feature set: the Rust driver matches the
   original byte for byte on the whole corpus, and the translated tests pass (16/16 for jsmn).
 - Plant the known mutant (jsmn: `experiments/e2_jsmn_judge_sensitivity.py`, `32..127` → `32..126`): the

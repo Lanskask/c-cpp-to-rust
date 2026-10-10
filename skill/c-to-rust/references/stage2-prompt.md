@@ -6,16 +6,16 @@ committed and validated on the Faithful port, including the planted-mutant check
 
 Slots (same sources as `stage1-prompt.md` unless stated):
 
-| Slot | Source |
-|---|---|
-| `{part_id}`, `{target_path}` | `workqueue.py --parts migration/parts-stage2.tsv next` |
-| `{faithful}` | the Part's Faithful-port Rust at its Stage 1 commit |
-| `{source}` | the original C source of the Part (for intent; behaviour is defined by `{faithful}` + the Judge) |
-| `{rulebook}` | `RULEBOOK.md` §1, §2, §4, §6, §7, §8, §9, §10, §11 |
-| `{idiom_rows}` | matched idiom rows, Stage 2 column |
-| `{adapter}` | `rust/tests/adapter/mod.rs` (Stage 1 version) |
-| `{judge}` | one paragraph: what the driver prints, which modes it runs, the feature matrix, corpus size |
-| `{previous}`, `{tm_hits}` | as in Stage 1 |
+| Slot                         | Source                                                                                           |
+|------------------------------|--------------------------------------------------------------------------------------------------|
+| `{part_id}`, `{target_path}` | `workqueue.py --parts migration/parts-stage2.tsv next`                                           |
+| `{faithful}`                 | the Part's Faithful-port Rust at its Stage 1 commit                                              |
+| `{source}`                   | the original C source of the Part (for intent; behaviour is defined by `{faithful}` + the Judge) |
+| `{rulebook}`                 | `RULEBOOK.md` §1, §2, §4, §6, §7, §8, §9, §10, §11                                               |
+| `{idiom_rows}`               | matched idiom rows, Stage 2 column                                                               |
+| `{adapter}`                  | `rust/tests/adapter/mod.rs` (Stage 1 version)                                                    |
+| `{judge}`                    | one paragraph: what the driver prints, which modes it runs, the feature matrix, corpus size      |
+| `{previous}`, `{tm_hits}`    | as in Stage 1                                                                                    |
 
 ---
 

@@ -74,58 +74,58 @@ structure, C ABI, `unsafe` allowed), `Stage 2` (Idiomatic pass: zero `unsafe`, d
 
 ## A. Allocation and ownership
 
-| id | C | Stage 1 | Stage 2 | trap | tags | verified |
-|---|---|---|---|---|---|---|
-| A1 | `malloc` + `free` of one object | `libc::malloc`/`free` or `Box::into_raw` | `Box<T>` or plain owned value | — | malloc | no |
-| A2 | `malloc(n * sizeof T)`, `calloc` | `libc::calloc` | `vec![T::default(); n]` | `calloc` zero-fills; `malloc` contents are indeterminate (reading them is UB, never reproduce) | malloc | no |
-| A3 | `realloc` growth | `libc::realloc` | `Vec::push` / `reserve` | pointers into the old block dangle after `realloc`; use indices in Stage 2 | malloc | no |
-| A4 | malloc failure check (`if (!p) return NULL`) | keep | unreachable: Rust aborts on OOM. Delete the branch and list it under Deviations | do not delete *precondition* guards that look the same (E2) | malloc | no |
-| A5 | `strdup`, string building | `libc` | `Vec<u8>` / `String` | — | malloc | no |
-| A6 | user allocator hooks (`cJSON_InitHooks`) | keep as function-pointer globals | drop the hooks; Deviation (observable only through custom allocators) | — | malloc | no |
-| A7 | linked list / tree with `next`/`prev`/`child` pointers | raw pointers | `Vec<Node>` + indices (arena), or `Vec<Child>` per node | iteration order and "detach then re-attach" semantics must survive; `Rc<RefCell>` only with a rulebook reason | malloc | no |
-| A8 | caller-owned buffer filled by the callee | `*mut T` + capacity | `&mut [T]` | "buffer too small" is a precondition result (jsmn `JSMN_ERROR_NOMEM`), not allocation failure: keep it | * | no |
-| A9 | `memcpy` | `core::ptr::copy_nonoverlapping` | `copy_from_slice` | overlapping `memcpy` is UB in C | * | no |
-| A10 | `memmove` | `core::ptr::copy` | `slice::copy_within` | — | * | no |
-| A11 | `memset(p, 0, sizeof *p)` | `core::ptr::write_bytes` | `*p = T::default()` | — | * | no |
+| id  | C                                                      | Stage 1                                  | Stage 2                                                                         | trap                                                                                                          | tags   | verified |
+|-----|--------------------------------------------------------|------------------------------------------|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|--------|----------|
+| A1  | `malloc` + `free` of one object                        | `libc::malloc`/`free` or `Box::into_raw` | `Box<T>` or plain owned value                                                   | —                                                                                                             | malloc | no       |
+| A2  | `malloc(n * sizeof T)`, `calloc`                       | `libc::calloc`                           | `vec![T::default(); n]`                                                         | `calloc` zero-fills; `malloc` contents are indeterminate (reading them is UB, never reproduce)                | malloc | no       |
+| A3  | `realloc` growth                                       | `libc::realloc`                          | `Vec::push` / `reserve`                                                         | pointers into the old block dangle after `realloc`; use indices in Stage 2                                    | malloc | no       |
+| A4  | malloc failure check (`if (!p) return NULL`)           | keep                                     | unreachable: Rust aborts on OOM. Delete the branch and list it under Deviations | do not delete *precondition* guards that look the same (E2)                                                   | malloc | no       |
+| A5  | `strdup`, string building                              | `libc`                                   | `Vec<u8>` / `String`                                                            | —                                                                                                             | malloc | no       |
+| A6  | user allocator hooks (`cJSON_InitHooks`)               | keep as function-pointer globals         | drop the hooks; Deviation (observable only through custom allocators)           | —                                                                                                             | malloc | no       |
+| A7  | linked list / tree with `next`/`prev`/`child` pointers | raw pointers                             | `Vec<Node>` + indices (arena), or `Vec<Child>` per node                         | iteration order and "detach then re-attach" semantics must survive; `Rc<RefCell>` only with a rulebook reason | malloc | no       |
+| A8  | caller-owned buffer filled by the callee               | `*mut T` + capacity                      | `&mut [T]`                                                                      | "buffer too small" is a precondition result (jsmn `JSMN_ERROR_NOMEM`), not allocation failure: keep it        | *      | no       |
+| A9  | `memcpy`                                               | `core::ptr::copy_nonoverlapping`         | `copy_from_slice`                                                               | overlapping `memcpy` is UB in C                                                                               | *      | no       |
+| A10 | `memmove`                                              | `core::ptr::copy`                        | `slice::copy_within`                                                            | —                                                                                                             | *      | no       |
+| A11 | `memset(p, 0, sizeof *p)`                              | `core::ptr::write_bytes`                 | `*p = T::default()`                                                             | —                                                                                                             | *      | no       |
 
 ## L. libc functions
 
-| id | C | Stage 1 | Stage 2 | trap | tags | verified |
-|---|---|---|---|---|---|---|
-| L1 | `strlen` | `libc::strlen` / `CStr` | slice `.len()` or `iter().position(\|&b\| b == 0)` | — | * | no |
-| L2 | `strcmp`, `strncmp`, `memcmp` | `libc` | slice `==` / `.cmp()` | C returns any negative/positive int; if a caller prints or stores the magnitude, compute it the C way | * | no |
-| L3 | `strchr`, `strstr`, `memchr` | `libc` | `iter().position`, `windows().position` | `strchr(s, '\0')` finds the terminator | * | no |
-| L4 | `isdigit`, `isxdigit` | `libc` or `u8::is_ascii_*` | `u8::is_ascii_digit`, `is_ascii_hexdigit` | `is*` on a negative `char` other than `EOF` is UB (T3) | * | no |
-| L5 | `isspace` | `libc::isspace` | `matches!(b, b' ' \| b'\t' \| b'\n' \| b'\x0b' \| b'\x0c' \| b'\r')` | **`u8::is_ascii_whitespace` excludes `\v` (0x0B)**; C `isspace` includes it | * | no |
-| L6 | `isalpha`, `isalnum`, `isprint`, `toupper`, `tolower` | `libc` | `u8::is_ascii_*`, `to_ascii_*` | C is locale-dependent; Rust ASCII helpers equal the "C" locale only. Underscore is not alphabetic in either | * | no |
-| L7 | `printf`, `fprintf`, `puts` in library code | `libc::printf` | write to a `&mut impl Write` / return `String` | buffering and stdout/stderr interleaving | varargs | no |
-| L8 | `sprintf`, `snprintf` | `libc::snprintf` | `write!` into `String`/`Vec<u8>` | `snprintf` returns the length it *would* have written and truncates silently; keep that if callers use the return | varargs | no |
-| L9 | `fopen`/`fread`/`fwrite`/`fclose` | `libc` | `std::fs::File`, `impl Read` / `impl Write` | text vs binary mode is a no-op on POSIX, not on Windows | * | no |
-| L10 | `qsort` | `libc::qsort` | `sort_unstable_by` | order of equal elements is unspecified in C and may differ from Rust: Deviation if the output shows it | * | no |
-| L11 | `abs`, `labs`, `fabs`, `floor`, `pow`, `fmod` | `libc` / `f64` methods | `i32::abs` (panics on `i32::MIN` in debug: I2), `f64::abs`, `floor`, `powf`, `%` | `abs(INT_MIN)` is UB | * | no |
-| L12 | `rand`, `time`, `clock` | `libc` | inject a source (parameter or trait) | non-deterministic: exclude from the Differential harness | * | no |
+| id  | C                                                     | Stage 1                    | Stage 2                                                                          | trap                                                                                                              | tags    | verified |
+|-----|-------------------------------------------------------|----------------------------|----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|---------|----------|
+| L1  | `strlen`                                              | `libc::strlen` / `CStr`    | slice `.len()` or `iter().position(\|&b\| b == 0)`                               | —                                                                                                                 | *       | no       |
+| L2  | `strcmp`, `strncmp`, `memcmp`                         | `libc`                     | slice `==` / `.cmp()`                                                            | C returns any negative/positive int; if a caller prints or stores the magnitude, compute it the C way             | *       | no       |
+| L3  | `strchr`, `strstr`, `memchr`                          | `libc`                     | `iter().position`, `windows().position`                                          | `strchr(s, '\0')` finds the terminator                                                                            | *       | no       |
+| L4  | `isdigit`, `isxdigit`                                 | `libc` or `u8::is_ascii_*` | `u8::is_ascii_digit`, `is_ascii_hexdigit`                                        | `is*` on a negative `char` other than `EOF` is UB (T3)                                                            | *       | no       |
+| L5  | `isspace`                                             | `libc::isspace`            | `matches!(b, b' ' \| b'\t' \| b'\n' \| b'\x0b' \| b'\x0c' \| b'\r')`             | **`u8::is_ascii_whitespace` excludes `\v` (0x0B)**; C `isspace` includes it                                       | *       | no       |
+| L6  | `isalpha`, `isalnum`, `isprint`, `toupper`, `tolower` | `libc`                     | `u8::is_ascii_*`, `to_ascii_*`                                                   | C is locale-dependent; Rust ASCII helpers equal the "C" locale only. Underscore is not alphabetic in either       | *       | no       |
+| L7  | `printf`, `fprintf`, `puts` in library code           | `libc::printf`             | write to a `&mut impl Write` / return `String`                                   | buffering and stdout/stderr interleaving                                                                          | varargs | no       |
+| L8  | `sprintf`, `snprintf`                                 | `libc::snprintf`           | `write!` into `String`/`Vec<u8>`                                                 | `snprintf` returns the length it *would* have written and truncates silently; keep that if callers use the return | varargs | no       |
+| L9  | `fopen`/`fread`/`fwrite`/`fclose`                     | `libc`                     | `std::fs::File`, `impl Read` / `impl Write`                                      | text vs binary mode is a no-op on POSIX, not on Windows                                                           | *       | no       |
+| L10 | `qsort`                                               | `libc::qsort`              | `sort_unstable_by`                                                               | order of equal elements is unspecified in C and may differ from Rust: Deviation if the output shows it            | *       | no       |
+| L11 | `abs`, `labs`, `fabs`, `floor`, `pow`, `fmod`         | `libc` / `f64` methods     | `i32::abs` (panics on `i32::MIN` in debug: I2), `f64::abs`, `floor`, `powf`, `%` | `abs(INT_MIN)` is UB                                                                                              | *       | no       |
+| L12 | `rand`, `time`, `clock`                               | `libc`                     | inject a source (parameter or trait)                                             | non-deterministic: exclude from the Differential harness                                                          | *       | no       |
 
 ## M. Macros and preprocessor
 
-| id | C | Stage 1 | Stage 2 | trap | tags | verified |
-|---|---|---|---|---|---|---|
-| M1 | object-like `#define N 42` | `pub const N: T = 42;` | same, typed | the macro's type is whatever the expression promotes to | * | no |
-| M2 | function-like macro | `#[inline] fn` (or `macro_rules!` if it takes types/tokens) | `fn` | arguments evaluated twice in C (`MAX(i++, j)`) | macro-fn | no |
-| M3 | configuration macro (`#ifdef FEATURE`) changing behaviour or layout | cargo feature + `#[cfg(feature = "...")]`; the Judge runs every upstream-tested combination (decision 24) | same | c2rust translates after preprocessing: one run = one configuration | config-macro | no |
-| M4 | linkage/packaging macro (`JSMN_STATIC`, `JSMN_HEADER`, `*_API`, `extern "C"` guards) | no feature; express with `pub` / private | same | — | config-macro | no |
-| M5 | platform macro (`_WIN32`, `__APPLE__`) | `#[cfg(target_os = "...")]` | same | untested platforms are listed under Deviations, not silently dropped | config-macro | no |
+| id | C                                                                                    | Stage 1                                                                                                   | Stage 2     | trap                                                                 | tags         | verified |
+|----|--------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|-------------|----------------------------------------------------------------------|--------------|----------|
+| M1 | object-like `#define N 42`                                                           | `pub const N: T = 42;`                                                                                    | same, typed | the macro's type is whatever the expression promotes to              | *            | no       |
+| M2 | function-like macro                                                                  | `#[inline] fn` (or `macro_rules!` if it takes types/tokens)                                               | `fn`        | arguments evaluated twice in C (`MAX(i++, j)`)                       | macro-fn     | no       |
+| M3 | configuration macro (`#ifdef FEATURE`) changing behaviour or layout                  | cargo feature + `#[cfg(feature = "...")]`; the Judge runs every upstream-tested combination (decision 24) | same        | c2rust translates after preprocessing: one run = one configuration   | config-macro | no       |
+| M4 | linkage/packaging macro (`JSMN_STATIC`, `JSMN_HEADER`, `*_API`, `extern "C"` guards) | no feature; express with `pub` / private                                                                  | same        | —                                                                    | config-macro | no       |
+| M5 | platform macro (`_WIN32`, `__APPLE__`)                                               | `#[cfg(target_os = "...")]`                                                                               | same        | untested platforms are listed under Deviations, not silently dropped | config-macro | no       |
 
 ## G. Globals and state
 
-| id | C | Stage 1 | Stage 2 | trap | tags | verified |
-|---|---|---|---|---|---|---|
-| G1 | file-level mutable global | `static mut` | first that fits: `const` → `static` → `OnceLock<T>` → `AtomicT` → `OnceLock<Mutex<T>>` (ENCRUST order) | signal-handler reachable globals: only `const`/`static`/atomic | static-global | no |
-| G2 | function-local `static` | `static mut` at module level | move into the owning struct or G1 | — | static-global | no |
-| G3 | global error/state shared by calls (`cJSON_GetErrorPtr`) | `static mut` | return it in `Err`; if the API must keep it, thread-local `Cell` | not thread-safe in C; Rust version may be: not a behaviour difference for single-threaded tests | static-global | no |
+| id | C                                                        | Stage 1                      | Stage 2                                                                                                | trap                                                                                            | tags          | verified |
+|----|----------------------------------------------------------|------------------------------|--------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|---------------|----------|
+| G1 | file-level mutable global                                | `static mut`                 | first that fits: `const` → `static` → `OnceLock<T>` → `AtomicT` → `OnceLock<Mutex<T>>` (ENCRUST order) | signal-handler reachable globals: only `const`/`static`/atomic                                  | static-global | no       |
+| G2 | function-local `static`                                  | `static mut` at module level | move into the owning struct or G1                                                                      | —                                                                                               | static-global | no       |
+| G3 | global error/state shared by calls (`cJSON_GetErrorPtr`) | `static mut`                 | return it in `Err`; if the API must keep it, thread-local `Cell`                                       | not thread-safe in C; Rust version may be: not a behaviour difference for single-threaded tests | static-global | no       |
 
 ## V. Varargs
 
-| id | C | Stage 1 | Stage 2 | trap | tags | verified |
-|---|---|---|---|---|---|---|
-| V1 | variadic function in library code | keep via `libc` calls; defining a C-variadic fn needs nightly `c_variadic` | slice `&[Arg]`, builder, or `fmt::Arguments` | avoid nightly in Stage 1 if any other route exists (decision 27) | varargs | no |
-| V2 | variadic test helper (jsmn `tokeq`) | — (original tests stay in C, decision 27) | slice of expected values in the translated Rust test | — | varargs | no |
+| id | C                                   | Stage 1                                                                    | Stage 2                                              | trap                                                             | tags    | verified |
+|----|-------------------------------------|----------------------------------------------------------------------------|------------------------------------------------------|------------------------------------------------------------------|---------|----------|
+| V1 | variadic function in library code   | keep via `libc` calls; defining a C-variadic fn needs nightly `c_variadic` | slice `&[Arg]`, builder, or `fmt::Arguments`         | avoid nightly in Stage 1 if any other route exists (decision 27) | varargs | no       |
+| V2 | variadic test helper (jsmn `tokeq`) | — (original tests stay in C, decision 27)                                  | slice of expected values in the translated Rust test | —                                                                | varargs | no       |

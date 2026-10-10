@@ -1,20 +1,20 @@
 # Stage 1 prompt (Faithful port, one Part)
 
 The orchestrator (Sonnet) fills the `{...}` slots and sends the result to the implementer (Haiku; a retry
-after 2 failures may escalate to Sonnet). The slots are the **only** context the implementer gets
-(PLAN §5): no other files, no chat history. Fill each slot from the named source:
+after 2 failures may escalate to Sonnet). The slots are the **only** context the implementer gets (PLAN §5): no other
+files, no chat history. Fill each slot from the named source:
 
-| Slot | Source |
-|---|---|
-| `{part_id}`, `{target_path}`, `{tier}` | `workqueue.py next` row |
-| `{source}` | the Part's `source_paths`, full text, with line numbers |
-| `{callee_signatures}` | signatures only (no bodies) of functions the Part calls, from `edges.tsv` + already translated Rust files |
-| `{structs}` | Rust definitions of structs/enums/consts the Part uses that other Parts already translated |
-| `{rulebook}` | `RULEBOOK.md` §0, §2, §3, §4, §5, §7, §8, §9, §11 |
-| `{idiom_rows}` | rows of `idiom-table-c.md` whose `tags` column matches the Part's inventory tags, plus all `*` rows |
-| `{c2rust}` | c2rust output for this Part per configuration, or `none` (LLM engine) |
-| `{previous}` | empty on attempt 1; else the last gate line (`gate: FAIL ...`, grouped rustc codes) and the attempt number |
-| `{tm_hits}` | `tm.py search "<previous error>"`, top 3, or `none` |
+| Slot                                   | Source                                                                                                     |
+|----------------------------------------|------------------------------------------------------------------------------------------------------------|
+| `{part_id}`, `{target_path}`, `{tier}` | `workqueue.py next` row                                                                                    |
+| `{source}`                             | the Part's `source_paths`, full text, with line numbers                                                    |
+| `{callee_signatures}`                  | signatures only (no bodies) of functions the Part calls, from `edges.tsv` + already translated Rust files  |
+| `{structs}`                            | Rust definitions of structs/enums/consts the Part uses that other Parts already translated                 |
+| `{rulebook}`                           | `RULEBOOK.md` §0, §2, §3, §4, §5, §7, §8, §9, §11                                                          |
+| `{idiom_rows}`                         | rows of `idiom-table-c.md` whose `tags` column matches the Part's inventory tags, plus all `*` rows        |
+| `{c2rust}`                             | c2rust output for this Part per configuration, or `none` (LLM engine)                                      |
+| `{previous}`                           | empty on attempt 1; else the last gate line (`gate: FAIL ...`, grouped rustc codes) and the attempt number |
+| `{tm_hits}`                            | `tm.py search "<previous error>"`, top 3, or `none`                                                        |
 
 ---
 
