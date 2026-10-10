@@ -1,7 +1,8 @@
 # C/C++ → Rust translation: research findings
 
 Gathered 2026-10-09 for the "settlers_to_rust" project. Input for planning a translation
-skill/pipeline. **No tool has been built yet.** This file is information only.
+skill/pipeline. This file is a dated snapshot (information only); where it disagrees with
+`docs/DECISIONS.md` (e.g. c2rust is now installed and tested, decisions 8, 23), the decision log wins.
 
 Verification labels used below:
 - **[read]**: I read the primary text this session.

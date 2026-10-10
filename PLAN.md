@@ -1,9 +1,9 @@
 # PLAN: build the `c-to-rust` Skill
 
-Self-contained brief for the executor (Opus). Written 2026-10-10 after a four-round design interview with the user.
+Self-contained brief for the executor (**Sonnet**; Opus only plans, writes and evaluates rules, and reviews). Written 2026-10-10 after a four-round design interview with the user; updated the same day after review, E0 and E1.
 **Do not re-ask decisions already settled.** Read first, in this order:
 1. `CONTEXT.md`: vocabulary (Pilot, Part, Faithful port, Idiomatic pass, Same behaviour, Judge, Differential harness, Skill). Use these words.
-2. `docs/DECISIONS.md`: 15 settled decisions with reasons.
+2. `docs/DECISIONS.md`: 25 settled decisions with reasons. Where it disagrees with this file, the newer decision wins.
 3. `RESEARCH-FINDINGS.md`: literature and prior-art notes, with what was and wasn't verified.
 
 Source of the user's standing rules: `~/.claude/CLAUDE.md` (see §9).
@@ -23,11 +23,11 @@ Success for this plan: the Skill takes jsmn end to end, and tinyxml2 through at 
 
 - Two stages: **Faithful port** (Stage 1) then **Idiomatic pass** (Stage 2). Final target is idiomatic Rust with **Same behaviour**, not the same API.
 - **Part** = a class, or the file holding one (for C: a file or a cohesive group of functions; never a single function).
-- One separate Rust crate per Pilot. **No mixed C/C++ + Rust build.** Consequence: original C++ tests cannot be linked to Rust.
+- One separate Rust crate per Pilot. **No mixed C/C++ + Rust build.** Consequence: original C++ tests cannot be linked to Rust. Linking original C tests to the crate's C ABI is test-only and allowed (decision 20).
 - **Judge** per Part: original tests (C only, Stage 1 only, through an exported C ABI) + **Differential harness** (same inputs to original and Rust, diff outputs) + tests translated into Rust (always for C++, and for all Pilots from Stage 2).
 - State lives in `migration/` inside each Pilot's workspace: `RULEBOOK.md`, `parts.tsv`, `RUN-NOTES.md`. One git commit per accepted Part. "Done" = gate passed and commit exists. A fresh session restarts from `parts.tsv` + `git log` only.
-- Stage 1 engine: **LLM by default** (the only path that can ever handle C++). `c2rust` 0.22.1 is installed at `~/.cargo/bin/c2rust` as an **optional fast path for C only**. It has never been run on a real file yet (experiment E1).
-- Models: small model for Part bodies and fixes; strongest model for rulebook, stress test, reviews; scripts for everything else.
+- Stage 1 engine: **LLM by default** (the only path that can ever handle C++). `c2rust` 0.22.1 is installed at `~/.cargo/bin/c2rust` as an **optional fast path for C only**. E1 showed it works on jsmn (decisions 23–25): each macro configuration is a separate translation, so configs become cargo features.
+- Models: Sonnet runs the sessions that build and execute; a small model (Haiku) writes Part bodies and fixes; Opus only for planning, rulebook, rule stress test and reviews; scripts for everything else.
 - The Skill ships (a) an **idiom table** in `references/` that the rulebook template loads, and (b) a **translation-memory cache** (SQLite FTS5 default, DuckDB optional), rebuildable from files, never the source of truth.
 
 ## 3. Repository layout to create
@@ -100,10 +100,10 @@ Zero `unsafe`; `cargo clippy` no warnings; `rustfmt` clean; no `unwrap()`/`expec
 
 | # | Experiment | Done when |
 |---|---|---|
-| E0 | `git init`; Makefile, README, `uv` project, empty script stubs with tests | `make test` and `make lint` pass; first commit |
-| E1 | Run c2rust on jsmn (header-only: it needs a `.c` file that includes it and a compile DB). Record in `experiments/` | c2rust output compiles, or the failure is documented and Stage 1 falls back to the LLM path |
-| E2 | Build scripts §4 against jsmn fixtures; Differential harness for jsmn (token stream dump) | `gate.py` passes on the c2rust output as a no-op Part |
-| E3 | Stage 1 + Stage 2 on jsmn through the full Skill | acceptance §6 met; `SPEND.md` has real numbers; **decision point: extrapolate cost for the rest** |
+| E0 ✅ | Makefile, README, `uv` project, script stubs with tests, working `spend.py` | done: commit `35b725a`, 20 tests pass, ruff + ty clean |
+| E1 ✅ | Run c2rust on jsmn. Record in `experiments/` | done: commit `65d8fb2`; output builds, translated upstream tests 16/16 in all 4 configs (`experiments/e1_c2rust_jsmn.py`) |
+| E2 | (a) Merge the 4 c2rust config outputs into one crate `pilots/jsmn/rust/` with features `strict` and `parent-links` (decision 24). (b) Build scripts §4 against jsmn fixtures. (c) Rewire the c2rust-translated upstream tests to call that crate (today they embed their own copy of jsmn). (d) Differential harness for jsmn (token stream dump) | `gate.py` passes on `pilots/jsmn/rust/` as a no-op Part, in all 4 feature combinations |
+| E3 | Stage 1 + Stage 2 on jsmn through the full Skill | acceptance §6 met; `SPEND.md` has real numbers; **decision point: extrapolate cost for the rest**, stating that jsmn (1–2 Parts) is too small to extrapolate from alone (decision 19) |
 | E4 | cJSON (adds ownership, recursion, serialization; Unity tests) | as E3 |
 | E5 | json-parser, then miniz (C binary data; tests have C++ driver files) | as E3 |
 | E6 | tinyxml2 Stage 1 (C++; separate crate; harness + translated tests) | Judge passes; C++ construct table in `references/idiom-table-cpp.md` filled from real constructs |
@@ -144,6 +144,9 @@ Cost levers, in order: scripts instead of LLM; reachable code only; small prompt
 
 ## 11. First actions for the executor
 
-1. Read the three documents listed at the top. Challenge anything in this plan you think is wrong **before** building; if you change a decision, add an entry to `docs/DECISIONS.md` with the reason.
-2. `git init`, commit the existing files (`CONTEXT.md`, `PLAN.md`, `RESEARCH-FINDINGS.md`, `docs/`, `articles/`; leave out `s25client/`, which is a separate checkout, via `.gitignore`).
-3. E0, then E1. Report results and token spend before E2.
+Done so far (commits `e25f229`, `35b725a`, `65d8fb2`): plan review (decisions 16–25), E0, E1. First `SPEND.md` row logged.
+
+1. Read the three documents listed at the top. If you think a decision is wrong, say so and add an entry to `docs/DECISIONS.md` with the reason; do not silently deviate.
+2. Run `make spend-now` and note the timestamp.
+3. Do E2 (§7). Commit per working script. Do not write the rulebook, idiom tables or stage prompts (Opus work).
+4. Stop after E2: `make spend PHASE=E2 SINCE=<timestamp> NOTE=...`, report results and tokens.

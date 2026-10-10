@@ -9,7 +9,7 @@ The C/C++ codebase being translated.
 _Avoid_: legacy code, original repo, upstream
 
 **Pilot**:
-A small library used only to prove the skill works. The C Pilots are jsmn, cJSON, json-parser and miniz; one small C++ Pilot is added after them. A Pilot is never the end goal.
+A small library used only to prove the skill works. The C Pilots are jsmn, cJSON, json-parser and miniz; the C++ Pilots after them are tinyxml2, pugixml and jsoncpp. A Pilot is never the end goal.
 _Avoid_: test project, sample, benchmark
 
 **Goal project**:
