@@ -5,9 +5,9 @@ Differential harness. Exit 0 = pass.
 Usage: python3 -I run.py [--crate DIR | --scratch] [FEATURES]
        FEATURES = comma list; the only macro feature is `locales` (ENABLE_LOCALES). Default: none.
        --crate   crate to judge (default: pilots/cjson/rust, the accepted Stage 1 target)
-       --scratch use the c2rust SCRATCH crate for the feature set (build/scratch/<default|locales>/, made by
+       --scratch use the c2rust SCRATCH crate for the feature set (work/scratch/<default|locales>/, made by
                  make_scratch.py on first use). Ticket 02 validates the Judge on these; they are not the target.
-Steps (outputs under build/<crate-tag>/<features>/, git-ignored):
+Steps (outputs under work/<crate-tag>/<features>/, git-ignored):
   0. regenerate inputs/ (make_inputs.py, fixed seed);
   1. cargo build the crate twice: with `test-internals` (upstream tests only) and without (the driver);
   2. baseline: the 21 upstream test programs built from the original C (real tests/common.h), run;
@@ -96,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     setname = "+".join(feats) or "default"
 
     if args.scratch:
-        crate = HERE / "build" / "scratch" / ("locales" if "locales" in feats else "default")
+        crate = HERE / "work" / "scratch" / ("locales" if "locales" in feats else "default")
         if not crate.is_dir():
             r = sh([sys.executable, "-I", str(HERE / "make_scratch.py")])
             if r.returncode:
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         crate = args.crate.resolve()
         tag = "default" if crate == DEFAULT_CRATE.resolve() else f"{crate.name}-{hashlib.sha1(str(crate).encode()).hexdigest()[:8]}"
-    build = HERE / "build" / "run" / tag / setname
+    build = HERE / "work" / "run" / tag / setname
     shutil.rmtree(build, ignore_errors=True)
     build.mkdir(parents=True)
     print(f"judge: crate={crate} features=[{','.join(feats) or 'default'}]")

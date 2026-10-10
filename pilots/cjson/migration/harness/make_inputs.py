@@ -248,6 +248,18 @@ def main() -> int:
     ]
     cases += judge
 
+    # array-index digits (decode_array_index_from_pointer): every digit as units, every digit 1-9 as tens
+    idx_doc = json.dumps(list(range(100)), separators=(",", ":")).encode()
+    cases.append(("judge-idx-array12", b"[0,1,2,3,4,5,6,7,8,9,10,11]"))
+    cases.append(("judge-idx-array100", idx_doc))
+    for d in range(10):
+        t = d % 9 + 1
+        ops = [{"op": "replace", "path": f"/{d}", "value": "x"},
+               {"op": "replace", "path": f"/{t}{d}", "value": "y"}]
+        cases.append((f"judge-idx-digit-{d}", idx_doc + SEP + json.dumps(ops, separators=(",", ":")).encode()))
+        for n, o in enumerate(ops):
+            cases.append((f"judge-idx-digit-{d}-{n}", idx_doc + SEP + json.dumps([o], separators=(",", ":")).encode()))
+
     # upstream data (documents and json-patch-tests), when the tests dir is given and present
     tests_dir = Path(sys.argv[2]) if len(sys.argv) == 3 else None
     if tests_dir and (tests_dir / "inputs").is_dir():

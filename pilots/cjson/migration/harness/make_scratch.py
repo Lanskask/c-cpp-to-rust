@@ -3,7 +3,7 @@
 
 The Judge links the upstream tests to a Rust crate, but the crate does not exist until Stage 1 (ticket 04).
 To prove the Judge works (links, passes, can fail) this script transpiles the pinned C with c2rust once per
-feature set and writes one crate per set under build/scratch/<set>/ (git-ignored):
+feature set and writes one crate per set under work/scratch/<set>/ (git-ignored):
     default  -> no macros
     locales  -> -DENABLE_LOCALES
 Each scratch crate declares the cargo features `locales` (no-op: the macro is baked in by c2rust, which
@@ -25,7 +25,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SRC = HERE.parent.parent / "src"
-OUT = HERE / "build" / "scratch"
+OUT = HERE / "work" / "scratch"
 C2RUST = Path.home() / ".cargo" / "bin" / "c2rust"
 SETS: dict[str, list[str]] = {"default": [], "locales": ["-DENABLE_LOCALES"]}
 

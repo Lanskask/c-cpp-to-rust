@@ -4,7 +4,7 @@
 
 Everything below was measured by running `pilots/cjson/migration/harness/run.py --scratch [FEATURES]` on macOS
 aarch64 (clang from Xcode, rustc stable, c2rust 0.22.1). The Judge was validated on SCRATCH crates produced by
-`harness/make_scratch.py` (one c2rust run per feature set, under `harness/build/scratch/`, git-ignored). They are not
+`harness/make_scratch.py` (one c2rust run per feature set, under `harness/work/scratch/`, git-ignored). They are not
 the accepted target `pilots/cjson/rust/`, which does not exist yet (ticket 04).
 
 ### Files
@@ -55,8 +55,8 @@ The one ignored test is upstream's (`print_number.c`, `TEST_IGNORE()` at `print_
 
 | Feature set | Inputs | Match | DIFF | Unstable (dropped) |
 |-------------|--------|-------|------|--------------------|
-| `""`        | 3849   | 3849  | 0    | 0                  |
-| `locales`   | 3849   | 3849  | 0    | 0                  |
+| `""`        | 3881   | 3881  | 0    | 0                  |
+| `locales`   | 3881   | 3881  | 0    | 0                  |
 
 `harness.py --repeat 2` runs the original driver twice per input; no input was unstable, so none was dropped as
 non-deterministic.
@@ -65,7 +65,7 @@ Corpus by group (`make_inputs.py`): valid 61, broken 99, prefix 74, byte 2816 (1
 values: top level, in a string, after a backslash, between number characters, in a key, before a value, as a `\u`
 hex digit, inside `true`, in a patch path, as a case-insensitive key, after `-`), mutation 400, random 160 (120
 document pairs, 40 identical pairs), patch 77, upstream data 142 (21 `tests/inputs/*`, 121 cases from
-`json-patch-tests/*.json`), judge 20. Total 3849.
+`json-patch-tests/*.json`), judge 52 (20 approved-deviation and quirk cases, 32 array-index cases). Total 3881.
 
 User-approved Judge cases and where they are exercised by `dump.c`:
 
@@ -100,18 +100,20 @@ integer literal inside one function. All 8 mutants were detected (exit 1). "Test
 |-------------|------------------------------------------------------------------|---------------------------------------------|-------------------------|
 | `""`        | whitespace `<= 32` to `<= 31` in `buffer_skip_whitespace`        | yes: 8 files, 24 failures                   | 43 of 3849 DIFF         |
 | `""`        | `print_string_ptr` escape `< 32` to `< 31`                       | yes: `print_string` (1 failure)             | 3849 of 3849 DIFF       |
-| `""`        | array index digit `'9'` to `'8'` in `decode_array_index_from_pointer` | **no**, 0 failures                      | 2 of 3849 DIFF          |
+| `""`        | array index digit `'9'` to `'8'` in `decode_array_index_from_pointer` | **no**, 0 failures                      | 34 of 3881 DIFF         |
 | `""`        | hex digit `'9'` to `'8'` in `parse_hex4`                         | yes: `parse_hex4` (1 failure)               | 2 of 3849 DIFF          |
 | `locales`   | whitespace `<= 32` to `<= 31`                                    | yes: 8 files, 24 failures                   | 43 of 3849 DIFF         |
-| `locales`   | array index digit `'9'` to `'8'`                                 | **no**, 0 failures                          | 2 of 3849 DIFF          |
+| `locales`   | array index digit `'9'` to `'8'`                                 | **no**, 0 failures                          | 34 of 3881 DIFF         |
 | `locales`   | `46 =>` to `47 =>` ('.' accepted in a number) in `parse_number`  | yes: 5 files, 6 failures                    | 3849 of 3849 DIFF       |
 | `locales`   | `decimal_point[0]` to `decimal_point[1]` in `get_decimal_point`  | yes: 5 files, 6 failures                    | 3849 of 3849 DIFF       |
 
 Reading: the array-index mutant is invisible to all 21 upstream test programs and is caught only by the Differential
-harness, and only by 2 inputs (`valid-043`, a 14-element array, and `valid-051`, a 300-element array: the pointers `/9`
-and above that `pointers()` in `dump.c` looks up). That is thin; a future corpus extension should add pointer
-round-trips for every index digit in every position. No mutant survived, so no corpus extension was forced. Whole-corpus
-DIFF counts of 3849 come from the fixed constructors section, which prints in every run.
+harness. With the first corpus (3849 inputs) only 2 inputs caught it (`valid-043`, `valid-051`). The corpus was then
+extended with 32 `judge-idx-*` inputs (a 12-element and a 100-element array, and `replace` patches at every digit in
+the units position and digits 1-9 in the tens position); the two array-index rows above were re-run on the 3881-input
+corpus: 34 inputs DIFF in each feature set. The other rows were measured on the 3849-input corpus and not re-run; their
+whole-corpus DIFF counts of 3849 come from the fixed constructors section, which prints in every run. No mutant
+survived.
 
 ### c2rust workarounds and hand tweaks (scratch crates)
 
