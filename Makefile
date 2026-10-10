@@ -1,13 +1,16 @@
 # Everyday commands. See README.md.
 SCRIPTS := skill/c-to-rust/scripts
 
-.PHONY: setup test lint typecheck fmt check spend-now pilot-jsmn pilot-jsmn-snapshot
+.PHONY: setup test idiom lint typecheck fmt check spend-now pilot-jsmn pilot-jsmn-snapshot
 
 setup:            ## create the uv environment with dev tools
 	uv sync
 
 test:             ## run pytest for the Skill scripts
 	uv run pytest -q
+
+idiom:            ## verify the idiom-table rows: compile C and Rust snippets, compare (slow, ~4 min)
+	uv run pytest -q tests/idiom --override-ini addopts=""
 
 lint:             ## ruff lint + format check, then type check
 	uvx ruff check .

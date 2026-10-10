@@ -1,0 +1,26 @@
+row_id	status	tests	note
+A1	verified	test_a1_malloc_free_one_object_is_box	
+A2	verified	test_a2_calloc_zero_fills_vec_default	naive with_capacity has len 0
+A3	verified	test_a3_realloc_growth_is_push	borrow checker rejects reference held across push
+A4	verified	test_a4_malloc_failure_branch	precondition guard must stay
+A5	verified	test_a5_strdup_is_independent_copy	
+A6	not-testable		design rule: allocator hooks observable only through a custom allocator
+A7	verified	test_a7_linked_list_as_arena_indices	swap_remove changes iteration order
+A8	verified	test_a8_caller_owned_buffer_nomem_is_a_result	
+A9	verified	test_a9_memcpy_copy_from_slice	overlap rejected by borrow checker
+A10	verified	test_a10_memmove_copy_within	
+A11	verified	test_a11_memset_zero_struct_is_default	
+L1	verified	test_l1_strlen_stops_at_first_nul	
+L2	verified	test_l2_strcmp_sign_and_magnitude	macOS strcmp returns byte difference, cmp() gives -1/0/1
+L3	verified	test_l3_strchr_finds_terminator	
+L4	verified	test_l4_isdigit_isxdigit_table	
+L5	verified	test_l5_isspace_includes_vertical_tab	is_ascii_whitespace excludes 0x0B
+L6	verified	test_l6_alpha_alnum_print_case_tables	Latin-1 locale makes 0xE9 alphabetic in C
+L7	verified	test_l7_printf_float_formats,test_l7_printf_stdio_buffering_interleave	macOS printf prints -NaN as nan (glibc prints -nan); Rust {} is not %g
+L8	verified	test_l8_snprintf_returns_would_be_length	truncated length changes return value
+L9	verified	test_l9_file_roundtrip_binary_and_text_mode	w equals wb on POSIX
+L10	verified	test_l10_qsort_equal_elements_order	equal-key order differs from macOS qsort
+L11	verified	test_l11_abs_floor_pow_fmod	i32::MIN.abs() panics in debug; rem_euclid is not fmod
+L12	verified	test_l12_rand_time_are_deterministic_under_injection	only determinism under seed/injection checked
+V1	verified	test_v1_variadic_fn_as_slice_of_args	stable rustc rejects C-variadic definition (E0658); calling variadic libc fns works on stable
+V2	verified	test_v2_variadic_test_helper_as_expected_slice	

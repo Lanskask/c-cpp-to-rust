@@ -1,0 +1,23 @@
+row_id	status	tests	note
+C1	verified	test_c1_goto_found_labelled_block,test_c1_goto_found_early_return	labelled block and early return match C; plain break differs
+C2	verified	test_c2_goto_cleanup_raii_order	RAII drop order matches C cleanup; tuple-drop order differs
+C3	verified	test_c3_goto_retry_loop_continue	
+C4	verified	test_c4_switch_fallthrough_break_in_loop	break in switch inside loop leaves switch only
+C5	verified	test_c5_backward_loop_signed_stage1,test_c5_backward_loop_rposition_stage2,test_c5_unsigned_index_never_ends	
+C6	verified	test_c6_setjmp_longjmp_result	Stage 2 Result+? reproduces error escape; Stage 1 is unknown tier (no mechanical mapping)
+C7	verified	test_c7_assert_with_side_effect_ndebug,test_c7_failed_assert_aborts_both	
+C8	verified	test_c8_exit_in_library_vs_err	Stage 2 Err differs observably: Deviation
+E1	verified	test_e1_error_codes_one_to_one	
+E2	verified	test_e2_null_kinds_stay_distinct	
+E3	verified	test_e3_errno_read_right_after_call	
+E4	verified	test_e4_partial_result_with_error	
+E5	verified	test_e5_count_or_error_in_one_int	
+E6	verified	test_e6_index_bound_by_real_length	
+G1	verified	test_g1_global_static_mut_stage1,test_g1_global_atomic_oncelock_stage2,test_g1_signal_handler_global_is_atomic	
+G2	verified	test_g2_function_local_static	
+G3	verified	test_g3_global_error_state_thread_local_cell,test_g3_error_in_err_loses_stale_state	
+M1	verified	test_m1_object_macro_keeps_promoted_type	
+M2	verified	test_m2_function_macro_double_evaluation	
+M3	verified	test_m3_configuration_macro_two_configs	C with/without -DFEATURE, Rust with/without --cfg feature
+M4	not-testable		linkage/packaging macros: design rule (pub/private), no observable behaviour
+M5	verified	test_m5_platform_macro_target_os	

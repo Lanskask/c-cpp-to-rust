@@ -10,6 +10,8 @@ dev-dependencies = ["pytest>=8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the idiom suite compiles C and Rust snippets (about 4 minutes): `make idiom`
+addopts = "--ignore=tests/idiom"
 pythonpath = ["skill/c-to-rust/scripts"]
 
 [tool.ruff]

@@ -1,0 +1,26 @@
+row_id	status	tests	note
+T1	verified	test_t1_unsigned_int_wraps_like_c	existing
+T2	verified	test_t2_size_t_sign_mixing	sizes 8; int<size_t converts int to unsigned
+T3	verified	test_t3_char_is_signed_on_this_platform	signed char on macOS arm64; Linux aarch64 unsigned case not runnable here
+T4	verified	test_t4_nul_terminated_string_stops_at_nul	
+T5	verified	test_t5_pointer_length_pair_and_limit_count	over-long length is UB, not observable; limit-count trap shown
+T6	verified	test_t6_null_pointer_selects_a_mode	
+T7	verified	test_t7_truthy_int_is_not_a_bool	
+T8	verified	test_t8_enum_holds_unknown_value	transmute UB not exercised; TryFrom path shown
+T9	verified	test_t9_struct_layout_repr_c_vs_plain	repr(C) size 12 vs reordered 8
+T10	verified	test_t10_union_punning_and_endianness,test_t10_tagged_union_becomes_enum	little-endian host only
+T11	verified	test_t11_bitfields_manual_masks	LSB-first on clang arm64; storage unit 4 bytes
+T12	verified	test_t12_null_function_pointer_means_default	
+T13	verified	test_t13_void_pointer_user_data_to_closure	
+T14	verified	test_t14_flexible_array_member_to_vec	
+T15	verified	test_t15_out_parameter_partial_value_on_error	
+I1	verified	test_i1_unsigned_wraps_with_wrapping_ops	
+I2	verified	test_i2_signed_overflow_wrapping_and_checked	C compared under -fwrapv; without it result is UB
+I3	verified	test_i3_shift_by_width_masks_count	C result is arm64 hardware behaviour of UB; wrapping_shl matches on this platform
+I4	verified	test_i4_integer_promotion	u16*u16 overflow in int compared under -fwrapv; both u16 and i32 naive panic
+I5	verified	test_i5_division_truncates_and_int_min_traps	INT_MIN/-1 returns INT_MIN on arm64 C, panics in Rust
+I6	verified	test_i6_float_to_int_cast	on arm64 C saturates like Rust (NaN -> 0); trap is x86-only, no observable diff here
+I7	verified	test_i7_double_printing_snprintf_and_handwritten	Stage 2 g/f formatter via {:.*e} and {:.*}; Rust {} and {:e} differ
+I8	verified	test_i8_strtod_libc_and_prefix_scanner,test_i8_strtod_hex_float_rust_parse_rejects	scanner excludes hex floats, nan; C locale only
+I9	verified	test_i9_strtol_libc_and_prefix_scanner	clamp + ERANGE; atoi overflow UB not tested
+I10	verified	test_i10_unsigned_minus_one_into_signed_sentinel	wrapping_sub as c_int gives -1; usize wrapping_sub printed as usize::MAX
