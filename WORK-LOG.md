@@ -248,3 +248,30 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Open:** user confirmation of the D2 amendment (RULEBOOK §8 still says "awaits user confirmation"); optional Judge
   additions (phase 6 for k in {0, toknext-1, toknext}).
 - **Next:** user confirms D2; then E4 (not started).
+
+## 19. E3 gap closure before E4: G5, G8, G9, G11, G12, G14, G15, G16
+- **Date:** 2026-10-10 (after entry 18)
+- **Who:** Sonnet 5.5 governor session did G5, G8, G9, G11 inline (two subagent spawns were refused by the
+  auto-mode classifier, decision 38 fallback); Sonnet 5.5 subagents did G12 (`754b1c0`) and G14/G15/G16 (`f6e52e0`).
+- **Done:** gate pass record `migration/gate-passed.tsv` checked by `workqueue.py verify`; harness raw-bytes compare,
+  timeout = DIFF, `--repeat` / `UNSTABLE`; `verify` checks stubbed `todo!()` + RUN-NOTES and that the commit
+  touched the target; one-Part crate -> `lib.rs`; ten new inventory tags; `# cmd:` header. Real Stage 2 gate on
+  jsmn re-run: all 4 feature sets, clippy, fmt, unsafe, unwrap, allow pass and are recorded (`ce9c06e`).
+  Full default suite: 74 passed, 1 skipped.
+- **Tells us:** the review's "blocks E4" gaps are closed; G6, G10, G13, G17, G18, G19 remain (G18, per-model input
+  tokens, matters for the extrapolation). One unrequested fix by a subagent: clang ran without the compile DB's
+  `directory`, so relative `file` entries silently dropped every symbol (G14 test found it).
+- **Next:** G18 in `spend.py`, then the user's go/no-go for E4 (open questions Q1-Q7 in chat).
+
+## 20. Idiom table verified by tests (70 of 72 rows)
+- **Date:** 2026-10-10 (after entry 19)
+- **Who:** three Sonnet 5.5 subagents wrote `tests/idiom/` (two were cut off by a rate limit and re-run); Sonnet 5.5
+  governor ran the suite and wrote the `verified` column with `experiments/e3_idiom_verified_column.py` (`74f1d4e`)
+- **Done:** 80 tests compile a C snippet and the Rust mapping of a row and compare stdout; where a row has a trap the
+  naive mapping is shown to differ. `make idiom` (about 4 minutes, excluded from default pytest). A6 and M4 are design
+  rules with no observable behaviour. New inventory tags now select T11, T12, I7, I8, L4-L6, L10 instead of `*`.
+- **Tells us:** 0 rows disproved. Caveat: the same agents wrote tests and judged rows against a table they could read,
+  so this checks that the rows are internally consistent with real C and rustc output, not that the table is
+  complete; a missing row is invisible to it. Rows with `*` tags are still sent to every prompt (the jsmn stress
+  prompt was 37 KB).
+- **Next:** first real use is E4 (cJSON); expect `fnptr`, `float-format`, `strtod` rows to be exercised there.
