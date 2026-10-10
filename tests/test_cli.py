@@ -1,4 +1,4 @@
-"""Every script answers --help with exit 0; stubs exit 1 until implemented."""
+"""Every script answers --help with exit 0; stubs (none left after E2) exit 1 until implemented."""
 
 from __future__ import annotations
 
@@ -10,12 +10,7 @@ import pytest
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "skill" / "c-to-rust" / "scripts"
 ALL = sorted(p.name for p in SCRIPTS.glob("*.py"))
-STUB_ARGS = {
-    "depmap.py": ["inv.tsv"],
-    "inventory.py": [".", "--lang", "c"],
-    "tier.py": ["inv.tsv", "order.txt"],
-    "tm.py": ["build"],
-}
+STUB_ARGS: dict[str, list[str]] = {}
 STUBS = sorted(STUB_ARGS)
 
 
@@ -35,6 +30,7 @@ def test_no_stdlib_shadowing() -> None:
     assert not names & set(sys.stdlib_module_names)
 
 
+@pytest.mark.skipif(not STUBS, reason="no stubs left")
 @pytest.mark.parametrize("script", STUBS)
 def test_stub_exits_1(script: str) -> None:
     r = run(script, *STUB_ARGS[script])

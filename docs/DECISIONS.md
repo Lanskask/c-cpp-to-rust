@@ -67,3 +67,18 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ measured — c2rust translates after preprocessing, so one run fixes one config; upstream tests all four, so Same behaviour covers all four.
 25. **Generated crates are built with `cargo +<pinned toolchain> --manifest-path`**, never by changing into the crate dir.
     _Reason:_ measured — rustup reads `rust-toolchain.toml` only from the cwd; this keeps the "no build tool with a pilot dir as cwd" rule and still honours c2rust's nightly pin.
+
+## 2026-10-10 — E2 results (executor)
+
+26. **The jsmn Faithful port is a hand-merge, not raw c2rust output.** `pilots/jsmn/rust/src/lib.rs` keeps the c2rust semantics and C ABI (`jsmn_init`, `jsmn_parse`, `#[repr(C)]` structs) but is written readably with `#[cfg(feature = "strict")]` / `#[cfg(feature = "parent-links")]` guards, using the diffs of the four c2rust configs as the guide (decision 24).
+    _Reason:_ c2rust emits four near-duplicate translations (each with `current_block` goto-simulation state); one crate with features is what the Judge needs. Verified by the Judge below, not by inspection.
+27. **Upstream C tests are linked to the Rust staticlib, not rewired as translated Rust tests.** `tests.c` is compiled with `-DJSMN_HEADER` (declarations only) plus the config defines and linked against `libjsmn.a`. This replaces PLAN §7 E2(c).
+    _Reason:_ simpler and stricter: the real upstream tests run unchanged, no nightly toolchain (`c_variadic`), and it is exactly the test-only linking allowed by decision 20. Translated-to-Rust tests remain required from Stage 2 (decision 6).
+28. **A differential corpus must contain every single byte value in each syntactic position.** `make_inputs.py` emits bytes 0..255 as primitive, string char and escape char, plus seeded mutations (932 inputs).
+    _Reason:_ measured (`experiments/e2_jsmn_judge_sensitivity.py`): a one-character change (`~` rejected) passed the upstream tests (16/16) and passed a 164-input hand-picked corpus; only the exhaustive-byte corpus caught it.
+29. **Gate baseline is recorded with `gate.py --snapshot` into `migration/gate/<part>.json` (git-ignored).** It stores HEAD (for path-scoped rollback) and the checks that already fail. Without a snapshot the baseline is empty and HEAD is the current commit.
+    _Reason:_ "baseline-aware" needs state from before the change, and the gate is called after it; per-Part files keep parallel Parts independent.
+30. **Skill scripts are standalone files with no shared module.** Each is run with `python3 -I`, which does not put the script directory on `sys.path`; the small TSV reader is duplicated on purpose.
+    _Reason:_ keeps the `-I` rule for untrusted directories; avoids a packaging step for the Skill.
+31. **`inventory.py` uses clang's JSON AST only for translation units listed in a compile DB**, regex for everything else (headers included), and says which in `# engine:`. On jsmn with a DB covering only `tests.c`, the result is `clang-ast+regex-fallback`, so header-only libraries get regex symbols.
+    _Reason:_ measured on jsmn; the regex engine reproduces line spans and tags on the fixture and on jsmn, but is unverified on C++ (templates, nested namespaces). Treat C++ inventory as unverified until E6.

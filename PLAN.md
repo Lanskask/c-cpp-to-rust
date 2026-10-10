@@ -102,7 +102,7 @@ Zero `unsafe`; `cargo clippy` no warnings; `rustfmt` clean; no `unwrap()`/`expec
 |---|---|---|
 | E0 ✅ | Makefile, README, `uv` project, script stubs with tests, working `spend.py` | done: commit `35b725a`, 20 tests pass, ruff + ty clean |
 | E1 ✅ | Run c2rust on jsmn. Record in `experiments/` | done: commit `65d8fb2`; output builds, translated upstream tests 16/16 in all 4 configs (`experiments/e1_c2rust_jsmn.py`) |
-| E2 | (a) Merge the 4 c2rust config outputs into one crate `pilots/jsmn/rust/` with features `strict` and `parent-links` (decision 24). (b) Build scripts §4 against jsmn fixtures. (c) Rewire the c2rust-translated upstream tests to call that crate (today they embed their own copy of jsmn). (d) Differential harness for jsmn (token stream dump) | `gate.py` passes on `pilots/jsmn/rust/` as a no-op Part, in all 4 feature combinations |
+| E2 ✅ | (a) Merge the 4 c2rust config outputs into one crate `pilots/jsmn/rust/` with features `strict` and `parent-links` (decision 24). (b) Build scripts §4 against jsmn fixtures. (c) Rewire the c2rust-translated upstream tests to call that crate (today they embed their own copy of jsmn). (d) Differential harness for jsmn (token stream dump) | done: `make pilot-jsmn` passes (12 checks, 4 feature sets); (c) done differently, see decision 27 |
 | E3 | Stage 1 + Stage 2 on jsmn through the full Skill | acceptance §6 met; `SPEND.md` has real numbers; **decision point: extrapolate cost for the rest**, stating that jsmn (1–2 Parts) is too small to extrapolate from alone (decision 19) |
 | E4 | cJSON (adds ownership, recursion, serialization; Unity tests) | as E3 |
 | E5 | json-parser, then miniz (C binary data; tests have C++ driver files) | as E3 |
@@ -144,7 +144,7 @@ Cost levers, in order: scripts instead of LLM; reachable code only; small prompt
 
 ## 11. First actions for the executor
 
-Done so far (commits `e25f229`, `35b725a`, `65d8fb2`): plan review (decisions 16–25), E0, E1. First `SPEND.md` row logged.
+Done so far: plan review (decisions 16–25), E0, E1, E2 (decisions 26–31). Next is E3 (Opus writes the rulebook, idiom tables and stage prompts first; Sonnet then executes).
 
 1. Read the three documents listed at the top. If you think a decision is wrong, say so and add an entry to `docs/DECISIONS.md` with the reason; do not silently deviate.
 2. Run `make spend-now` and note the timestamp.

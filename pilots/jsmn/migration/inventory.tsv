@@ -1,0 +1,48 @@
+# engine: regex
+symbol	kind	file	lines	tags
+realloc_it	function	example/jsondump.c	14-21	errno,malloc
+dump	function	example/jsondump.c	28-70	
+main	function	example/jsondump.c	72-134	goto,errno,malloc
+JSON_STRING	variable	example/simple.c	11-13	
+jsoneq	function	example/simple.c	15-21	
+main	function	example/simple.c	23-77	
+JSMN_API	macro	jsmn.h	34-34	config-macro:JSMN_STATIC
+JSMN_API	macro	jsmn.h	36-36	config-macro:JSMN_STATIC
+jsmntype_t	typedef	jsmn.h	46-52	
+jsmnerr	enum	jsmn.h	54-61	
+jsmntok	record	jsmn.h	69-77	config-macro:JSMN_PARENT_LINKS
+jsmntok_t	typedef	jsmn.h	69-77	config-macro:JSMN_PARENT_LINKS
+jsmn_parser	record	jsmn.h	83-87	
+jsmn_parser	typedef	jsmn.h	83-87	
+jsmn_alloc_token	function	jsmn.h	106-119	config-macro:JSMN_HEADER,config-macro:JSMN_PARENT_LINKS
+jsmn_fill_token	function	jsmn.h	124-130	config-macro:JSMN_HEADER
+jsmn_parse_primitive	function	jsmn.h	135-188	goto,config-macro:JSMN_HEADER,config-macro:JSMN_PARENT_LINKS,config-macro:JSMN_STRICT
+jsmn_parse_string	function	jsmn.h	193-263	config-macro:JSMN_HEADER,config-macro:JSMN_PARENT_LINKS
+jsmn_parse	function	jsmn.h	268-453	config-macro:JSMN_HEADER,config-macro:JSMN_PARENT_LINKS,config-macro:JSMN_STRICT
+jsmn_init	function	jsmn.h	459-463	config-macro:JSMN_HEADER
+fail	macro	test/test.h	8-8	macro-fn
+done	macro	test/test.h	11-11	macro-fn
+check	macro	test/test.h	14-18	macro-fn
+test_passed	variable	test/test.h	4-4	static-global
+test_failed	variable	test/test.h	5-5	static-global
+test	function	test/test.h	21-29	
+test_empty	function	test/tests.c	9-15	
+test_object	function	test/tests.c	17-48	config-macro:JSMN_STRICT
+test_array	function	test/tests.c	50-59	
+test_primitive	function	test/tests.c	61-73	
+test_string	function	test/tests.c	75-97	
+test_partial_string	function	test/tests.c	99-119	
+test_partial_array	function	test/tests.c	121-143	config-macro:JSMN_STRICT
+test_array_nomem	function	test/tests.c	145-170	
+test_unquoted_keys	function	test/tests.c	172-188	
+test_issue_22	function	test/tests.c	190-211	
+test_issue_27	function	test/tests.c	213-218	
+test_input_length	function	test/tests.c	220-234	
+test_count	function	test/tests.c	236-281	
+test_nonstrict	function	test/tests.c	283-300	config-macro:JSMN_STRICT
+test_unmatched_brackets	function	test/tests.c	302-318	
+test_object_key	function	test/tests.c	320-337	config-macro:JSMN_STRICT
+main	function	test/tests.c	339-359	
+vtokeq	function	test/testutil.h	6-62	varargs
+tokeq	function	test/testutil.h	64-71	varargs
+parse	function	test/testutil.h	73-94	varargs,malloc

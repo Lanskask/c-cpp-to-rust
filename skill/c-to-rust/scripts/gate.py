@@ -162,12 +162,16 @@ def main(argv: list[str] | None = None) -> int:
             results = run_checks(crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, set(), False)
             snap.parent.mkdir(exist_ok=True)
             snap.write_text(
-                json.dumps({"head": git(root, "rev-parse", "HEAD"), "failing": [r.key for r in results if r.status == "fail"]})
+                json.dumps(
+                    {"head": git(root, "rev-parse", "HEAD"), "failing": [r.key for r in results if r.status == "fail"]}
+                )
             )
             failing = sum(r.status == "fail" for r in results)
             print(f"gate: snapshot of {args.part} recorded ({failing} pre-existing failure(s))", file=sys.stderr)
             return 0
-        saved = json.loads(snap.read_text()) if snap.exists() else {"head": git(root, "rev-parse", "HEAD"), "failing": []}
+        saved = (
+            json.loads(snap.read_text()) if snap.exists() else {"head": git(root, "rev-parse", "HEAD"), "failing": []}
+        )
         baseline = set(saved["failing"])
         results = run_checks(crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, baseline, True)
     except (ValueError, RuntimeError, OSError) as e:
@@ -179,8 +183,8 @@ def main(argv: list[str] | None = None) -> int:
     if regressions:
         first = regressions[0]
         if not args.no_rollback:
-            rollback(root, saved["head"], target)
-        action = "kept working tree" if args.no_rollback else f"restored {target} to {saved['head'][:8]}"
+            rollback(root, str(saved["head"]), target)
+        action = "kept working tree" if args.no_rollback else f"restored {target} to {str(saved['head'])[:8]}"
         print(f"gate: FAIL {args.part}: {first.key}: {first.detail} ({action})", file=sys.stderr)
         return 1
     ok = sum(r.status == "pass" for r in results)

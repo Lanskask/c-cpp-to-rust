@@ -11,7 +11,10 @@ HEADER = "part_id\tkind\tsource_paths\ttarget_path\ttier\tdeps\tstate\tattempts\
 
 
 def test_summarize_groups_by_error_code() -> None:
-    out = "error[E0308]: mismatched types\n --> x\nerror[E0308]: mismatched types\nerror[E0425]: cannot find\nerror: aborting due to 3 errors\n"
+    out = (
+        "error[E0308]: mismatched types\n --> x\nerror[E0308]: mismatched types\n"
+        "error[E0425]: cannot find\nerror: aborting due to 3 errors\n"
+    )
     s = gate.summarize_rustc(out)
     assert s.startswith("E0308 x2, E0425 x1") and "first: mismatched types" in s
 
@@ -24,7 +27,11 @@ def test_count_unsafe_ignores_comments(tmp_path: Path) -> None:
 
 def make_workspace(tmp_path: Path) -> tuple[Path, Path]:
     def git(*a: str) -> None:
-        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", *a], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", *a],
+            check=True,
+            capture_output=True,
+        )
 
     git("init", "-q")
     crate = tmp_path / "rust"
@@ -32,7 +39,9 @@ def make_workspace(tmp_path: Path) -> tuple[Path, Path]:
     (crate / "Cargo.toml").write_text('[package]\nname="t"\nversion="0.0.0"\nedition="2021"\n[workspace]\n')
     (crate / "src" / "lib.rs").write_text("pub fn f() -> i32 { 1 }\n")
     (tmp_path / "migration").mkdir()
-    (tmp_path / "migration" / "parts.tsv").write_text(HEADER + "p\tfile\ta.c\trust/src/lib.rs\tmechanical\t\ttodo\t0\t\t\t\t\n")
+    (tmp_path / "migration" / "parts.tsv").write_text(
+        HEADER + "p\tfile\ta.c\trust/src/lib.rs\tmechanical\t\ttodo\t0\t\t\t\t\n"
+    )
     git("add", ".")
     git("commit", "-q", "-m", "base")
     return crate, tmp_path / "migration" / "parts.tsv"
@@ -42,7 +51,7 @@ def test_regression_rolls_back_and_good_change_passes(tmp_path: Path) -> None:
     crate, parts = make_workspace(tmp_path)
     args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts)]
     assert gate.main([*args, "--snapshot"]) == 0
-    (crate / "src" / "lib.rs").write_text("pub fn f() -> i32 { \"no\" }\n")
+    (crate / "src" / "lib.rs").write_text('pub fn f() -> i32 { "no" }\n')
     assert gate.main(args) == 1
     assert (crate / "src" / "lib.rs").read_text() == "pub fn f() -> i32 { 1 }\n"  # restored
     (crate / "src" / "lib.rs").write_text("pub fn f() -> i32 { 2 }\n")
@@ -52,7 +61,7 @@ def test_regression_rolls_back_and_good_change_passes(tmp_path: Path) -> None:
 
 def test_preexisting_failure_is_not_a_regression(tmp_path: Path) -> None:
     crate, parts = make_workspace(tmp_path)
-    (crate / "src" / "lib.rs").write_text("pub fn f() -> i32 { \"no\" }\n")  # broken before the Part is touched
+    (crate / "src" / "lib.rs").write_text('pub fn f() -> i32 { "no" }\n')  # broken before the Part is touched
     args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts)]
     assert gate.main([*args, "--snapshot"]) == 0
     assert gate.main(args) == 0  # same failures as baseline: no regression
