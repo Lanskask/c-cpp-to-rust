@@ -37,7 +37,8 @@ are the resume points; commit ticket changes with the step they belong to.
    anything else that is not library code. Test and example files are never Parts.)
 3. `depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`
 4. `tier.py <ws>/migration/inventory.tsv <ws>/migration/order.txt --out <ws>/migration/parts.tsv`
-5. Build the Judge and prove it can fail: `references/judge.md`.
+5. Build the Judge and prove it can fail: `references/judge.md`. The crate does not exist yet: validate the Stage 1
+   Judge against a scratch crate (raw c2rust transpile per feature set, or a stub for C++), judge.md §4a.
 6. Draft `<ws>/migration/RULEBOOK.md` from `references/rulebook-template.md` and
    `references/idiom-table-c.md` (Opus). Every `config-macro:` tag gets a §3 row; every UB or platform
    behaviour gets a §8 Deviation row with status `proposed`.

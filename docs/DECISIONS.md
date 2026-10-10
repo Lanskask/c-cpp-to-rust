@@ -233,3 +233,9 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ one `cd pilots/cjson/src` in a persistent shell made the relative hook path unresolvable, and a failing
     hook blocked every Bash, Write and Edit call. The user's rule "save analysis scripts under `experiments/`" is met
     per Pilot without letting a Translation session rewrite the Skill's own sensitivity experiments.
+
+46. **Stage 1 Judge is validated against a scratch crate before ticket 04 (judge.md §4a).** For C with c2rust: a raw
+    transpile per feature set in `<ws>/experiments/scratch-crate/`; for C without c2rust: a minimal hand-merged
+    slice; for C++: a `todo!()` stub that the Judge must reject with a diff. The scratch crate is never the accepted
+    target. _Reason:_ the cJSON Translation session (WORK-LOG 28) found that ticket 02 must link the upstream tests to
+    a crate that only ticket 04 produces. jsmn escaped this because its Judge was built beside a hand-merged crate.

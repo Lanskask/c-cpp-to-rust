@@ -55,6 +55,27 @@ Per feature set, in a per-feature build dir under `migration/harness/build/` (gi
 
 The gate calls it as `--harness-cmd "python3 -I <pilot>/migration/harness/run.py {features}"`.
 
+## 4a. Validating the Stage 1 Judge before the crate exists
+
+Ticket 02 builds the Stage 1 Judge, but its crate is the output of ticket 04, which 02 blocks. The Judge needs
+something Rust-shaped to run green against, and a planted mutant to run red against. Use a **scratch crate** in
+`<ws>/experiments/scratch-crate/` (never committed as the target; ticket 04's done-commit must still change the
+real crate):
+
+- **C, engine c2rust:** a raw `c2rust transpile` per feature set (config defines on the command line), unpolished,
+  one crate per set.
+- **C, no c2rust:** one hand-merged minimal port of a slice big enough to exercise the driver.
+- **C++:** a stub crate with real signatures and `todo!()` bodies. Original tests cannot link (decision 5).
+
+Acceptance for the Judge (ticket 02):
+
+1. Green on the raw transpile in **every** feature set (C routes only). A red run here is a Judge bug or a c2rust
+   defect; find out which before going on, and record it in RUN-NOTES.
+2. Red on a planted mutant of the scratch crate (§6).
+3. Stub route: red on the stub, and the runner reports a diff, not a build error.
+
+The scratch crate proves the Judge, not the port. Ticket 04's Gate runs the same Judge against the real crate.
+
 ## 5. Stage 2 Judge: the adapter
 
 Stage 2 drops the C ABI, so the C test runner and the C-built Rust driver can no longer link. The
@@ -89,9 +110,9 @@ replacement is written **before** Stage 2 touches `src/`, and validated on the F
 ## 6. Proving a Judge can fail (every new Pilot)
 
 A Judge that passes everything is indistinguishable from a broken one. For each Pilot, write one
-`experiments/<eN>_<pilot>_judge_sensitivity.py` that plants at least one one-character mutant in a byte
-class or boundary check, runs the Judge, restores the file, and states in its docstring which Judge piece
-caught it. If nothing catches it, extend the corpus (§3) until something does.
+`<ws>/experiments/<eN>_<pilot>_judge_sensitivity.py` (decision 45) that plants at least one one-character mutant
+in a byte class or boundary check, runs the Judge, restores the file, and states in its docstring which Judge
+piece caught it. If nothing catches it, extend the corpus (§3) until something does.
 
 ## 7. Rules for untrusted Pilot code
 

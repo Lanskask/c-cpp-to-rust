@@ -397,3 +397,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   (a raw transpile, not an accepted Part); the Skill does not say so. Skill gap for the skill-editing chat.
 - **Next:** ticket 02: one c2rust run per feature set into a scratch crate, then the Judge (driver, corpus,
   planted mutant), then 03 (stress test), then `mark 04 in_progress` and the guard proof.
+
+## 29. Skill bug: Stage 1 Judge needs a crate before ticket 04 (from entry 28)
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** `references/judge.md` §4a (scratch crate per route: c2rust transpile, minimal hand-merged slice, C++
+  stub; acceptance: green on every feature set, red on a planted mutant, stub red with a diff); SKILL.md step 5 points
+  to it; judge.md §6 now names `<ws>/experiments/` (decision 45); decision 46. No subagent ran, no spend row.
+- **Tells us:** the ticket chain had a dependency the Skill text never stated; only a real run on a second Pilot
+  exposed it. Not yet exercised: the C++ stub route (tinyxml2, E6) and the "no c2rust" route.
+- **Next:** the cJSON Translation session re-reads SKILL.md step 5 and builds the scratch crates for ticket 02.
