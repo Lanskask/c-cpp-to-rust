@@ -56,6 +56,8 @@ two-agent diff, so each is a candidate only; they still need B (or a second A-ru
 | RP9 (applied as prompt rule 8 + idiom C1, commit e210aad) | §2 C1: say "one `found` flag, one shared tail after the loop; the strict-mode `PART` return is guarded by `!found`". C1 already says Stage 1 keeps the flag, so this is a restatement | A: no flag, the `found` tail (count-mode, alloc, fill, parent, `pos--`) is written three times in `match` arms and at loop end | three copies can drift; B has one copy. The rule exists, A did not follow it |
 | RP10 (applied as prompt rule 8 + idiom C5, commit e210aad) | idiom C5 Stage 1 (already "same with `c_int`"): `jsmn_parse` keeps `i: c_int` and two sequential `while i >= 0` scans in the `}`/`]` arm; no `for .. in (..).rev()`, no extra `found` bool or nested scan | A: `for i in (0..toknext).rev()` with a nested `for j in (0..i).rev()` and a `found` flag; B: C's two scans sharing `i`, `if i == -1` | the C code's `i == -1` test and "second scan starts at the same `i`" are the structure to keep; A's rewrite is equivalent here but is the Stage 2 form |
 | RP11 (applied §4, §11, commit e210aad) | §4 and §11: Stage 1 annotations are fixed. Place `QUIRK(port): Q<n>` only at the sites in §9 "Where"; `// PORT STATUS: stage=1 confidence=<high\|medium\|low> todos=<N> deviations=<ids that apply to this file>` | A: Q-markers at three sites, one wrong (Q1 on the `c < 32` check), `confidence=draft`, `deviations=D1,D2,D3`. B: no markers at all, `confidence=high`, `deviations=-` | markers and the trailer are free text today; neither file is right by the rulebook (B omitted markers the prompt asked for; D3 applies to B's `u8` compares) |
+| RP12 | §2 C4 (strict/non-strict case labels): say how a `#[cfg]`-dependent case label that shares its body is written in Stage 1: either one arm with the shared body written once (guard or `if` for the strict-only check, strict default folded into the same `_` arm) or separate cfg'd arms with the body duplicated. Same for the primitive loop's `:` label (cfg'd arm vs one or-pattern with a guard). Pick one | B: separate `#[cfg(strict)]` arm for `-`/digits/`t`/`f`/`n` plus `#[cfg(not(strict))] _` arm, the primitive tail (call, `r < 0`, `count`, `size++`) written twice, and a third `#[cfg(strict)] _ => return INVAL` arm; `:` is its own cfg'd arm in the primitive loop. C: one `_` arm holding one copy of the tail, with `matches!` returning `INVAL` for the strict default and the strict key check in a `#[cfg(strict)]` block; `:` in one or-pattern with a `cfg!` guard | idiom C4 allows duplication, prompt rule 8 asks for one copy only for goto labels; both pass the Judge, but the two shapes put the Q5 marker ("non-strict `default` arm") on different sites (B: the non-strict arm only; C: the one arm that also serves strict) |
+| RP13 | §0 Stage 1 items: state whether `pub type jsmnerr = c_int` (the C `enum jsmnerr` tag) is emitted, or only the three `JSMN_ERROR_*` constants | B: three constants only. C: constants plus `pub type jsmnerr = c_int` | extra public item, harmless to the adapter; two agents differ, nothing observable (low priority, could also be left to cosmetic) |
 
 Review (Opus, 2026-10-10): RP6-RP11 checked against `jsmn.h`, the Faithful port, A and B. None rejected.
 RP7 changed before applying: the proposal asked for `wrapping_*` at every site, including the `int` values
@@ -119,3 +121,46 @@ New disagreements: 6 (RP6-RP11). Two of them (RP9, RP10) restate an existing rul
 so they are prompt-emphasis issues rather than missing rules. RP6-RP8 and RP11 are gaps in the rulebook.
 Not shown by this test: whether two agents with the same model and the same rulebook agree (one A-run with
 RP1-RP5 would show it).
+
+## Stress test diff B vs C
+
+C: Sonnet 5.5, prompt rebuilt with RULEBOOK carrying RP1-RP11 (prompt HARD RULE 8 added). B: same model, RP1-RP5
+only. C `rust/src/lib.rs`: `cargo check` clean in all four feature sets, 0 TODOs, trailer
+`stage=1 confidence=high todos=0 deviations=D3`.
+
+Gate (`python3 -I harness/run.py --crate stress/c/rust <set>`), exact lines:
+
+| set | upstream tests | harness |
+|---|---|---|
+| `""` | `original tests vs Rust [default]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+| `strict` | `original tests vs Rust [strict]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+| `parent-links` | `original tests vs Rust [parent-links]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+| `strict,parent-links` | `original tests vs Rust [strict,parent-links]: FAILED: 0` | `harness: 1188/1188 inputs match` |
+
+| # | decision | B | C | class |
+|---|---|---|---|---|
+| 1 | `jsmntype_t`, `jsmntok_t.type_0`, `jsmn_parser` field types, `jsmn_parse`/`jsmn_init` signatures, `len`/`size_t` | `c_uint` + consts, `type_0`, `c_uint`/`c_uint`/`c_int`, C-typed params | identical | agree |
+| 2 | arithmetic on signed `int` values (`count`, `size`, `start + 1`) | `wrapping_add` | plain `+= 1`, `start + 1` | covered by RP7 (B predates; RP7 as applied says plain for `int`) |
+| 3 | `toknext - 1` in parent-links `}`/`]` arm | plain `- 1` after a `< 1` guard | `wrapping_sub(1)` | covered by RP7 |
+| 4 | `QUIRK(port)` / `DEVIATION(port)` markers | none | 4xQ1, 2xQ2, 3xQ3, 3xQ4, 2xQ5, Q6, Q7, 2xQ8, 2xD3 (one line above each site) | covered by RP11 |
+| 5 | PORT STATUS `deviations=` | `-` | `D3` | covered by RP11 |
+| 6 | `pos++` placement, count-mode arm | one at loop tail, arm falls out | same | agree (RP8; B already matched) |
+| 7 | primitive `found` exit | flag, one tail, strict `PART` guarded by `!found` | same | agree (RP9; B already matched) |
+| 8 | `}`/`]` scans | two `while i >= 0` sharing `i`, `i == -1` | same | agree (RP10; B already matched) |
+| 9 | index variable of the final `PART` scan | new `let mut k` inside the `if` | the function-level `i`, as in C | covered by prompt rule 8 / C5 (same index variable); B predates |
+| 10 | strict-vs-non-strict case labels in `jsmn_parse` and `:` in the primitive loop | separate cfg'd arms, primitive tail written twice, third arm for strict default | one `_` arm, one tail, `matches!` + `cfg!` guard | new: RP12 |
+| 11 | extra public `jsmnerr` alias | absent | `pub type jsmnerr = c_int` | new: RP13 (minor) |
+| 12 | error-path state (Q2, Q3, Q4, Q6, Q8), `unsafe` use (raw deref only) | reproduced | reproduced | agree (both pass 1188/1188 x 4) |
+| 13 | token field reset order in `jsmn_alloc_token` | `start` then `end` | `end` then `start` (C's `a = b = -1`) | cosmetic |
+| 14 | `offset` vs `add`, `num_tokens_sz` local vs inline cast, `type_0`/`type_1` locals, `///` copies of C comments, `#![allow]` lines, `let c` before vs after the match | various | various | cosmetic |
+
+RP6-RP11 followed by C: RP6 (`pos`, `toknext` are `c_uint`; §0) yes. RP7 (§0: `wrapping_*` on `pos`/`toknext`
+expressions, plain on `count`/`size`/`start + 1`/`i`) yes, all sites. RP8 (§2 C4: single tail increment, no `continue`,
+no per-arm increment, count-mode arms fall out) yes. RP9 (prompt rule 8 / C1: one flag, one tail) yes. RP10 (rule 8 /
+C5: same `i`, two sequential scans, final loop resumes on `i`) yes. RP11 (§4 marker table, §11 trailer) yes: marker
+counts match the table (Q1 4, Q2 2, Q3 3, Q4 3, Q5 2, Q6 1, Q7 1, Q8 2, D3 2).
+
+New disagreements C vs B: 2 (RP12, RP13; RP13 is minor). Every other difference is covered by RP6-RP11 or cosmetic.
+The differences B had on RP6-RP11 closed in C, so the rules did their job on a same-model run. One gap in the
+rulebook: the §4 marker table cannot say where a marker goes when one shared arm serves both strict and non-strict.
+Single run per translation; one more same-rulebook run would show whether RP12 is noise.
