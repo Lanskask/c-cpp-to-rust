@@ -58,6 +58,24 @@ int main(int argc, char **argv) {
   }
   printf("chunked pos=%u toknext=%u toksuper=%d\n", p.pos, p.toknext, p.toksuper);
   dump("chunked", r, tok, r > 0 ? r : (int)p.toknext);
+
+  /* 5. dirty buffer: allocation does not reset the type (Q2) */
+  for (int i = 0; i < N; i++) tok[i].type = JSMN_PRIMITIVE; /* other fields as phase 4 left them */
+  jsmn_init(&p);
+  r = jsmn_parse(&p, buf, len, tok, N);
+  printf("dirty pos=%u toknext=%u toksuper=%d\n", p.pos, p.toknext, p.toksuper);
+  dump("dirty", r, tok, r > 0 ? r : (int)p.toknext);
+
+  /* 6. reused parser, num_tokens below toknext (Q9, RP14) */
+  memset(tok, 0, N * sizeof *tok);
+  jsmn_init(&p);
+  size_t half = len / 2;
+  r = jsmn_parse(&p, buf, half, tok, N);
+  unsigned k = p.toknext / 2;
+  printf("shrink1 r=%d pos=%u toknext=%u toksuper=%d k=%u\n", r, p.pos, p.toknext, p.toksuper, k);
+  r = jsmn_parse(&p, buf, len, tok, k);
+  printf("shrink pos=%u toknext=%u toksuper=%d\n", p.pos, p.toknext, p.toksuper);
+  dump("shrink", r, tok, r > 0 ? r : (int)p.toknext);
   free(tok);
   free(buf);
   return 0;

@@ -27,6 +27,14 @@ BROKEN = [
     b',', b'{"a":[}', b'["\\', b'\\', b'"', b'""', b"'a'", b'{"a":"b"', b'[[]', b'[]]', b'{"a":{"b":1}',
 ]
 
+EXTRA = [
+    b'{{', b'{[', b'{"a":1,{', b'{"a":1,[',  # G-S2-1 (Q2): strict `{`/`[` Inval after allocation, phase 5
+    b'"\\u12\x00"', b'["\\u1\x00]',  # G-S2-2 (Q1): the `\u` hex loop stops on NUL (C: PART)
+    b'{}:}', b'[]:]',  # G-S2-3 (Q8): `}`/`]` with a closed root and toksuper != -1
+    b'"a":,', b'1:,',  # G-S2-4 (Q8): `,` with no open container and a non-container toksuper
+    b'[[],[]]', b'{"a":[1,2],"b":{}}', b'[1,[2,[3]]]',  # G-S2-5 / RP14 (Q9): phase 6, num_tokens below toknext
+]
+
 
 def main() -> int:
     if len(sys.argv) != 2:
@@ -56,6 +64,9 @@ def main() -> int:
     for v in range(256):
         c = bytes([v])
         cases += [b"[" + c + b"a]", b'["' + c + b'"]', b'["\\' + c + b'"]', b"[1" + c + b"]"]
+    # E3 Stage 2 attempt 1 findings (RUN-NOTES G-S2-1..5, RP14): appended after the byte loop so earlier
+    # case numbers stay stable. Each group reaches a path no earlier input did (see the spec in RUN-NOTES).
+    cases += EXTRA
     for n, data in enumerate(cases):
         (out / f"case{n:03d}.json").write_bytes(data)
     print(f"make_inputs: {len(cases)} files in {out}", file=sys.stderr)

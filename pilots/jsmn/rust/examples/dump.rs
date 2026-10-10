@@ -89,6 +89,31 @@ fn run(js: &[u8], out: &mut impl Write) -> std::io::Result<()> {
         s.pos, s.toknext, s.toksuper
     )?;
     dump(out, "chunked", r, &p.tokens(shown(r, s.toknext)))?;
+
+    // 5. dirty buffer: allocation does not reset the type (Q2)
+    p.poison_kinds();
+    p.reset();
+    let r = p.parse(js, Some(CAPACITY));
+    let s = p.state();
+    writeln!(out, "dirty pos={} toknext={} toksuper={}", s.pos, s.toknext, s.toksuper)?;
+    dump(out, "dirty", r, &p.tokens(shown(r, s.toknext)))?;
+
+    // 6. reused parser, num_tokens below toknext (Q9, RP14)
+    p.clear_tokens();
+    p.reset();
+    let half = js.len() / 2;
+    let r1 = p.parse(&js[..half], Some(CAPACITY));
+    let s = p.state();
+    let k = (s.toknext / 2) as usize;
+    writeln!(
+        out,
+        "shrink1 r={r1} pos={} toknext={} toksuper={} k={k}",
+        s.pos, s.toknext, s.toksuper
+    )?;
+    let r = p.parse(js, Some(k));
+    let s = p.state();
+    writeln!(out, "shrink pos={} toknext={} toksuper={}", s.pos, s.toknext, s.toksuper)?;
+    dump(out, "shrink", r, &p.tokens(shown(r, s.toknext)))?;
     Ok(())
 }
 

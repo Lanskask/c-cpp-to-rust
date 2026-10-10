@@ -4,7 +4,7 @@
 //! `None` count mode = `parse(js, None)`; unset position = `-1`; errors = `-1`, `-2`, `-3`.
 #![allow(dead_code)]
 
-use jsmn::{Parser, Token};
+use jsmn::{Parser, Token, TokenKind};
 
 pub const OBJECT: i32 = 1;
 pub const ARRAY: i32 = 2;
@@ -60,6 +60,13 @@ impl P {
     /// Zero the whole token buffer (the C driver's `memset`).
     pub fn clear_tokens(&mut self) {
         self.buf.fill(Token::default());
+    }
+
+    /// Set every slot's kind to PRIMITIVE (8), other fields unchanged (the C driver's dirty-buffer loop).
+    pub fn poison_kinds(&mut self) {
+        for t in &mut self.buf {
+            t.kind = TokenKind::Primitive;
+        }
     }
 
     /// `None` = count mode (`tokens == NULL`); `Some(n)` = use the first `n` slots of the persistent buffer.
