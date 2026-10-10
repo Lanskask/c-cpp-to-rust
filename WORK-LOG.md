@@ -165,3 +165,19 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   is smaller than `toknext` on a reused parser; the rulebook D2 text does not cover it.
 - **Next:** user or Opus decides RP14 (new Deviation vs API change) and applies RP15-RP18; Judge gaps G-S2-1..5 go in
   as their own commit and Stage 2 is re-gated against the stronger Judge.
+
+## 14. E3 Stage 2 on jsmn: reviewer findings reproduced, RP14 decided (Opus), patches pending
+- **Date:** 2026-10-10 (after entry 13)
+- **Who:** Sonnet 5.5 subagent (reproduction); Opus 5.5 subagent (decision, patches, Judge spec); Sonnet 5.5 governor
+- **Done:** C and Rust run side by side in all 4 feature sets (scratch only). G1-G4: Rust == C (coverage gaps, not
+  divergences). RP14 confirmed: `[` (8) then `[]` (0): C 1, Rust -2; `[[` (8) then `[[]]` (1): C 2, Rust -2.
+  Opus: C is defined here (`num_tokens` only limits allocation), so no new Deviation; the §6 API gains
+  `parse_with_limit(js, tokens, num_tokens)` and a quirk Q9; D2 reworded (needs user confirmation). RP15-RP18 written
+  as patches because the deny-rules refused the edits; Judge spec (13 inputs, phases 5-6) written. RUN-NOTES has the
+  Opus entry.
+- **Tells us:** commit `35e87c3` does not match C in one defined case and the Judge could not see it. Stage 2 must be
+  redone after the rulebook and Judge change.
+- **Open:** nothing outside RUN-NOTES is applied. The rulebook, idiom table and Judge are deny-protected in this
+  session and Judge changes need their own commit outside the fan-out (SKILL.md rules).
+- **Next:** user confirms the D2 amendment; patches applied and Judge extended in a session without the deny-rules;
+  then attempt 2.

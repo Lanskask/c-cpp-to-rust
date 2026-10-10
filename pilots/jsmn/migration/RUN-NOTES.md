@@ -296,3 +296,39 @@ I have not reproduced them by running the inputs, so treat them as unverified un
 NITs (not blocking): `parse_primitive` `self.pos -= 1` comment should name the caller contract (terminators are
 handled in earlier arms); add "`toknext >= 1`, checked above" to the parent-links `}` arm; re-wrap the adapter `//!`
 line to 120 columns; one-line doc comments on `pos`/`toknext`/`toksuper`/`code`.
+
+### Opus review (2026-10-10)
+
+Reproduction (C `jsmn.h` vs Stage 2 attempt 1, run side by side in all four feature sets, scratch `verify/`):
+
+- G-S2-1..4 (stale `kind` on a reused buffer, `"\u12<NUL>"`, `{}:}`/`[]:]`, `"a":,`/`1:,`): Rust == C in every set.
+  The reviewer's divergence claims are refuted; they stay as corpus-coverage gaps only.
+- RP14 confirmed. On a reused parser C uses `num_tokens` only as the allocation limit and reads `tokens[toknext - 1]`,
+  `tokens[toksuper]` and the backward scans from the caller's whole array. `[` (8) then `[]` (0): C 1, Rust −2.
+  `[[` (8) then `[[]]` (1): C 2, Rust −2. `[[` then `[[]` (1): C −3, Rust −2. Control `[` then `[]` (1): match.
+
+Is the C behaviour defined? Yes, whenever the array object really holds the tokens being read: `num_tokens` is a
+plain integer, and `tokens[i]` with `i < toknext` is an in-bounds access when the caller's array is at least `toknext`
+long (C11 6.5.6p8). It is UB only when the real array is shorter than `toknext`/`toksuper + 1` (that is D2) or when
+`num_tokens` exceeds the real array and an allocation goes past it (also D2). A Rust slice carries its real length,
+so Rust can tell the defined case from the UB case; mapping `num_tokens` to the slice length erased that difference.
+
+Decision RP14: no new Deviation. The user's goal is C behaviour and C is defined here, so the API changes:
+`Parser::parse_with_limit(&mut self, js: &[u8], tokens: &mut [Token], num_tokens: usize) -> Result<usize, Error>`
+(the whole caller array plus C's limit); `parse(js, t)` = `parse_with_limit(js, t, t.len())`; `count(js)` unchanged
+(C ignores `num_tokens` when `tokens == NULL`). `alloc_token` fails when `toknext >= num_tokens` (Q9, new kept quirk)
+or `toknext >= tokens.len()` (D2); every other access is bounded by `tokens.len()` only. The adapter passes
+`&mut self.buf` (all 512 slots) and `n`, never `&mut self.buf[..n]`. D2 is reworded: `num_tokens > tokens.len()` is
+now representable and gives `NoMem` at the first allocation past the array; the user must confirm that amendment.
+RP15-RP18 accepted (Stage 2 marker table: Q9 1, D2 11, D1 has no site; idiom C5 `rposition`, new I10
+`checked_sub(1)`, new E6 array index, T5 trap).
+
+RULEBOOK.md and `skill/**` refused the Edit (deny-rules), so the changes are patches in the session scratchpad:
+`opus-RULEBOOK.md.patch.md` and `opus-idiom-table-c.md.patch.md` (raw `.diff`, checked with `git apply --check`
+against `b9d1dff`; full text in `.new`). Judge additions (corpus +13 inputs, dump phases 5 `dirty` and 6 `shrink`,
+adapter `poison_kinds`): `opus-judge-spec.md`. Phases 5 and 6 were run on C for `[]`, `[[]]` and `{"a":1,[`.
+
+Consequence: Stage 2 attempt 1 (`35e87c3`) must be redone for `lib.rs` (new method, `num_tokens` threaded through
+`run`/`alloc_token`/`parse_string`/`parse_primitive`, Q9 and D2 markers) and the adapter (`parse_with_limit` on the
+whole buffer). Order: apply the patches, build and validate the extended Judge (it must fail on `35e87c3`), then run
+Stage 2 attempt 2.
