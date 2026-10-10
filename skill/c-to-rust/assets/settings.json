@@ -18,18 +18,26 @@
       "WebSearch",
       "Edit(pilots/*/src/**)",
       "Edit(pilots/*/UPSTREAM)",
-      "Edit(pilots/*/migration/RULEBOOK.md)",
-      "Edit(pilots/*/migration/parts*.tsv)",
-      "Edit(pilots/*/migration/harness/**)",
-      "Edit(pilots/*/rust/Cargo.toml)",
-      "Edit(pilots/*/rust/tests/*.rs)",
-      "Edit(pilots/*/rust/examples/**)",
       "Edit(skill/**)",
       "Edit(docs/**)",
       "Edit(experiments/**)",
       "Edit(PLAN.md)",
       "Edit(CONTEXT.md)",
-      "Edit(.claude/**)"
+      "Edit(.claude/**)",
+      "Edit(pilots/*/migration/gate-passed.tsv)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I skill/c-to-rust/scripts/guard.py"
+          }
+        ]
+      }
     ]
   }
 }

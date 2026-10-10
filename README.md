@@ -30,9 +30,11 @@ claude --settings skill/c-to-rust/assets/settings.json --model sonnet
 
 Before the first run, check these (each one has bitten a session in E3):
 
-1. **Deny-rules are active.** `--settings` loads `skill/c-to-rust/assets/settings.json`, which makes the rulebook, the
-   Judge files, `parts*.tsv` and the upstream source read-only. The first thing the session must do is try an `Edit` of
-   `pilots/<name>/migration/RULEBOOK.md` and see it refused (SKILL.md step 3.1).
+1. **The guard is active.** `--settings` loads `skill/c-to-rust/assets/settings.json`: static deny-rules for the
+   upstream
+   source, `skill/**`, `docs/**` and the git history, plus the `guard.py` hook, which makes the Rulebook, the Judge
+   files and `parts*.tsv` read-only only while the fan-out ticket (04 or 06) is `in_progress`. The session proves it:
+   mark 04 `in_progress`, then an `Edit` of `pilots/<name>/migration/RULEBOOK.md` must be refused (SKILL.md step 3.1).
 2. **Subagents are allowed in auto mode.** With `"defaultMode": "auto"` in `~/.claude/settings.json`, the classifier may
    refuse an `Agent` spawn ("Auto-Mode Bypass", "Create Unsafe Agents"). Add an `autoMode.allow` entry for the Skill's
    subagents (decision 38 has the wording). The deny-rules file cannot fix this. If a spawn is refused anyway, the

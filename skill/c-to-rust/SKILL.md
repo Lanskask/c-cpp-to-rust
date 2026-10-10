@@ -53,11 +53,13 @@ missing rule: propose it under `## Rule proposals` in `RUN-NOTES.md`; Opus appli
 Done when the rulebook status line says `stress-tested (<date>)` and RUN-NOTES records the diffs.
 
 ### 3. `parts.tsv` has `todo`, `in_progress` or `failed` Parts → Stage 1 (Faithful port)
-1. Install deny-rules: the fan-out session is started from the repo root with
-   `claude --settings skill/c-to-rust/assets/settings.json`. **Verify** them first: an `Edit` of
-   `<ws>/migration/RULEBOOK.md` must be refused. If it is not refused, stop and tell the user.
+1. Protect the Rulebook and the Judge for the fan-out (decision 44). The session was started from the repo root with
+   `claude --settings skill/c-to-rust/assets/settings.json`, which loads the static deny-rules and the `guard.py`
+   hook. Run `tickets.py mark 04 in_progress` (Stage 2: ticket 06), then **verify**: an `Edit` of
+   `<ws>/migration/RULEBOOK.md` must be refused by the guard. If it is not refused, stop and tell the user.
    A crate with several Parts needs a `rust/src/lib.rs` that declares them (`pub mod <stem>;`) and the cargo features of
-   rulebook §3, written by the governor before the first batch (`tier.py --crate-root-part NAME` makes one Part the root).
+   rulebook §3, written by the governor before the first batch (`tier.py --crate-root-part NAME` makes one Part the
+   root).
 2. `workqueue.py next --batch N`; for each Part run the loop in `references/stage1-prompt.md`
    (snapshot → implementer → gate → review with `references/review-prompt.md` → commit → mark).
    Parts with no unfinished deps may run in parallel; each Part writes only its own `target_path`.
@@ -68,7 +70,8 @@ Done when every row is `done` or `stubbed` and `verify` passes.
 ### 4. All Stage 1 Parts `done`/`stubbed` → Stage 2 (Idiomatic pass)
 1. Rulebook §6 (Stage 2 API) must be filled (Opus). If empty, stop and ask for it.
 2. Build and validate the Stage 2 Judge (adapter, Rust driver, translated tests, planted mutant):
-   `references/judge.md` §5. This runs **without** the deny-rules, in its own commit.
+   `references/judge.md` §5. The guard allows these writes while ticket 06 is not `in_progress`; commit them on their
+   own, then `tickets.py mark 05 done`.
 3. Create `<ws>/migration/parts-stage2.tsv` (copy of `parts.tsv`, all `todo`, attempts 0, no commit).
 4. Run the loop of step 3 with `references/stage2-prompt.md`, gate `--stage 2`.
 
@@ -91,5 +94,6 @@ next step.
 - **Done** = gate passed and the Part's commit exists. One commit per accepted Part.
 - Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).
 - The rulebook and the Judge are read-only during a batch. Judge changes (new corpus inputs from a
-  review `GAP`) are their own commit, made outside the fan-out session, then the Part is re-gated.
+  review `GAP`) are their own commit: `tickets.py mark 04 todo` (or 06), make and commit the change, mark it
+  `in_progress` again, then the Part is re-gated. The guard enforces this; the commit trail shows it.
 - Report numbers only from commands actually run; failing results are reported, not retried silently.

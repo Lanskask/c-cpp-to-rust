@@ -214,3 +214,14 @@ Each entry: decision, reason, who/what it came from. Newest last.
     force-added because `.claude` is ignored), and Markdown is kept at 120 columns by
     `experiments/e3_md_reflow.py` (never joins lines, refuses a file if any word changes).
     _Reason:_ a session can now call `/c-to-rust`; the E4 run is meant to start from the Skill, not from a prompt.
+
+44. **The Rulebook and Judge files are protected by a ticket-aware guard, not by static deny-rules.**
+    `assets/settings.json` keeps only always-protected paths (upstream source, `skill/**`, `docs/**`, `experiments/**`,
+    `PLAN.md`, `CONTEXT.md`, `.claude/**`, `gate-passed.tsv`, history-rewriting git and network commands) and wires
+    `scripts/guard.py` as a PreToolUse hook. The guard refuses `RULEBOOK.md`, `parts*.tsv`, `harness/**`,
+    `rust/Cargo.toml`, `rust/tests/*.rs` and `rust/examples/**` of a Pilot only while its ticket 04 or 06 is
+    `in_progress`. A Judge change during fan-out is: mark 04 todo, commit, mark in_progress. Bash writes are checked
+    crudely (a write marker plus a protected path); writing through an interpreter is not detected.
+    _Reason:_ the cJSON translation session found that static deny-rules block Mapping and the Judge build, which must
+    write exactly those files, and the Skill never said how to switch them off inside one autonomous session. Two
+    settings files would need a restart at every stage boundary.
