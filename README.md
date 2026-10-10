@@ -19,6 +19,28 @@ Pilots (`pilots/`) first. Vocabulary: `CONTEXT.md`. Plan: `PLAN.md`. Decisions: 
 
 Requires: `uv`, Python ≥ 3.12, Rust (`cargo`), `clang`. Optional: `c2rust` (C-only fast path).
 
+## Running the Skill
+
+The Skill is not installed as a global Claude Code skill. Start a session from the repo root and point it at
+`skill/c-to-rust/SKILL.md`:
+
+```bash
+claude --settings skill/c-to-rust/assets/settings.json --model sonnet
+```
+
+Before the first run, check these (each one has bitten a session in E3):
+
+1. **Deny-rules are active.** `--settings` loads `skill/c-to-rust/assets/settings.json`, which makes the rulebook, the
+   Judge files, `parts*.tsv` and the upstream source read-only. The first thing the session must do is try an `Edit` of
+   `pilots/<name>/migration/RULEBOOK.md` and see it refused (SKILL.md step 3.1).
+2. **Subagents are allowed in auto mode.** With `"defaultMode": "auto"` in `~/.claude/settings.json`, the classifier may
+   refuse an `Agent` spawn ("Auto-Mode Bypass", "Create Unsafe Agents"). Add an `autoMode.allow` entry for the Skill's
+   subagents (decision 38 has the wording). The deny-rules file cannot fix this. If a spawn is refused anyway, the
+   session does the step inline and reports it.
+3. **Log every subagent.** After each one: `make spend PHASE=<phase> SINCE=<timestamp> NOTE="..."` and an entry in
+   `WORK-LOG.md` (append only).
+4. **Markdown style.** Files written by the session follow `~/.claude/md-style.md` (120 columns, aligned tables).
+
 ## Layout
 
 - `skill/c-to-rust/` — the Skill: `SKILL.md`, `references/`, `scripts/` (stdlib Python), `assets/`.

@@ -97,3 +97,16 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ the LLM engine is the default and the only one for C++ (decision 8), and nothing has run `stage1-prompt.md` yet; jsmn is the cheapest place to find missing rules. The accepted c2rust-based port stays the baseline.
 37. **Idiom-table rows carry `tags` and `verified` columns.** `tags` (inventory tags, `*` = always) selects the rows a prompt receives; `verified` stays `no` until a Pilot test exercises the row (`<pilot>@<commit>` + test name).
     _Reason:_ PLAN §5 (prompt gets only matching rows) and PLAN §10 (rows from general knowledge are unverified).
+
+## 2026-10-10 — E3 governor session
+
+38. **Subagent spawning is allowed through `autoMode.allow` in the user's `~/.claude/settings.json`, not through the
+    Skill's deny-rules.** The entry reads: "Spawning Agent subagents (sonnet, opus, haiku) that run the c-to-rust Skill
+    steps in /Users/a1/Programming/My_Projects/settlers_to_rust: they only edit files in the repo, run cargo/python3
+    -I/make targets and commit to master". Fallback when a spawn is still refused: the session does that step inline and
+    says so; it never retries the same spawn or works around the classifier.
+    _Reason:_ the user's `defaultMode` is `auto`, and its classifier refused two subagent spawns in the E3 session
+    ("Auto-Mode Bypass", "Create Unsafe Agents") while accepting five others. `skill/c-to-rust/assets/settings.json`
+    has no `Agent`/`Task` rule, so it is not the cause and cannot fix it. The `--settings` file merges with the global
+    one, so a Skill session started with it is still under auto mode. Measured: 2 refusals in 7 spawns (Haiku A
+    accepted, Haiku B refused twice, Sonnet B/C/D and Opus x3 accepted); the exact trigger is not known.
