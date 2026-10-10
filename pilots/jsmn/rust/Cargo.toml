@@ -1,0 +1,18 @@
+[package]
+name = "jsmn"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Faithful port of jsmn (zserge/jsmn 25647e6) from c2rust output; compile-time macros are cargo features"
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[features]
+default = []
+# JSMN_STRICT
+strict = []
+# JSMN_PARENT_LINKS
+parent-links = []
+
+[workspace]
