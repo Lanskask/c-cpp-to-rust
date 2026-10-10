@@ -1,0 +1,6 @@
+$ /Users/a1/.cargo/bin/c2rust transpile -e -o /Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/default/jsmn/jsmn_c2rust /Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/default/jsmn/compile_commands.json
+exit 0
+--- stdout
+Transpiling jsmn.c
+
+--- stderr

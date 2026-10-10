@@ -58,3 +58,12 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ standard Python practice: never name a module after a stdlib module.
 22. **Transcript usage is de-duplicated by `message.id`.** Claude Code writes one JSONL line per content block, each repeating the full `usage`.
     _Reason:_ measured — session 031b9674 has 119 usage lines but 53 distinct messages; summing lines would overcount about 2×.
+
+## 2026-10-10 — E1 results
+
+23. **c2rust is a working Stage 1 fast path for jsmn**; its output is the Faithful-port baseline for E2.
+    _Reason:_ measured (E1, `experiments/e1_c2rust_jsmn.py`): output builds; translated upstream tests pass 16/16 in all 4 macro configs, same as the C original.
+24. **Compile-time configuration macros become cargo features in the Faithful port** (jsmn: `strict` for `JSMN_STRICT`, `parent-links` for `JSMN_PARENT_LINKS`), and the Judge runs every upstream-tested combination. `inventory.py` must report `#ifdef` config macros as a tag (`config-macro`).
+    _Reason:_ measured — c2rust translates after preprocessing, so one run fixes one config; upstream tests all four, so Same behaviour covers all four.
+25. **Generated crates are built with `cargo +<pinned toolchain> --manifest-path`**, never by changing into the crate dir.
+    _Reason:_ measured — rustup reads `rust-toolchain.toml` only from the cwd; this keeps the "no build tool with a pilot dir as cwd" rule and still honours c2rust's nightly pin.

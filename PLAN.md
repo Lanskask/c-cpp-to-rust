@@ -133,7 +133,7 @@ Cost levers, in order: scripts instead of LLM; reachable code only; small prompt
 
 ## 10. Known risks and open items
 
-- **c2rust on header-only C and on LLVM 20** is untested (E1). Its README requires LLVM 15+; build succeeded.
+- **c2rust** works on jsmn with three workarounds (E1, decisions 23–25). Untested on cJSON+ (multi-file, varargs in the library itself).
 - **Idiom tables are written from general knowledge**, not verified against a source. Mark each row `verified: no` until a Pilot test exercises it.
 - **C++ construct table** is empty until E6 shows tinyxml2's real constructs.
 - **Differential harness for C++** needs a per-Pilot driver on both sides; keep drivers tiny (read input, print canonical dump).

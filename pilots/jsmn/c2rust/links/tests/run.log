@@ -1,0 +1,8 @@
+$ cargo +nightly-2023-04-15 run -q --manifest-path /Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/links/tests/tests_c2rust/Cargo.toml --bin tests
+exit 0
+--- stdout
+
+PASSED: 16
+FAILED: 0
+
+--- stderr

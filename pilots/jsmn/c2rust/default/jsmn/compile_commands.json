@@ -1,0 +1,15 @@
+[
+  {
+    "directory": "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/default/jsmn",
+    "file": "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/jsmn.c",
+    "arguments": [
+      "clang",
+      "-c",
+      "-I",
+      "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/src",
+      "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/jsmn.c",
+      "-o",
+      "jsmn.o"
+    ]
+  }
+]

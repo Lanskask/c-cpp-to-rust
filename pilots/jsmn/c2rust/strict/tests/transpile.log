@@ -1,0 +1,6 @@
+$ /Users/a1/.cargo/bin/c2rust transpile -b tests -e -o /Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/strict/tests/tests_c2rust /Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/strict/tests/compile_commands.json
+exit 0
+--- stdout
+Transpiling tests.c
+
+--- stderr

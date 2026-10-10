@@ -1,0 +1,5 @@
+$ cargo +nightly-2023-04-15 build -q --manifest-path /Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/default/jsmn/jsmn_c2rust/Cargo.toml
+exit 0
+--- stdout
+
+--- stderr

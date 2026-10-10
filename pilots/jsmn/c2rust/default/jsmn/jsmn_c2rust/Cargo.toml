@@ -1,0 +1,17 @@
+[workspace]
+members = [
+]
+[package]
+name = "jsmn_c2rust"
+authors = ["C2Rust"]
+version = "0.0.0"
+publish = false
+edition = "2021"
+autobins = false
+
+[lib]
+name = "jsmn_c2rust"
+path = "lib.rs"
+crate-type = ["staticlib", "rlib"]
+[dependencies]
+

@@ -1,0 +1,17 @@
+[
+  {
+    "directory": "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/c2rust/strict_links/tests",
+    "file": "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/src/test/tests.c",
+    "arguments": [
+      "clang",
+      "-c",
+      "-I",
+      "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/src",
+      "-DJSMN_STRICT=1",
+      "-DJSMN_PARENT_LINKS=1",
+      "/Users/a1/Programming/My_Projects/settlers_to_rust/pilots/jsmn/src/test/tests.c",
+      "-o",
+      "tests.o"
+    ]
+  }
+]
