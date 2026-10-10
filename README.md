@@ -6,16 +6,16 @@ Pilots (`pilots/`) first. Vocabulary: `CONTEXT.md`. Plan: `PLAN.md`. Decisions: 
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `make setup` | create the `uv` environment (pytest) |
-| `make test` | run pytest for the Skill scripts |
-| `make lint` | `ruff` lint and format check, then `ty` type check |
-| `make fmt` | auto-format and auto-fix Python |
-| `make pilot-jsmn` | gate the jsmn Part over all 4 feature sets: cargo check/test, original C tests via staticlib, differential harness (`STAGE=2` adds clippy/fmt/unsafe) |
-| `make pilot-jsmn-snapshot` | record HEAD and baseline before editing the Part |
-| `make spend-now` | print a UTC timestamp; note it at the start of a phase |
-| `make spend PHASE=E1 SINCE=<timestamp> NOTE="..."` | sum Claude Code token usage since then into `SPEND.md` |
+| Command                                            | What it does                                                                                                                                          |
+|----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `make setup`                                       | create the `uv` environment (pytest)                                                                                                                  |
+| `make test`                                        | run pytest for the Skill scripts                                                                                                                      |
+| `make lint`                                        | `ruff` lint and format check, then `ty` type check                                                                                                    |
+| `make fmt`                                         | auto-format and auto-fix Python                                                                                                                       |
+| `make pilot-jsmn`                                  | gate the jsmn Part over all 4 feature sets: cargo check/test, original C tests via staticlib, differential harness (`STAGE=2` adds clippy/fmt/unsafe) |
+| `make pilot-jsmn-snapshot`                         | record HEAD and baseline before editing the Part                                                                                                      |
+| `make spend-now`                                   | print a UTC timestamp; note it at the start of a phase                                                                                                |
+| `make spend PHASE=E1 SINCE=<timestamp> NOTE="..."` | sum Claude Code token usage since then into `SPEND.md`                                                                                                |
 
 Requires: `uv`, Python ≥ 3.12, Rust (`cargo`), `clang`. Optional: `c2rust` (C-only fast path).
 
