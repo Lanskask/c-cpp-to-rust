@@ -133,37 +133,37 @@ Input: C project → **C2Rust** produces a compilable all-`unsafe` Rust crate (`
 Full reference list is on the last page of `articles/2604.04527v1.txt`. [read]
 
 **Rule-based / static transpilers (all C only, all start from C2Rust except Corrode)**
-| Tool | Idea |
-|---|---|
-| C2Rust (Galois/Immunant, 2018) | syntactic rewrite; every pointer → raw pointer; output compiles, all unsafe |
-| Laertes (Emre et al., OOPSLA 2021) | uses rustc as an oracle; iteratively retypes pointers and fixes errors |
-| Crown (Zhang et al., CAV 2023) | SAT-based ownership analysis; pointer → `Box`/reference |
-| CRustS (Ling et al., ICSE-C 2022) | 220 TXL source-to-source rules (198 semantics-preserving) |
+| Tool                               | Idea                                                                        |
+|------------------------------------|-----------------------------------------------------------------------------|
+| C2Rust (Galois/Immunant, 2018)     | syntactic rewrite; every pointer → raw pointer; output compiles, all unsafe |
+| Laertes (Emre et al., OOPSLA 2021) | uses rustc as an oracle; iteratively retypes pointers and fixes errors      |
+| Crown (Zhang et al., CAV 2023)     | SAT-based ownership analysis; pointer → `Box`/reference                     |
+| CRustS (Ling et al., ICSE-C 2022)  | 220 TXL source-to-source rules (198 semantics-preserving)                   |
 
 **LLM, function level**
-| Tool | Idea |
-|---|---|
-| VERT (Yang 2024, arXiv 2404.18852) | C→WASM→rWasm oracle + LLM candidate; property tests + bounded model checking |
-| FLOURINE (Eniser 2024, 2405.11514) | differential fuzzing as the equivalence check |
-| Syzygy (Shetty 2024, 2412.14234) | translate code and tests together, using dynamic analysis |
-| SmartC2Rust (Shiraishi 2024, 2409.10506) | segment to fit context; separate repair signals for compile / semantic /
+| Tool                                     | Idea                                                                         |
+|------------------------------------------|------------------------------------------------------------------------------|
+| VERT (Yang 2024, arXiv 2404.18852)       | C→WASM→rWasm oracle + LLM candidate; property tests + bounded model checking |
+| FLOURINE (Eniser 2024, 2405.11514)       | differential fuzzing as the equivalence check                                |
+| Syzygy (Shetty 2024, 2412.14234)         | translate code and tests together, using dynamic analysis                    |
+| SmartC2Rust (Shiraishi 2024, 2409.10506) | segment to fit context; separate repair signals for compile / semantic /     |
 unsafe |
-| SACTOR (Zhou 2025, 2503.12511) | unidiomatic then idiomatic step; static-analysis hints; FFI-based mixed C/Rust
+| SACTOR (Zhou 2025, 2503.12511) | unidiomatic then idiomatic step; static-analysis hints; FFI-based mixed C/Rust |
 testing |
-| SafeTrans (Farrukh 2025, 2505.10708) | compile-error then few-shot repair |
-| TymCrat (Hong & Ryu 2025) | type migration of signatures, many-to-many C↔Rust types |
+| SafeTrans (Farrukh 2025, 2505.10708) | compile-error then few-shot repair                      |
+| TymCrat (Hong & Ryu 2025)            | type migration of signatures, many-to-many C↔Rust types |
 
 **LLM, project level**
-| Tool | Idea |
-|---|---|
-| RustMap (Cai 2025, 2503.17741) | dependency + dynamic call-graph ordering; repair from compile and test feedback |
-| LLMigrate (Liu 2025, 2503.23791) | Tree-sitter per-function split to fight LLM "laziness"; reassemble in topological
+| Tool                             | Idea                                                                              |
+|----------------------------------|-----------------------------------------------------------------------------------|
+| RustMap (Cai 2025, 2503.17741)   | dependency + dynamic call-graph ordering; repair from compile and test feedback   |
+| LLMigrate (Liu 2025, 2503.23791) | Tree-sitter per-function split to fight LLM "laziness"; reassemble in topological |
 order |
-| EvoC2Rust (Wang 2025, 2508.04295) | module decomposition → compilable stub skeleton → fill stubs → cascading repair |
-| Rustine (Dehghan 2025, 2511.20617) | refactors C first (preprocessor, pointers); two-tier LLM (escalate to a reasoning
+| EvoC2Rust (Wang 2025, 2508.04295)  | module decomposition → compilable stub skeleton → fill stubs → cascading repair   |
+| Rustine (Dehghan 2025, 2511.20617) | refactors C first (preprocessor, pointers); two-tier LLM (escalate to a reasoning |
 model on failure); no C2Rust |
-| C2SaferRust (Nitin 2025, TSE) | C2Rust + LLM per slice with dataflow/call-graph context; the direct baseline |
-| IRENE (Luo 2025, ICSME) | rule-augmented example retrieval + semantic summary + error-driven refinement |
+| C2SaferRust (Nitin 2025, TSE) | C2Rust + LLM per slice with dataflow/call-graph context; the direct baseline  |
+| IRENE (Luo 2025, ICSME)       | rule-augmented example retrieval + semantic summary + error-driven refinement |
 
 **Supporting**: AFL++ (fuzzing for test inputs); the memory-safety motivation papers (SoK:
 Eternal War in Memory, Cling, Intel MPX study); RustBelt; the Rust language paper.
@@ -203,7 +203,7 @@ ABI**, always with a pre-existing test suite or reference implementation as the 
 | Project                                        | Source → target                                                                                                                               | Approach                                                                                                                                                                                                    | Source                                 |
 |------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------|
 | **Bun**                                        | Zig → Rust, ~1M lines in <2 weeks, 100% existing tests passing before merge, 19 regressions after merge, all fixed                            | 576-line porting rulebook (`PORTING.md`) plus a one-sentence kickoff; orchestrator script, parallel fixer agents, adversarial reviewers, one whole-workspace compiler pass whose error list becomes a queue | Anthropic blog [read via fetched page] |
-| Python → TypeScript, 165k lines over a weekend | hundreds of agents, 8 phase gates, 3 adversarial review rounds, final parity check diffing every command's output against the Python original | same blog                                                                                                                                                                                                   |
+| Python → TypeScript, 165k lines over a weekend | hundreds of agents, 8 phase gates, 3 adversarial review rounds, final parity check diffing every command's output against the Python original | same blog                                                                                                                                                                                                   |                                        |
 | Cursor FastRender                              | Rust browser engine from scratch, ~1M lines, hundreds of agents for a week                                                                    | coordination patterns and review problems documented in the Cursor blog                                                                                                                                     | awesome list [snippet]                 |
 | Cloudflare vinext                              | Next.js API on Vite                                                                                                                           | AI-written; token cost and quality gates described                                                                                                                                                          | awesome list [snippet]                 |
 | Turso / Rustwright / etc.                      | SQLite / Playwright in Rust                                                                                                                   | parity-test suites; Rustwright itself says full parity is not proven                                                                                                                                        | awesome list [snippet]                 |

@@ -106,7 +106,8 @@ A defect-looking behaviour of the Source project that the Rust version reproduce
 _Avoid_: bug, wart, oddity
 
 **Idiom table**:
-The shared list of C constructs with their Rust mapping at each stage and the trap in each. A row is verified only when a
+The shared list of C constructs with their Rust mapping at each stage and the trap in each. A row is verified only when
+a
 test exercises it.
 _Avoid_: cheat sheet, mapping table
 
