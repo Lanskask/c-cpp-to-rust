@@ -45,7 +45,7 @@ A generator script (`make_inputs.py`, fixed seed) writes the corpus so it is rep
 
 ## 4. Stage 1 runner (`migration/harness/run.py [FEATURES]`, exit 0 = pass)
 
-Per feature set, in a per-feature build dir under `migration/harness/build/` (git-ignored):
+Per feature set, in a per-feature work dir under `migration/harness/work/` (git-ignored):
 
 1. `cargo build --manifest-path <crate> --target-dir <build>/cargo-target --features <set>` (staticlib).
 2. C only: compile the upstream tests with the header in declarations-only mode (jsmn: `-DJSMN_HEADER`)
@@ -118,4 +118,4 @@ piece caught it. If nothing catches it, extend the corpus (§3) until something 
 
 Upstream clones are untrusted. Never use a Pilot directory as the working directory of a build tool or
 interpreter; pass paths as arguments (`cargo --manifest-path`, `cc <path>`); run Python with `-I`.
-Build outputs go under `migration/harness/build/` (git-ignored).
+Build outputs go under `migration/harness/work/` (git-ignored).

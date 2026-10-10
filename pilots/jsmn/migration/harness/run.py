@@ -6,7 +6,7 @@ Usage: python3 -I run.py [--crate DIR] [--stage 1|2] [FEATURES]
        --crate  crate to judge (default: pilots/jsmn/rust); stress-test scratch copies use this
        --stage  1 (default): C-ABI steps below. 2: `cargo test` (translated tests), then the C driver vs
                 `cargo build --example dump` (judge.md §5), no C ABI needed.
-Steps (all outputs under migration/harness/build/<features>/, or build/<crate-name>-<hash>/<features>/
+Steps (all outputs under migration/harness/work/<features>/, or work/<crate-name>-<hash>/<features>/
 for a non-default crate):
   1. cargo build the crate (staticlib) with FEATURES;
   2. compile upstream test/tests.c with -DJSMN_HEADER (declarations only) and link the Rust staticlib
@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     crate = args.crate.resolve()
     names = [f for f in feats.split(",") if f]
     defines = [{"strict": "-DJSMN_STRICT=1", "parent-links": "-DJSMN_PARENT_LINKS=1"}[f] for f in names]
-    build = HERE / "build"
+    build = HERE / "work"
     if crate != DEFAULT_CRATE.resolve():
         build = build / f"{crate.name}-{hashlib.sha1(str(crate).encode()).hexdigest()[:8]}"
     build = build / (feats.replace(",", "+") or "default")

@@ -10,8 +10,8 @@ write them. A Judge change during fan-out means: `tickets.py mark 04 todo`, comm
 
 Bash commands are checked crudely: a command that names a protected path and contains a write marker (`>`, `tee`,
 `sed -i`, `mv`, `cp`, `rm`, `truncate`, `perl -i`) is refused. Writing through an interpreter (`python -c`) is not
-detected. The repo root is `$CLAUDE_PROJECT_DIR` (else this script's location), not the shell's cwd. Standalone on purpose
-(runs with `python3 -I`; decision 30). Errors fail closed (exit 2).
+detected. The repo root is `$CLAUDE_PROJECT_DIR` (else this script's location), not the shell's cwd. Standalone on
+purpose (runs with `python3 -I`; decision 30). Errors fail closed (exit 2).
 
 `guard.py check PATH` prints ALLOW or REFUSE for PATH (working directory = repo root) and exits 0 / 1.
 """

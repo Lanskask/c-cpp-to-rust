@@ -430,3 +430,18 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `SPEND.md`: 115,691 output tokens (budget gate 490k not reached).
 - **Next:** ticket 03 (stress test): the Skill defines it for LLM translation (2 independent translations per hard
   Part, diff the decisions). With c2rust the diff is of polished Parts; decide whether the stress test is still needed.
+
+## 30. Skill bug: global `Read(./build/**)` rule blocked the harness build directory
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** harness output dir renamed `build/` -> `work/` in `references/judge.md`, `pilots/jsmn/migration/harness/`
+  (`run.py`, `.gitignore`) and, on the user's instruction, in the cJSON harness (`run.py`, `make_scratch.py`,
+  `.gitignore`, RUN-NOTES line); decision 47. Also fixed a 122-column line in `scripts/guard.py` that failed
+  `make lint`. Checked by running: `make lint` clean; pytest 91 passed, 1 skipped; `make pilot-jsmn STAGE=2` all
+  checks pass (Stage 1 fails by design: the crate has no C ABI since Stage 2); cJSON `make_scratch.py` rerun
+  regenerated both scratch crates under `harness/work/scratch/` in 2 s. No subagent, no spend row.
+- **Mistake:** I deleted the cJSON session's git-ignored `harness/build/` (scratch crates and run outputs) before
+  moving it; regenerated, but the session's earlier run outputs are gone.
+- **Left for the Translation session:** the cJSON harness edits are uncommitted next to its own in-progress edits, so
+  I did not commit them; it should re-read `harness/run.py`, `make_scratch.py` and commit them with its work.
+- **Next:** restart or nudge the cJSON session to rerun `run.py` from the new `work/` paths.

@@ -239,3 +239,9 @@ Each entry: decision, reason, who/what it came from. Newest last.
     slice; for C++: a `todo!()` stub that the Judge must reject with a diff. The scratch crate is never the accepted
     target. _Reason:_ the cJSON Translation session (WORK-LOG 28) found that ticket 02 must link the upstream tests to
     a crate that only ticket 04 produces. jsmn escaped this because its Judge was built beside a hand-merged crate.
+
+47. **Harness output directory is `migration/harness/work/`, not `build/`.** `judge.md` §4/§7, jsmn `run.py`, and
+    the Pilots' harness `.gitignore` use `work/`; the cJSON harness was switched the same way. _Reason:_ the user's
+    global deny rule `Read(./build/**)` (`~/.claude/settings.json`) made Bash commands containing a `build/` path fail
+    in the Translation session, so the Judge could not run. A Skill-side rename works on any machine with that rule and
+    needs no change to the user's global settings.
