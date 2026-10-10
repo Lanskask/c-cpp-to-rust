@@ -93,6 +93,9 @@ def check_call(root: Path, tool: str, tool_input: dict[str, object]) -> str | No
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["--help"], ["-h"]):
+        print(__doc__)
+        return 0
     if argv[:1] == ["check"] and len(argv) == 2:
         root = Path.cwd()
         msg = refusal(root, relative(argv[1], root))
