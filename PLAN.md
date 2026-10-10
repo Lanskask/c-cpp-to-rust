@@ -70,7 +70,7 @@ All Python 3 with strict type hints, managed by `uv`, checked with `uvx ty`, tes
 | `inventory.py` | In: source root, language (`c`/`cpp`), compile commands (optional). Out: `migration/inventory.tsv` (symbol, kind, file, lines, risky-construct tags: `virtual`, `template`, `goto`, `union`, `setjmp`, `varargs`, `macro-fn`, `static-global`, `errno`, `malloc`). Uses `clang -Xclang -ast-dump=json` when a compile DB or flags are available; falls back to a regex pass and says so. |
 | `depmap.py` | Include graph, call graph, class hierarchy, SCCs, leaf-first order, dead-code candidates (unreachable from tests and public API). Out: `edges.tsv`, `cycles.txt`, `order.txt`. Study `anthropics/code-migration-kit-with-claude-code` `scripts/depmap_c.py` and its fixtures first; reuse its fixtures as tests. |
 | `tier.py` | Assigns each Part a tier from inventory tags: `mechanical` (POD, enums, constants, pure helpers), `judgment` (ownership, `virtual`, globals, unions), `unknown` (flag for the user or stub). Out: `parts.tsv` skeleton. |
-| `queue.py` | `status`, `next --batch N`, `mark <part> <state> [--commit H] [--error ...]`, `verify` (a "done" Part must have its output file non-empty and its commit present). Derives truth from files and git, never from memory. Model on the kit's `queue_runner.mjs`. |
+| `workqueue.py` | `status`, `next --batch N`, `mark <part> <state> [--commit H] [--error ...]`, `verify` (a "done" Part must have its output file non-empty and its commit present). Derives truth from files and git, never from memory. Model on the kit's `queue_runner.mjs`. |
 | `gate.py` | For one Part: record HEAD (path-scoped rollback, decision 17), `cargo check`, then `cargo test`, then Differential harness, then `unsafe` count, `clippy`, `rustfmt --check` (Stage 2 only). **Baseline-aware**: record which checks failed before the change; reject only regressions. On failure: restore the snapshot and report the first error grouped by `rustc` error code. |
 | `harness.py` | Runs the original-side driver and the Rust-side driver on every file in `migration/harness/inputs/`, diffs stdout and exit code, writes `harness-report.tsv`. Drivers themselves are written per Pilot (see `references/judge.md`). |
 | `spend.py` | Sums `usage` from Claude Code session transcripts (`~/.claude/projects/<project>/*.jsonl`, subagents included) between two timestamps and appends `date, phase, part, input, output, cache_create, cache_read, note` to `SPEND.md` (decision 16). |
@@ -86,7 +86,7 @@ Retry policy: at most 5 attempts per Part (ENCRUST). Then `stubbed`: real signat
 
 1. `migration/` absent → run Stage 0: `inventory.py`, `depmap.py`, `tier.py`; draft `RULEBOOK.md` from the template + idiom tables; **stop and let the user review Deviations** (decision 11).
 2. Rulebook exists, no stress test recorded → translate the 3 hardest `judgment` Parts twice, diff, amend rules only (Anthropic step 2).
-3. `parts.tsv` has `todo` Parts → `queue.py next`, fan out with the small model, run `gate.py`, commit per accepted Part, `spend.py` after each batch.
+3. `parts.tsv` has `todo` Parts → `workqueue.py next`, fan out with the small model, run `gate.py`, commit per accepted Part, `spend.py` after each batch.
 4. All Parts `done`/`stubbed` for Stage 1 → run Stage 2 per Part with the same gate plus the acceptance rules (§6).
 5. Report: Parts done/stubbed/failed, deviations list, tokens spent, one recommended next step.
 

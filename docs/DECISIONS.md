@@ -54,3 +54,7 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ a 1–2 sample estimate scaled to ~50k lines (pugixml, jsoncpp) is not meaningful.
 20. **Linking original C tests to the Rust crate's C ABI (decision 6) is allowed and does not break decision 5.** Decision 5 forbids a mixed *product* build; test-only linking of a Rust `staticlib` into the upstream C test runner is part of the Judge.
     _Reason:_ clarifies an apparent contradiction between decisions 5 and 6.
+21. **`queue.py` is named `workqueue.py`.** A script called `queue.py` shadows the stdlib `queue` module for anything run from or importing the scripts directory (`concurrent.futures`, `multiprocessing`, `logging.handlers` import it).
+    _Reason:_ standard Python practice: never name a module after a stdlib module.
+22. **Transcript usage is de-duplicated by `message.id`.** Claude Code writes one JSONL line per content block, each repeating the full `usage`.
+    _Reason:_ measured — session 031b9674 has 119 usage lines but 53 distinct messages; summing lines would overcount about 2×.

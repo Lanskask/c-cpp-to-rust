@@ -1,0 +1,32 @@
+[project]
+name = "settlers-to-rust"
+version = "0.1.0"
+description = "c-to-rust Claude Code Skill: scripts and tests"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+dev-dependencies = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["skill/c-to-rust/scripts"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["pilots", "articles"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN"]
+
+[tool.ty.environment]
+extra-paths = ["skill/c-to-rust/scripts"]
+
+[tool.ty.src]
+exclude = ["pilots", "articles"]
+
+# uv 0.2.x has no `package = false`; tell setuptools there is nothing to package.
+[tool.setuptools]
+packages = []
+py-modules = []
