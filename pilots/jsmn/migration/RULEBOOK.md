@@ -18,6 +18,10 @@ Template: `skill/c-to-rust/references/rulebook-template.md`.
   (match `rust/src/lib.rs`; the adapter depends on them):
   - `pub type jsmntype_t = c_uint;` plus `pub const JSMN_UNDEFINED/OBJECT/ARRAY/STRING/PRIMITIVE: jsmntype_t`.
     No Rust `enum` in Stage 1 (§2 T8).
+  - `pub type jsmnerr = c_int;` plus `pub const JSMN_ERROR_NOMEM/INVAL/PART: jsmnerr`
+    (−1, −2, −3). `jsmn.h` declares the named type `enum jsmnerr`, so Stage 1
+    emits the alias, as the Faithful port and c2rust do; the constants are typed
+    `jsmnerr`, not bare `c_int`.
   - `jsmntok_t` fields: `type_0: jsmntype_t, start: c_int, end: c_int, size: c_int`,
     `#[cfg(feature = "parent-links")] parent: c_int`. The field is `type_0`
     (c2rust spelling), not `type_` or `r#type`.
@@ -71,6 +75,34 @@ Template: `skill/c-to-rust/references/rulebook-template.md`.
 | I1        | Stage 2: positions are plain `usize`; `pos - 1` after a primitive cannot underflow (`pos > start` there); write that invariant as a comment                     | the Faithful port's `wrapping_*` is only needed for C's `unsigned int`          |
 | E1        | `enum Error { NoMem, Inval, Part }`, `code()` = −1, −2, −3                                                                                                      | dump and tests print / compare the codes                                        |
 
+**C4, `#ifdef` around `case` labels (Stage 1).** `jsmn.h` puts `#ifdef JSMN_STRICT`
+around case labels in two places: the strict labels `-`, `0`-`9`, `t`, `f`, `n` vs the
+non-strict `default:` (sharing one primitive tail), plus a strict-only
+`default: return JSMN_ERROR_INVAL`, in `jsmn_parse`; and `#ifndef JSMN_STRICT case ':'`
+in `jsmn_parse_primitive`. Each C label group under an `#ifdef` becomes its own
+`match` arm with the same `#[cfg]` (prompt HARD RULE 2), in C order. A body that the
+C labels share is written once per cfg'd arm: every feature set compiles exactly
+one copy, as C does. Do not merge the arms into one `_` arm with `matches!`/`if`
+for the strict labels, and do not use a `cfg!(..)` match guard: both turn a
+compile-time label set into a runtime test. HARD RULE 8 ("one copy") is about
+goto labels, not about this. The Faithful port has this shape.
+
+```rust
+#[cfg(feature = "strict")]
+b'-' | b'0'..=b'9' | b't' | b'f' | b'n' => {
+    /* strict key check, then the primitive tail: parse, r < 0, count, size */
+}
+// QUIRK(port): Q5
+#[cfg(not(feature = "strict"))]
+_ => { /* the same primitive tail */ }
+#[cfg(feature = "strict")]
+_ => return JSMN_ERROR_INVAL,
+```
+
+In `jsmn_parse_primitive` the `:` label is its own arm, first, as in C:
+`// QUIRK(port): Q5`, then `#[cfg(not(feature = "strict"))] b':' => { found = true; break; }`,
+then the `b'\t' | .. | b'}'` arm with the same body.
+
 ## 3. Configuration macros → cargo features (decision 24)
 
 | Macro               | Kind                                | Cargo feature  | Judge runs it | Notes                                                        |
@@ -105,7 +137,7 @@ above the site, and no other `QUIRK`/`DEVIATION` comments.
 | `QUIRK(port): Q2` | the field resets in `jsmn_alloc_token`; the strict `{`/`[` `return JSMN_ERROR_INVAL` (2) |
 | `QUIRK(port): Q3` | each `return JSMN_ERROR_NOMEM`: `{`/`[` arm, `jsmn_parse_string`, `jsmn_parse_primitive` (3) |
 | `QUIRK(port): Q4` | each count-mode (`tokens == NULL`) test: `}`/`]` arm, string closing quote, primitive `found` tail (3) |
-| `QUIRK(port): Q5` | the non-strict `default` arm of `jsmn_parse`; the non-strict `:` case in `jsmn_parse_primitive` (2) |
+| `QUIRK(port): Q5` | the `#[cfg(not(feature = "strict"))] _ =>` arm of `jsmn_parse`; the `#[cfg(not(feature = "strict"))] b':' =>` arm of `jsmn_parse_primitive`; the marker line goes directly above the `#[cfg]` line; the strict arms carry no Q5 (§2 C4 `#ifdef` shape) (2) |
 | `QUIRK(port): Q6` | the strict `return JSMN_ERROR_PART` after the primitive loop (1) |
 | `QUIRK(port): Q7` | `count` initialised from `toknext` (1) |
 | `QUIRK(port): Q8` | the `}`/`]` arm; the `,` arm (2) |
@@ -245,4 +277,6 @@ Stage 1 (bytes read as `u8`, §0; Stage 1 keeps C's D1/D2 behaviour) and
 | 2026-10-10 | E3 stress test (RP7) | §0 | per-site arithmetic: `wrapping_*` on `pos`/`toknext` expressions, plain operators on `int` `count`/`size`/`start + 1`/`i`, `as c_int` for unsigned→int | accepted with change: RP7 asked for `wrapping_*` on signed sites too; C signed overflow is UB (D1), so plain operators match the Faithful port. `toknext - 1` at 0 is Judge-reachable and must wrap |
 | 2026-10-10 | E3 stress test (RP8) | §2 C4 | one `pos` increment at the loop tail; count-mode arms fall out of the `match`; no `continue` | accepted: the C `break` + `for` increment shape; replaces the old C4 text that asked for `pos += 1; continue` and conflicted with "keep the C structure" |
 | 2026-10-10 | E3 stress test (RP11) | §4, §11 | fixed Stage 1 marker sites (Q1-Q8, D3) and fixed PORT STATUS values | accepted: §9 "Where" is too vague to place markers; A and B both differed from the rulebook |
+| 2026-10-10 | E3 stress test (RP12) | §2 C4, §4 | `#ifdef`-guarded case labels become separate `#[cfg]` arms in C order, shared body written once per arm; no merged `_` arm with `matches!`, no `cfg!` guard; Q5 sits above the two `#[cfg(not(feature = "strict"))]` arms | accepted, B's shape (= Faithful port): HARD RULE 2 puts `#[cfg]` where `jsmn.h` has `#ifdef`, and each feature set then compiles one copy of the tail as C does; C's `cfg!`/`matches!` shape makes the label set a runtime test and leaves the Q5 site ambiguous |
+| 2026-10-10 | E3 stress test (RP13) | §0 | Stage 1 emits `pub type jsmnerr = c_int` and types `JSMN_ERROR_*` as `jsmnerr` | accepted: `jsmn.h` declares the named `enum jsmnerr`; the Faithful port and c2rust emit the alias. Nothing in the adapter, `dump.rs` or the Judge uses the name, so it fixes a free choice, not behaviour |
 | 2026-10-10 | E3-prep Judge validation | §10 | corpus 932 → 1188 inputs (primitive-continuation byte class) | accepted: 932-input corpus missed the E2 mutant in both `strict` sets |
