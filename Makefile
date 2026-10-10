@@ -1,7 +1,7 @@
 # Everyday commands. See README.md.
 SCRIPTS := skill/c-to-rust/scripts
 
-.PHONY: setup test lint typecheck fmt check spend-now
+.PHONY: setup test lint typecheck fmt check spend-now pilot-jsmn pilot-jsmn-snapshot
 
 setup:            ## create the uv environment with dev tools
 	uv sync
@@ -29,3 +29,19 @@ spend-now:        ## print a UTC timestamp to mark the start of a phase
 # Log spend for a phase:  make spend PHASE=E1 SINCE=2026-10-09T20:00:00+00:00 NOTE="c2rust on jsmn"
 spend:
 	python3 -I $(SCRIPTS)/spend.py log --phase "$(PHASE)" --since "$(SINCE)" --note "$(NOTE)"
+
+# Judge for one Pilot: gate the Part over every upstream-tested feature set.
+# Usage: make pilot-jsmn [STAGE=1] [PART=jsmn]
+STAGE ?= 1
+PART ?= jsmn
+pilot-jsmn:
+	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \
+	  --parts pilots/jsmn/migration/parts.tsv \
+	  --features "" --features strict --features parent-links --features strict,parent-links \
+	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py {features}"
+
+pilot-jsmn-snapshot:  ## record HEAD + baseline before editing the Part
+	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \
+	  --parts pilots/jsmn/migration/parts.tsv --snapshot \
+	  --features "" --features strict --features parent-links --features strict,parent-links \
+	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py {features}"

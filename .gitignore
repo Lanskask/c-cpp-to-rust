@@ -14,3 +14,4 @@ pilots/*/src/
 s25client/
 # translation-memory cache is disposable (decision 15)
 *.sqlite
+pilots/*/migration/gate/
