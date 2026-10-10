@@ -1,3 +1,7 @@
 date	phase	model	input	output	cache_create	cache_read	messages
 2026-10-10 14:02	E4-mapping	claude-sonnet-5-5	92	41812	93766	14338888	46
 2026-10-10 14:30	E3-skill-fixes	claude-sonnet-5-5	90	37328	60855	15671249	45
+2026-10-10 14:44	E4-rulebook	claude-opus-5-5	82	499	192022	4862343	41
+2026-10-10 14:44	E4-rulebook	claude-sonnet-5-5	36	9518	59179	3993445	17
+2026-10-10 15:09	E4-rulebook-fixes	<synthetic>	0	0	0	0	1
+2026-10-10 15:09	E4-rulebook-fixes	claude-sonnet-5-5	80	36988	54781	7743135	40

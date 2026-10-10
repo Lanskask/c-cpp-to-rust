@@ -363,3 +363,24 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   total (mostly input/cache); the subagent's sidechain output may not be in `spend.py`'s per-session sum
   (unverified). Check before the E4 extrapolation.
 - **Next:** user approves or vetoes D1-D20; then ticket 01 closes and the stress test (ticket 03) follows.
+
+## 27. E4 cJSON: Q15/Q20 proved by running, engine decision, Judge cases for D3/D6/D15/D19
+- **Date:** 2026-10-10 (after entry 26)
+- **Who:** Sonnet 5.5 governor, user answers in chat
+- **Done:** (1) Q15 and Q20 compiled and run against the pinned `cJSON.c`/`cJSON_Utils.c` (`cc`, driver in the session
+  scratchpad). Q15: `["\\", "x y"]` minifies to `["\\", "xy"]`, expected `["\\","x y"]`. Q20, calling the static
+  `decode_pointer_inplace` directly: `a~1` -> `a~`, `a~1b` -> `a~/`, `a~0b` -> `a~0`, `a~0` -> `a~` (right);
+  `replace` patches with `/a~1b`, `/a~0b`, `/x~1` return status 13, `/a` and `/x~0` return 0;
+  `cJSONUtils_GetPointer` finds all four keys (it does not use the decoder). The traced-by-reading claim "wrong unless
+  the escape is last" was itself wrong: `~1` is wrong even when last. RULEBOOK Q15 and Q20 rewritten from the run.
+  (2) User decisions: Stage 1 engine is c2rust with per-feature runs and LLM polish (RULEBOOK §0); internals for
+  the 12 static-using tests exported as `pub` under the cargo feature `test-internals` (§3, §10); D3, D6, D15, D19
+  get Judge cases (§8 "Reachable" column). All 20 Deviation rows are still `proposed`.
+  Spend row `E4-rulebook-fixes`: 36,988 output tokens; E4 total 88,817 (budget gate 490k not reached). The window
+  overlaps the skill-editing chat, so it is an upper bound for this session.
+- **Skill bugs:** (a) `assets/settings.json` hook used a relative path, so one `cd` into a Pilot directory broke
+  every Bash/Write/Edit call (fixed by the user: `$CLAUDE_PROJECT_DIR`); the governor's own `cd` into
+  `pilots/cjson/src` caused it. (b) `Edit(experiments/**)` is denied in `assets/settings.json:23`, so the proof
+  script could not be saved to `experiments/` as the user's rules ask; it stays in the scratchpad until the line is
+  dropped or another directory is named (user decision pending). (c) c2rust has not been run on cJSON yet.
+- **Next:** user approves or vetoes D1-D20; then ticket 01 closes, `tickets.py mark 04 in_progress` and the guard proof.
