@@ -33,7 +33,7 @@ Success for this plan: the Skill takes jsmn end to end, and tinyxml2 through at 
 ## 3. Repository layout to create
 
 ```
-settlers_to_rust/                 (run `git init` first; it is not a repo yet)
+settlers_to_rust/                 (already a git repo; branch master)
   Makefile                        setup / test / lint / typecheck / pilot-<name>
   README.md                       how to use the Makefile and the Skill
   CONTEXT.md  PLAN.md  SPEND.md   (SPEND.md: token log, see §8)
@@ -52,7 +52,8 @@ settlers_to_rust/                 (run `git init` first; it is not a repo yet)
     scripts/                      Python 3, see §4
     assets/                       settings.json deny-rules template, parts.tsv header
   pilots/<name>/                  one dir per Pilot (downloaded code is untrusted)
-    src/                          git clone of upstream (read-only)
+    UPSTREAM                      upstream URL + pinned commit (decision 18)
+    src/                          git clone of upstream (read-only, git-ignored)
     rust/                         the Rust crate
     migration/                    RULEBOOK.md, parts.tsv, RUN-NOTES.md, harness/
   tests/                          pytest for scripts, with fixtures
@@ -70,9 +71,9 @@ All Python 3 with strict type hints, managed by `uv`, checked with `uvx ty`, tes
 | `depmap.py` | Include graph, call graph, class hierarchy, SCCs, leaf-first order, dead-code candidates (unreachable from tests and public API). Out: `edges.tsv`, `cycles.txt`, `order.txt`. Study `anthropics/code-migration-kit-with-claude-code` `scripts/depmap_c.py` and its fixtures first; reuse its fixtures as tests. |
 | `tier.py` | Assigns each Part a tier from inventory tags: `mechanical` (POD, enums, constants, pure helpers), `judgment` (ownership, `virtual`, globals, unions), `unknown` (flag for the user or stub). Out: `parts.tsv` skeleton. |
 | `queue.py` | `status`, `next --batch N`, `mark <part> <state> [--commit H] [--error ...]`, `verify` (a "done" Part must have its output file non-empty and its commit present). Derives truth from files and git, never from memory. Model on the kit's `queue_runner.mjs`. |
-| `gate.py` | For one Part: snapshot (git stash or branch), `cargo check`, then `cargo test`, then Differential harness, then `unsafe` count, `clippy`, `rustfmt --check` (Stage 2 only). **Baseline-aware**: record which checks failed before the change; reject only regressions. On failure: restore the snapshot and report the first error grouped by `rustc` error code. |
+| `gate.py` | For one Part: record HEAD (path-scoped rollback, decision 17), `cargo check`, then `cargo test`, then Differential harness, then `unsafe` count, `clippy`, `rustfmt --check` (Stage 2 only). **Baseline-aware**: record which checks failed before the change; reject only regressions. On failure: restore the snapshot and report the first error grouped by `rustc` error code. |
 | `harness.py` | Runs the original-side driver and the Rust-side driver on every file in `migration/harness/inputs/`, diffs stdout and exit code, writes `harness-report.tsv`. Drivers themselves are written per Pilot (see `references/judge.md`). |
-| `spend.py` | Appends `date, phase, part, model, tokens_left_before, tokens_left_after, note` to `SPEND.md`. The unit is tokens; a subscription has no dollar meter. |
+| `spend.py` | Sums `usage` from Claude Code session transcripts (`~/.claude/projects/<project>/*.jsonl`, subagents included) between two timestamps and appends `date, phase, part, input, output, cache_create, cache_read, note` to `SPEND.md` (decision 16). |
 | `tm.py` | `build` (index accepted Part pairs and error → fix from `migration/` and git into `migration/tm.sqlite`, FTS5), `search "<error or snippet>"`. Cache is disposable. |
 | `snapshot.py` (optional) | Thin wrapper over git for per-Part checkpoint/rollback if `gate.py` needs it. |
 
@@ -112,7 +113,7 @@ Do E0–E3 before spending on anything else. If E3 shows the budget is not enoug
 
 ## 8. Budget and measurement
 
-The user has a Claude Code subscription. "$20" is a rough time/effort budget that **includes planning and skill writing**. No dollar meter exists, so log tokens: read the remaining-token counter before and after each phase and append via `spend.py`. After E3, write a one-paragraph extrapolation for the remaining Pilots and ask the user before continuing.
+The user has a Claude Code subscription. "$20" is a rough time/effort budget that **includes planning and skill writing**. No dollar meter exists, so log tokens from session transcripts via `spend.py` (decision 16; the in-session "tokens left" counter is the context window, not the quota). After E3, write a one-paragraph extrapolation for the remaining Pilots and ask the user before continuing.
 Cost levers, in order: scripts instead of LLM; reachable code only; small prompts (signatures only); small model for bodies; group errors by root cause; cap retries at 5; `cargo check` in inner loops.
 
 ## 9. User's standing rules (from `~/.claude/CLAUDE.md`; follow them)

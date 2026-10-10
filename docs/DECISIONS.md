@@ -39,3 +39,18 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ user requirement ("the skill should know it and use it"). Seed sources: Anthropic RULEBOOK template, `rewrite-rs/skills` (BSD-3-Clause). Do **not** copy from `arustydev/ai` (AGPL-3.0); use only as inspiration.
 15. **The Skill ships a translation-memory cache:** accepted source/Rust snippet pairs and compile error → fix, searchable by text (SQLite FTS5 by default, DuckDB as an option). It is rebuilt from files in `migration/` and git, never the source of truth.
     _Reason:_ user requirement ("the skill should know it and use it"); fewer retries. Parts remain resumable from `parts.tsv` and git alone (decision 7).
+
+## 2026-10-09 — executor review of PLAN.md (before E0)
+
+16. **Measure spend from session transcripts, not the "tokens left" counter.**
+    The counter visible to the model is the context-window budget of one session; it does not include subagents and is not the subscription quota. Claude Code writes per-message `usage` (input, output, cache-creation, cache-read tokens) into `~/.claude/projects/<project>/<session>.jsonl`, and subagent transcripts sit next to it. `spend.py` sums those between two timestamps.
+    _Reason:_ measured — this repo's planning session (031b9674) logged 119 messages, 164k output tokens and 16.5M cache-read tokens; none of that is visible in the per-session counter.
+17. **Gate rollback is path-scoped, never `git stash`.**
+    `gate.py` records `HEAD` and restores only the Part's `target_path` (`git checkout <HEAD> -- <path>` plus `git clean` of that path) on failure.
+    _Reason:_ best practice; `git stash` in a repo shared by all Pilots, the Skill and the docs would also stash unrelated work (decision log, `SPEND.md`, notes) and can conflict on pop.
+18. **Upstream clones are not committed.** `pilots/*/src/` is git-ignored; the upstream URL and pinned commit go in `pilots/<name>/UPSTREAM` so a fresh session can re-clone the exact source.
+    _Reason:_ a nested `.git` inside the repo is either a broken submodule or a silent vendor copy; the pin keeps the Judge reproducible.
+19. **jsmn cost is not extrapolated alone.** jsmn is ~500 lines and splits into 1–2 Parts, so it exercises the queue and fan-out barely. The E3 extrapolation must say this; the first usable per-Part cost figure comes from cJSON (E4).
+    _Reason:_ a 1–2 sample estimate scaled to ~50k lines (pugixml, jsoncpp) is not meaningful.
+20. **Linking original C tests to the Rust crate's C ABI (decision 6) is allowed and does not break decision 5.** Decision 5 forbids a mixed *product* build; test-only linking of a Rust `staticlib` into the upstream C test runner is part of the Judge.
+    _Reason:_ clarifies an apparent contradiction between decisions 5 and 6.

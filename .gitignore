@@ -1,0 +1,16 @@
+# local tool state
+.serena/
+.claude/settings.local.json
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Rust build output
+target/
+# upstream clones: untrusted, re-cloned from pilots/<name>/UPSTREAM (decision 18)
+pilots/*/src/
+# Goal project checkout (out of scope)
+s25client/
+# translation-memory cache is disposable (decision 15)
+*.sqlite
