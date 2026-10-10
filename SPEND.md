@@ -12,3 +12,4 @@ Written by `spend.py` from Claude Code transcripts (decision 16).
 | 2026-10-10 04:38 | E3-stage2 | - | 80 | 16703 | 138412 | 4214311 | 40 | <synthetic>:0, claude-sonnet-5-5:16703 | Stage 2 jsmn attempt 1: Sonnet implementer (gate PASS 23/23) |
 | 2026-10-10 04:43 | E3-stage2 | - | 26 | 4517 | 91240 | 905064 | 12 | claude-sonnet-5-5:4517 | Stage 2 jsmn attempt 1: Sonnet reviewer (verdict accept, 5 GAP, 5 RULE, 4 NIT) + governor gate/prompt work |
 | 2026-10-10 05:04 | E3-stage2 | - | 92 | 13653 | 196496 | 3592234 | 44 | claude-opus-5-5:227, claude-sonnet-5-5:13426 | Stage 2 jsmn: reviewer-claim reproduction (Sonnet) + Opus RP14 decision, RP15-18 patches, Judge spec |
+| 2026-10-10 05:13 | E3-judge-ext | - | 34 | 14910 | 32541 | 3862014 | 16 | claude-sonnet-5-5:14910 | governor session: apply Opus diffs, extend Judge (1201 inputs, phases 5-6), validate on Faithful/35e87c3/mutant (first attempt used SINCE=04:00 and double-counted; row removed) |

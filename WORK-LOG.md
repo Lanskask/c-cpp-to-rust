@@ -181,3 +181,17 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   session and Judge changes need their own commit outside the fan-out (SKILL.md rules).
 - **Next:** user confirms the D2 amendment; patches applied and Judge extended in a session without the deny-rules;
   then attempt 2.
+
+## 15. E3 Stage 2 on jsmn: Opus patches applied, Judge extended for attempt 2
+- **Date:** 2026-10-10 (after entry 14)
+- **Who:** Sonnet 5.5, governor session without deny-rules (`e2aa765`, `63a6486`, `858de4c`); the patches and the
+  Judge spec were written by Opus in the deny-ruled Skill session
+- **Done:** `git apply` of the Opus RULEBOOK and idiom-table diffs, committed. Judge extension per
+  `opus-judge-spec.md`: +13 corpus inputs (1188 → 1201), `dump.c` / `dump.rs` phases 5 "dirty" and 6 "shrink",
+  adapter `poison_kinds`. Validated on scratch crates built from git history.
+- **Tells us:** the Faithful port passes 1201/1201 in all 4 sets under both the Stage 1 and the Stage 2 Judge.
+  `35e87c3` (attempt 1) fails 36 / 160 / 38 / 162 inputs (default / strict / parent-links / strict+parent-links),
+  all first differing in phase `shrink`: RP14 is now caught mechanically, where attempt 1 had passed the old
+  Judge 23/23. The E2 mutant still fails (2 / 1 / 2 / 1 inputs). Spec detail wrong: `[[]]` is not yet a corpus case.
+- **Next:** Stage 2 attempt 2 in the deny-ruled session: implement `parse_with_limit` per RULEBOOK §6, switch the
+  adapter's `Some(k)` path to it, gate with `make pilot-jsmn STAGE=2 MIN_TESTS=16` (must now pass 1201/1201).
