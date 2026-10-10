@@ -1,0 +1,6 @@
+part_id	kind	source_paths	target_path	tier	deps	state	attempts	model	last_error	commit	updated
+cJSON	file	cJSON.c,cJSON.h	rust/src/cJSON.rs	judgment	cJSON_Utils	todo	0				
+cJSON_Utils	file	cJSON_Utils.c	rust/src/cJSON_Utils.rs	judgment	cJSON	todo	0				
+fuzzing/afl	file	fuzzing/afl.c	rust/src/afl.rs	judgment	cJSON,cJSON_Utils	todo	0				
+fuzzing/cjson_read_fuzzer	file	fuzzing/cjson_read_fuzzer.c	rust/src/cjson_read_fuzzer.rs	judgment	cJSON,cJSON_Utils	todo	0				
+fuzzing/fuzz_main	file	fuzzing/fuzz_main.c	rust/src/fuzz_main.rs	judgment	cJSON,cJSON_Utils,fuzzing/cjson_read_fuzzer	todo	0				

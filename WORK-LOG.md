@@ -315,3 +315,19 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the run's phases are now machine-readable state, so a fresh session resumes from `tickets.py status`
   plus `parts.tsv` instead of from prose. Not yet exercised on a real Pilot; ticket 04 does that on jsmn.
 - **Next:** start the cJSON run from the Skill; its first action creates the cJSON tickets.
+
+## 24. E4 cJSON run started: tickets, inventory, depmap, tiers; blocked by deny-rules at Judge/rulebook writing
+- **Date:** 2026-10-10 (after entry 23)
+- **Who:** Sonnet 5.5 governor session, `/c-to-rust pilots/cjson`
+- **Done:** deny-rule proof: `Edit` of `pilots/cjson/migration/RULEBOOK.md` refused ("File is in a directory that
+  is denied by your permission settings"). `tickets.py init` wrote 7 tickets; 01 `in_progress`. `inventory.py`
+  (regex engine, 2100 symbols), `depmap.py` (852 edges, 2 cycles), `tier.py` (5 Parts, all `judgment`) ran.
+  Spend row `E4-mapping`: 41,812 output tokens (budget gate 490k not reached).
+- **Tells us:** (1) `tier.py` lists `fuzzing/afl`, `cjson_read_fuzzer`, `fuzz_main` as Parts: they are fuzz drivers,
+  not library code, so `parts.tsv` needs them dropped or marked. (2) `depmap` reports a `cJSON`/`cJSON_Utils` cycle
+  and `parts.tsv` makes each a dep of the other; `cJSON.c` does not include `cJSON_Utils.h`, so this looks like a
+  name-based false edge (unverified). (3) `cycles.txt` also lists vendored `tests/unity` files: `inventory.py` walks
+  `tests/`.
+- **Skill bug:** the Skill's Stage 0 steps 5-6 write `migration/harness/**` and `RULEBOOK.md`, but the deny-ruled
+  session the user asked for refuses `Edit`/`Write` to exactly those paths, so Stage 0 cannot finish inside it.
+- **Next:** user decides how to write the Judge and rulebook (see the stop message of this session).
