@@ -205,3 +205,21 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   inputs (all in phase `shrink`); the E2 mutant fails 2 / 1 / 2 / 1. Opus spec errors found so far: one
   (`[[]]`), so spec claims about corpus content should be checked by a script, not by reading.
 - **Next:** Stage 2 attempt 2 in a fresh deny-ruled session (command in the chat; fresh, not `--resume`).
+
+## 17. E3 Stage 2 on jsmn: attempt 2 passes the gate, held before review (Judge file touched)
+- **Date:** 2026-10-10 (after entry 16)
+- **Who:** Sonnet 5.5 governor (deny-ruled session); Sonnet 5.5 subagent (implementer)
+- **Done:** deny-rule check passed (Edit of `RULEBOOK.md` refused). `make spend-now` 05:23:37. Marked `jsmn`
+  in_progress (attempts 2), snapshot STAGE=2. Implementer added `Parser::parse_with_limit`, threaded `num_tokens`,
+  adapter `Some(k)` calls `parse_with_limit(js, &mut self.buf, k)`. Gate `make pilot-jsmn STAGE=2 MIN_TESTS=16`: PASS
+  23/23, harness 1202/1202 in all 4 sets, 0 `unsafe`, 0 `unwrap`/`expect`, 0 `TODO(port)`.
+- **Tells us:** (1) the gate baselines failures: on `35e87c3` it printed PASS (15 checks) while the harness failed
+  1165/1202 (default), because the snapshot recorded those failures as pre-existing. A gate PASS proves nothing
+  about the harness unless the harness rows are `pass`; here they are. Proposed fix: never baseline `harness` in
+  `gate.py` (protected, not edited). (2) The implementer's `cargo fmt` reformatted two `writeln!` in
+  `examples/dump.rs` (Judge file; committed version is not rustfmt-clean, which is why `fmt` failed in attempt 1).
+  The implementer's revert was denied. The `fmt` PASS above is therefore only true with that unauthorised edit.
+- **Open:** `dump.rs` is modified in the working tree and must not go into the Part commit. No review, no commit, Part
+  still `in_progress`.
+- **Next:** user decides: revert `dump.rs` (then `fmt` is red again) or commit the formatting as its own Judge
+  commit; then review (`review-prompt.md`) and commit lib.rs + adapter.
