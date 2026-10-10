@@ -1,6 +1,7 @@
 # 05: WORK-LOG numbering and entry hygiene
 
-**What to build:** The log has one numbered sequence again (two entries are numbered 17) and each entry still follows who/what/tells us/next.
+**What to build:** The log has one numbered sequence again (two entries are numbered 17) and each entry still follows
+who/what/tells us/next.
 
 **Blocked by:** None (can start immediately)
 

@@ -1,6 +1,7 @@
 # 06: Fold cJSON Stage 1 findings back into the Skill
 
-**What to build:** The idiom table, rulebook template and prompts absorb what cJSON's Stage 1 showed: new rows, rows verified by a cJSON test, rules that agents disagreed on.
+**What to build:** The idiom table, rulebook template and prompts absorb what cJSON's Stage 1 showed: new rows, rows
+verified by a cJSON test, rules that agents disagreed on.
 
 **Blocked by:** cJSON run ticket 04 (Stage 1 Faithful port)
 

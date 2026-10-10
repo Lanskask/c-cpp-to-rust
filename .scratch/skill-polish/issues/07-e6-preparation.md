@@ -1,6 +1,7 @@
 # 07: E6 preparation: tinyxml2 pin and C++ idiom-table skeleton
 
-**What to build:** tinyxml2 is cloned and pinned, and `idiom-table-cpp.md` has its structure ready to be filled from real constructs.
+**What to build:** tinyxml2 is cloned and pinned, and `idiom-table-cpp.md` has its structure ready to be filled from
+real constructs.
 
 **Blocked by:** cJSON run ticket 07 (report and go/no-go)
 

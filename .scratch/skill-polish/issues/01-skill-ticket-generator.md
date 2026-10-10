@@ -1,6 +1,8 @@
 # 01: The Skill creates the ticket set for a translation run
 
-**What to build:** Start a run on any Pilot and the Skill itself writes `<ws>/migration/tickets/` (Mapping, Stage 1 Judge, stress test, Stage 1 Faithful port, Stage 2 Judge, Stage 2 Idiomatic pass, report), with blocking edges, acceptance checklists and a `mark`/`status` command; SKILL.md says when to create and update them.
+**What to build:** Start a run on any Pilot and the Skill itself writes `<ws>/migration/tickets/` (Mapping, Stage 1
+Judge, stress test, Stage 1 Faithful port, Stage 2 Judge, Stage 2 Idiomatic pass, report), with blocking edges,
+acceptance checklists and a `mark`/`status` command; SKILL.md says when to create and update them.
 
 **Blocked by:** None (can start immediately)
 

@@ -113,8 +113,24 @@ _Avoid_: cheat sheet, mapping table
 
 ### People and sessions
 
+**Skill-editing session**:
+A session where the Skill itself is built and changed: its SKILL.md, scripts, prompts, Judge builders, idiom table and
+tests. It may edit anything under `skill/`, `docs/` and `experiments/`; it does not translate a Pilot.
+_Avoid_: dev session, building session, meta session
+
+**Translation session**:
+A session where the Skill is run: it translates a Source project into Rust following SKILL.md, and thereby tests whether
+the Skill-editing session built the Skill correctly. It writes only inside the Pilot's workspace and the logs; a
+defect in the Skill is recorded as a Skill bug, not edited in place.
+_Avoid_: run session, test session, worker session
+
 **Governor**:
-The Claude Code session that runs the Skill's decision tree for a Pilot: starts each step, hands Parts to implementers
-and reviewers, re-checks every report by running the Gate or tests itself, logs spend and the work log, and stops only
-for the user's decisions. It never edits the Judge or the Rulebook during a batch.
+The role of the top-level agent of a Translation session: starts each step, hands Parts to implementers and reviewers,
+re-checks every report by running the Gate or tests itself, logs spend and the work log, and stops only for the user's
+decisions. It never edits the Judge or the Rulebook during a batch.
 _Avoid_: orchestrator, coordinator, manager
+
+**Skill bug**:
+Anything a Translation session needed the user, or a Skill file change, for beyond the allowed interventions. Logged in
+WORK-LOG.md; fixed by a Skill-editing session.
+_Avoid_: issue, glitch, workaround

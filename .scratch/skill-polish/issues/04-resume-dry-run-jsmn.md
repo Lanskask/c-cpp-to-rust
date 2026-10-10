@@ -1,6 +1,7 @@
 # 04: Resume dry run: `/c-to-rust` on the finished jsmn Pilot
 
-**What to build:** A fresh session invoked with the Skill on `pilots/jsmn` recognises that everything is done and reports without changing any file: this proves resumability from disk state before cJSON.
+**What to build:** A fresh session invoked with the Skill on `pilots/jsmn` recognises that everything is done and
+reports without changing any file: this proves resumability from disk state before cJSON.
 
 **Blocked by:** 01
 

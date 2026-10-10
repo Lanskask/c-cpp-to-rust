@@ -1,6 +1,7 @@
 # 02: Close the remaining script gaps G6, G13, G17, G19
 
-**What to build:** The deny-rules are verified by a script instead of a manual Edit try, `fmt` runs once per gate, `tm.py` indexes both stage queues, and `dead.txt` says it under-approximates.
+**What to build:** The deny-rules are verified by a script instead of a manual Edit try, `fmt` runs once per gate,
+`tm.py` indexes both stage queues, and `dead.txt` says it under-approximates.
 
 **Blocked by:** None (can start immediately)
 

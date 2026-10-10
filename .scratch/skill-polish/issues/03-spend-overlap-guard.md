@@ -1,6 +1,7 @@
 # 03: `spend.py log` refuses an overlapping window
 
-**What to build:** Logging spend can no longer double-count: a `SINCE` earlier than the previous row's end is refused with a message, and an identical row is not appended twice.
+**What to build:** Logging spend can no longer double-count: a `SINCE` earlier than the previous row's end is refused
+with a message, and an identical row is not appended twice.
 
 **Blocked by:** None (can start immediately)
 
