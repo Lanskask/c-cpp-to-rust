@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git reset:*)",
+      "Bash(git stash:*)",
+      "Bash(git rebase:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "Bash(git switch:*)",
+      "Bash(git merge:*)",
+      "Bash(git clean:*)",
+      "Bash(git push:*)",
+      "Bash(git commit --amend:*)",
+      "Bash(rm -rf:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "WebFetch",
+      "WebSearch",
+      "Edit(pilots/*/src/**)",
+      "Edit(pilots/*/UPSTREAM)",
+      "Edit(pilots/*/migration/RULEBOOK.md)",
+      "Edit(pilots/*/migration/parts*.tsv)",
+      "Edit(pilots/*/migration/harness/**)",
+      "Edit(pilots/*/rust/Cargo.toml)",
+      "Edit(pilots/*/rust/tests/*.rs)",
+      "Edit(pilots/*/rust/examples/**)",
+      "Edit(skill/**)",
+      "Edit(docs/**)",
+      "Edit(experiments/**)",
+      "Edit(PLAN.md)",
+      "Edit(CONTEXT.md)",
+      "Edit(.claude/**)"
+    ]
+  }
+}
