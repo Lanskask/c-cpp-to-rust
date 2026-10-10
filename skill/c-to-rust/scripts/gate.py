@@ -6,7 +6,8 @@ Flow:  gate.py PART --crate DIR --stage N --snapshot    # before changing the Pa
        gate.py PART --crate DIR --stage N               # run checks; on regression restore the Part's path
 
 Checks run once per feature set (`--features ""` `--features strict` ...; default: one run, no features), in
-order, stopping at the first regression. A check that already failed in the baseline is not a regression.
+order, stopping at the first regression. A check that already failed in the baseline is not a
+regression, except at Stage 2 the Judge checks `test` and `harness`, which always count.
 `--harness-cmd` is a shell command with `{features}` replaced by the feature list; exit 0 = pass.
 Rollback is path-scoped (decision 17): `git checkout <HEAD> -- <path>` plus `git clean` of that path, for the
 Part's target_path and every `--also PATH` (relative to the workspace root, e.g. rust/tests/adapter/mod.rs).
@@ -25,6 +26,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# At Stage 2 the Judge checks are never excused by the baseline: a snapshot taken while the Judge already
+# fails would otherwise let a still-failing attempt print PASS (found in E3 Stage 2 attempt 2). Stage 1 keeps
+# the baseline for them, because a half-translated crate may not compile while other Parts are `todo`.
+JUDGE_CHECKS = {"test", "harness"}
+
 ERROR_CODE = re.compile(r"^error(?:\[(E\d+)\])?: (.*)$", re.M)
 
 
@@ -38,6 +44,10 @@ class Result:
     @property
     def key(self) -> str:
         return f"{self.check}[{self.features}]"
+
+    def regresses(self, baseline: set[str], stage: int = 1) -> bool:
+        """A failed check counts unless the baseline already had it; at Stage 2 Judge checks always count."""
+        return self.status == "fail" and (self.key not in baseline or (stage == 2 and self.check in JUDGE_CHECKS))
 
 
 def run(cmd: list[str]) -> tuple[int, str]:
@@ -128,7 +138,7 @@ def run_checks(
 
     def record(res: Result) -> bool:
         results.append(res)
-        return res.status == "fail" and res.key not in baseline and stop_on_regression
+        return res.regresses(baseline, stage) and stop_on_regression
 
     for feats in feature_sets:
         steps: list[tuple[str, list[str] | None]] = [
@@ -246,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     for r in results:
         print(f"{r.check}\t{r.features}\t{r.status}\t{r.detail}")
-    regressions = [r for r in results if r.status == "fail" and r.key not in baseline]
+    regressions = [r for r in results if r.regresses(baseline, args.stage)]
     if regressions:
         first = regressions[0]
         if not args.no_rollback:

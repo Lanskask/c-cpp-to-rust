@@ -95,7 +95,11 @@ fn run(js: &[u8], out: &mut impl Write) -> std::io::Result<()> {
     p.reset();
     let r = p.parse(js, Some(CAPACITY));
     let s = p.state();
-    writeln!(out, "dirty pos={} toknext={} toksuper={}", s.pos, s.toknext, s.toksuper)?;
+    writeln!(
+        out,
+        "dirty pos={} toknext={} toksuper={}",
+        s.pos, s.toknext, s.toksuper
+    )?;
     dump(out, "dirty", r, &p.tokens(shown(r, s.toknext)))?;
 
     // 6. reused parser, num_tokens below toknext (Q9, RP14)
@@ -112,7 +116,11 @@ fn run(js: &[u8], out: &mut impl Write) -> std::io::Result<()> {
     )?;
     let r = p.parse(js, Some(k));
     let s = p.state();
-    writeln!(out, "shrink pos={} toknext={} toksuper={}", s.pos, s.toknext, s.toksuper)?;
+    writeln!(
+        out,
+        "shrink pos={} toknext={} toksuper={}",
+        s.pos, s.toknext, s.toksuper
+    )?;
     dump(out, "shrink", r, &p.tokens(shown(r, s.toknext)))?;
     Ok(())
 }

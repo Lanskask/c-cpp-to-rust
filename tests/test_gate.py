@@ -146,3 +146,15 @@ def test_min_tests_rejects_vacuous_test_pass(tmp_path: Path) -> None:
     (crate / "src" / "lib.rs").write_text("pub fn f() {}\n")  # no tests at all: cargo passes, the gate must not
     none = gate.run_checks(crate, 1, [""], None, None, set(), False, None, 1)
     assert next(r for r in none if r.check == "test").status == "fail"
+
+
+def test_stage2_judge_checks_are_never_baselined(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    for stage, expected in (("1", 0), ("2", 1)):
+        args = ["p", "--crate", str(crate), "--stage", stage, "--parts", str(parts), "--harness-cmd", "false"]
+        assert gate.main([*args, "--snapshot", "--no-rollback"]) == 0
+        # `false` as harness fails in the baseline; Stage 1 excuses it, Stage 2 must not
+        assert gate.main([*args, "--no-rollback"]) == expected, stage
+    assert not gate.Result("check", "", "fail").regresses({"check[]"}, 2)
+    assert gate.Result("harness", "", "fail").regresses({"harness[]"}, 2)
+    assert not gate.Result("harness", "", "fail").regresses({"harness[]"}, 1)
