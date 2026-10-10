@@ -223,3 +223,15 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   still `in_progress`.
 - **Next:** user decides: revert `dump.rs` (then `fmt` is red again) or commit the formatting as its own Judge
   commit; then review (`review-prompt.md`) and commit lib.rs + adapter.
+
+## 17. E3 Stage 2 attempt 2: gate could pass a failing Judge (fixed)
+- **Date:** 2026-10-10 (after entry 16)
+- **Who:** Sonnet 5.5 governor session; the finding came from the deny-ruled Stage 2 session
+- **Done:** `gate.py`: at Stage 2 the `test` and `harness` checks are never excused by the baseline
+  (`Result.regresses`); Stage 1 keeps the baseline because a half-translated crate may not compile. New test
+  `test_stage2_judge_checks_are_never_baselined` (37 passed, 1 skipped). `examples/dump.rs` rustfmt'd (Faithful
+  port still 1202/1202 through it).
+- **Tells us:** a baseline taken on a tree where the Judge already fails turns the gate into a rubber stamp.
+  Review gap G-new: `make pilot-jsmn-snapshot` should be taken before the Judge extension or ignore Judge checks;
+  now enforced by the script instead of by procedure. Attempt 2's gate PASS must show 1202/1202 in the harness.
+- **Next:** the Stage 2 session re-gates attempt 2 with the fixed gate (script is read at run time).
