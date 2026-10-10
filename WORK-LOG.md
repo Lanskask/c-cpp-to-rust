@@ -70,3 +70,28 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   so this diff cannot yet support "stress-tested".
 - **Next:** Opus applies RP6-RP8, RP11 to the rulebook and RP9/RP10 to `stage1-prompt.md`; then translation C
   (Sonnet, same rules) is diffed against B. Agreement there earns the `stress-tested` status line.
+
+## 7. E3 stress test: RP6-RP11 applied to the rulebook and prompt
+- **Date:** 2026-10-10 (after entry 6)
+- **Who:** Opus 5.5 subagent (`e210aad`, `67735be`)
+- **Done:** RP6, RP7, RP8, RP11 applied to jsmn `RULEBOOK.md` §0/§2/§4/§11 with amendment rows; RP9, RP10 added
+  as HARD RULE 8 in `stage1-prompt.md` and in idiom rows C1, C5. RP7 changed on the way: `wrapping_*` on
+  unsigned `pos`/`toknext` arithmetic only, plain operators on signed `count`/`size`/`i`. Prompt for
+  translation C generated. `pytest`: 36 passed, 1 skipped (re-run by Sonnet).
+- **Tells us:** the Judge reaches `toknext - 1` with `toknext == 0`, so unsigned wrap is observable; signed
+  overflow is only D1 (unreachable). The Faithful port `pilots/jsmn/rust/src/lib.rs` has no PORT STATUS trailer
+  or markers, so it does not satisfy the new §4/§11.
+- **Next:** translation C, same model and same rules as B, diffed against B.
+
+## 8. E3 stress test: translation C and diff C vs B
+- **Date:** 2026-10-10 (after entry 7)
+- **Who:** Sonnet 5.5 subagent (translation, gate, diff; `6dd5f7b`); Sonnet 5.5 (this session) re-ran the 4 gates
+- **Done:** C gated in all 4 feature sets: `FAILED: 0` and 1188/1188 harness inputs each (re-run, same numbers);
+  0 TODO(port); trailer `stage=1 confidence=high todos=0 deviations=D3`. Diff C vs B: 2 new disagreements.
+- **Tells us:** with the same model and the new rules, B and C differ in only two places. RP12: how a
+  `#[cfg]`-dependent case label that shares its body is written (B: separate arms, tail written twice; C: one
+  arm, one tail), which also leaves open which site carries the Q5 marker. RP13 (minor): whether
+  `pub type jsmnerr = c_int` is emitted. Everything else followed RP6-RP11 or was cosmetic. n = 2 translations
+  per rule set, so RP12 may be a real gap or noise.
+- **Next:** Opus decides RP12 (§2 C4 or §4) and RP13 (§0) in the rulebook; one more Sonnet translation (D) with
+  that rulebook; if D agrees with C, Opus may set the status line to `stress-tested (2026-10-10)`.
