@@ -355,3 +355,17 @@ Deviations from the spec, for Opus:
   says. Making `parse(js, Some(k))` call `parse_with_limit` is the attempt-2 implementer's job.
 - Scratch crates for this validation are under the session scratchpad, not in the repo.
 - `make pilot-jsmn STAGE=2` now fails on the committed attempt 1 by design (RP14).
+
+### Update: `[[]]` added, corpus 1202 (Sonnet, commit a60f56a)
+
+The spec's claim that `[[]]` was already in the corpus was wrong; it is now case 1201 of 1202. Re-run of all
+validation, same method as above (commands run in this session):
+
+| crate | result (default / strict / parent-links / strict+parent-links) |
+|---|---|
+| Faithful port, Stage 1 Judge | 1202/1202 in all 4 sets, upstream C tests `FAILED: 0` |
+| Faithful port, Stage 2 Judge | 1202/1202 in all 4 sets |
+| Stage 2 attempt 1 (`35e87c3`) | 1165 / 1041 / 1163 / 1039 of 1202 match, i.e. 37 / 161 / 39 / 163 differ (one more than before: `[[]]`) |
+| E2 mutant on Faithful port | 1200 / 1201 / 1200 / 1201 of 1202 match, i.e. 2 / 1 / 2 / 1 differ |
+
+RULEBOOK §10 and a §12 row now say 1202.
