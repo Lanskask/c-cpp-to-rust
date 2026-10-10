@@ -82,14 +82,26 @@ impl Parser {
         }
     }
 
-    /// `jsmn_parse` with a token buffer.
+    /// `jsmn_parse` with a token buffer; `num_tokens` limits allocation only (Q9), every other token access is
+    /// bounded by `tokens.len()`.
+    pub fn parse_with_limit(
+        &mut self,
+        js: &[u8],
+        tokens: &mut [Token],
+        num_tokens: usize,
+    ) -> Result<usize, Error> {
+        self.run(js, Some(tokens), num_tokens)
+    }
+
+    /// `jsmn_parse` with `num_tokens = tokens.len()`, the common case.
     pub fn parse(&mut self, js: &[u8], tokens: &mut [Token]) -> Result<usize, Error> {
-        self.run(js, Some(tokens))
+        let num_tokens = tokens.len();
+        self.run(js, Some(tokens), num_tokens)
     }
 
     /// `jsmn_parse` with `tokens == NULL`: count only.
     pub fn count(&mut self, js: &[u8]) -> Result<usize, Error> {
-        self.run(js, None)
+        self.run(js, None, 0)
     }
 
     pub fn pos(&self) -> usize {
@@ -104,10 +116,14 @@ impl Parser {
         self.toksuper
     }
 
-    /// `jsmn_alloc_token`: index of a fresh token, or `None` when the slice is full.
-    fn alloc_token(&mut self, tokens: &mut [Token]) -> Option<usize> {
+    /// `jsmn_alloc_token`: index of a fresh token, or `None` when `num_tokens` or the slice is exhausted.
+    fn alloc_token(&mut self, tokens: &mut [Token], num_tokens: usize) -> Option<usize> {
         let idx = self.toknext;
-        // `get_mut` fails exactly when `toknext >= tokens.len()`, the C guard.
+        // QUIRK(port): Q9
+        if idx >= num_tokens {
+            return None;
+        }
+        // DEVIATION(port): D2
         let tok = tokens.get_mut(idx)?;
         self.toknext += 1;
         // QUIRK(port): Q2
@@ -122,7 +138,12 @@ impl Parser {
     }
 
     /// `jsmn_parse_primitive`.
-    fn parse_primitive(&mut self, js: &[u8], tokens: Option<&mut [Token]>) -> Result<(), Error> {
+    fn parse_primitive(
+        &mut self,
+        js: &[u8],
+        tokens: Option<&mut [Token]>,
+        num_tokens: usize,
+    ) -> Result<(), Error> {
         let start = self.pos;
         'found: {
             // QUIRK(port): Q1
@@ -156,7 +177,7 @@ impl Parser {
             self.pos -= 1;
             return Ok(());
         };
-        let Some(idx) = self.alloc_token(tokens) else {
+        let Some(idx) = self.alloc_token(tokens, num_tokens) else {
             // QUIRK(port): Q3
             self.pos = start;
             return Err(Error::NoMem);
@@ -177,7 +198,12 @@ impl Parser {
     }
 
     /// `jsmn_parse_string`.
-    fn parse_string(&mut self, js: &[u8], tokens: Option<&mut [Token]>) -> Result<(), Error> {
+    fn parse_string(
+        &mut self,
+        js: &[u8],
+        tokens: Option<&mut [Token]>,
+        num_tokens: usize,
+    ) -> Result<(), Error> {
         let start = self.pos;
         // Skip the starting quote.
         self.pos += 1;
@@ -192,7 +218,7 @@ impl Parser {
                 let Some(tokens) = tokens else {
                     return Ok(());
                 };
-                let Some(idx) = self.alloc_token(tokens) else {
+                let Some(idx) = self.alloc_token(tokens, num_tokens) else {
                     // QUIRK(port): Q3
                     self.pos = start;
                     return Err(Error::NoMem);
@@ -244,7 +270,12 @@ impl Parser {
     }
 
     /// Shared implementation of `jsmn_parse` (`tokens == None` is the count-only mode).
-    fn run(&mut self, js: &[u8], mut tokens: Option<&mut [Token]>) -> Result<usize, Error> {
+    fn run(
+        &mut self,
+        js: &[u8],
+        mut tokens: Option<&mut [Token]>,
+        num_tokens: usize,
+    ) -> Result<usize, Error> {
         // QUIRK(port): Q7
         let mut count = self.toknext;
 
@@ -256,7 +287,7 @@ impl Parser {
                     count += 1;
                     // C: with `tokens == NULL` the `break` leaves the switch and `pos` still advances.
                     if let Some(toks) = tokens.as_deref_mut() {
-                        let Some(idx) = self.alloc_token(toks) else {
+                        let Some(idx) = self.alloc_token(toks, num_tokens) else {
                             // QUIRK(port): Q3
                             return Err(Error::NoMem);
                         };
@@ -342,7 +373,7 @@ impl Parser {
                     }
                 }
                 b'"' => {
-                    self.parse_string(js, tokens.as_deref_mut())?;
+                    self.parse_string(js, tokens.as_deref_mut(), num_tokens)?;
                     count += 1;
                     if let (Some(sup), Some(toks)) = (self.toksuper, tokens.as_deref_mut()) {
                         // DEVIATION(port): D2
@@ -392,7 +423,7 @@ impl Parser {
                             return Err(Error::Inval);
                         }
                     }
-                    self.parse_primitive(js, tokens.as_deref_mut())?;
+                    self.parse_primitive(js, tokens.as_deref_mut(), num_tokens)?;
                     count += 1;
                     if let (Some(sup), Some(toks)) = (self.toksuper, tokens.as_deref_mut()) {
                         // DEVIATION(port): D2
@@ -402,7 +433,7 @@ impl Parser {
                 // QUIRK(port): Q5
                 #[cfg(not(feature = "strict"))]
                 _ => {
-                    self.parse_primitive(js, tokens.as_deref_mut())?;
+                    self.parse_primitive(js, tokens.as_deref_mut(), num_tokens)?;
                     count += 1;
                     if let (Some(sup), Some(toks)) = (self.toksuper, tokens.as_deref_mut()) {
                         // DEVIATION(port): D2

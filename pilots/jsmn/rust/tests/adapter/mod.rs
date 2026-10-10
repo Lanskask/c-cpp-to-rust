@@ -75,7 +75,7 @@ impl P {
             None => self.parser.count(js),
             Some(n) => {
                 assert!(n <= CAPACITY, "adapter buffer holds {CAPACITY} tokens");
-                self.parser.parse(js, &mut self.buf[..n])
+                self.parser.parse_with_limit(js, &mut self.buf, n)
             }
         };
         match result {
