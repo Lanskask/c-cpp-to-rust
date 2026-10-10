@@ -25,7 +25,7 @@ The Skill is not installed as a global Claude Code skill. Start a session from t
 `skill/c-to-rust/SKILL.md`:
 
 ```bash
-claude --settings skill/c-to-rust/assets/settings.json --model sonnet
+claude --name <pilot>-translation --settings skill/c-to-rust/assets/settings.json --model sonnet --allowedTools Agent
 ```
 
 Before the first run, check these (each one has bitten a session in E3):
