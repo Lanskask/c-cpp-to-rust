@@ -26,7 +26,7 @@ primitive position the corpus covered) is rejected before the per-byte range che
 Lesson for judge.md §3 item 3: enumerate each byte class in every position **per feature set**, not once.
 Applied to RULEBOOK §10 (2026-10-10, §12 amendments).
 
-## Stress test (SKILL.md step 2): INCOMPLETE, one of two translations
+## Stress test (SKILL.md step 2): two translations done (A Haiku no RP1-5, B Sonnet with RP1-5); status not yet stress-tested
 
 Prompt builder: `experiments/e3_jsmn_stress_prompt.py` (37 KB prompt: rulebook §0,2,3,4,5,7,8,9,11, 75 idiom rows
 tagged `*`/`goto`/`config-macro:*`, c2rust `none`). Scratch crates under the session scratchpad, not in the repo.
