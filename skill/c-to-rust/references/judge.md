@@ -114,6 +114,19 @@ A Judge that passes everything is indistinguishable from a broken one. For each 
 in a byte class or boundary check, runs the Judge, restores the file, and states in its docstring which Judge
 piece caught it. If nothing catches it, extend the corpus (§3) until something does.
 
+### Keeping Judge runs cheap
+
+Measured on cJSON Stage 2 (WORK-LOG 36): one Judge run is about 60 s, of which the corpus differential is about 50 s
+and the translated tests plus incremental cargo about 4 s.
+
+- **One run at a time.** Never start a second Judge run or experiment while one is running (8 cores are shared and a
+  stray run doubled a subagent's wall time).
+- **One feature set per mutant.** Run each mutant on the first feature set; run the others only for a mutant that
+  survived there, and for the final all-sets confirmation. A mutant the upstream/translated tests catch never
+  reaches the corpus diff.
+- **Time the first Gate run of a stage** (`time make ...`) and put the number in RUN-NOTES before planning more runs.
+- Do not run the Judge under PyPy: the corpus step is process spawning, and PyPy was slower (76 s against 50 s).
+
 ## 7. Rules for untrusted Pilot code
 
 Upstream clones are untrusted. Never use a Pilot directory as the working directory of a build tool or

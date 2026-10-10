@@ -554,3 +554,17 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Open:** the Stage 2 adapter paths (`HOOKS = false`, `C_LAYOUT = false`) are reasoned about, not run, because
   RULEBOOK section 6 is `TODO`; P1-P5 must be decided before ticket 06.
 - **Next:** decide the RULEBOOK section 6 (Stage 2 API) from P1-P5, then ticket 06.
+
+## 36. Judge speed: measured, simplest measures written into judge.md §6
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's request
+- **Done:** timed cJSON Stage 2 on the real crate, nothing else running. Full run `--stage 2`: 62.6 s wall (user
+  19.6 s, system 27.9 s); `--skip-tests`: 58.2 s, so translated tests plus incremental cargo are about 4 s and the
+  corpus differential (3,881 inputs, `--repeat 2`) about 50-58 s. `harness.py` alone: 49.6 s under CPython, 76.0 s
+  under PyPy 3.12 (user 20.5 s, system 44.6 s). PyPy is slower because the step is process spawning.
+  judge.md §6 gets "Keeping Judge runs cheap": one run at a time, one feature set per mutant, time the first Gate run,
+  no PyPy. No script changed.
+- **Not done:** a thread pool in `harness.py` (the only change that would cut the 50 s); wait for the first ticket 06
+  Gate timing. The 62.6 s first measurement overlapped one other process on the machine; the second, cleaner run
+  gave 62.6 s again.
+- **Next:** cJSON session re-reads judge.md §6 before ticket 06.
