@@ -65,3 +65,24 @@ def test_preexisting_failure_is_not_a_regression(tmp_path: Path) -> None:
     args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts)]
     assert gate.main([*args, "--snapshot"]) == 0
     assert gate.main(args) == 0  # same failures as baseline: no regression
+
+
+def test_also_paths_are_restored_with_the_target(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    adapter = crate / "tests" / "adapter"
+    adapter.mkdir(parents=True)
+    (adapter / "mod.rs").write_text("// adapter v1\n")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "adapter"],
+        check=True,
+    )
+    args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts), "--also", "rust/tests/adapter"]
+    assert gate.main([*args, "--snapshot"]) == 0
+    (adapter / "mod.rs").write_text("// adapter edited by the failed attempt\n")
+    (adapter / "extra.rs").write_text("// stray new file\n")
+    (crate / "src" / "lib.rs").write_text('pub fn f() -> i32 { "no" }\n')
+    assert gate.main(args) == 1
+    assert (adapter / "mod.rs").read_text() == "// adapter v1\n"
+    assert not (adapter / "extra.rs").exists()
+    assert (crate / "src" / "lib.rs").read_text() == "pub fn f() -> i32 { 1 }\n"

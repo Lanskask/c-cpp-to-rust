@@ -8,7 +8,8 @@ Flow:  gate.py PART --crate DIR --stage N --snapshot    # before changing the Pa
 Checks run once per feature set (`--features ""` `--features strict` ...; default: one run, no features), in
 order, stopping at the first regression. A check that already failed in the baseline is not a regression.
 `--harness-cmd` is a shell command with `{features}` replaced by the feature list; exit 0 = pass.
-Rollback is path-scoped (decision 17): `git checkout <HEAD> -- <target_path>` plus `git clean` of that path.
+Rollback is path-scoped (decision 17): `git checkout <HEAD> -- <path>` plus `git clean` of that path, for the
+Part's target_path and every `--also PATH` (relative to the workspace root, e.g. rust/tests/adapter/mod.rs).
 Cargo is called with `--manifest-path` (decision 25); pass `--toolchain nightly-2023-04-15` if needed.
 Output: TSV lines `check<TAB>features<TAB>pass|fail|skip<TAB>detail`, summary on stderr. Exit 0 pass, 1 fail.
 """
@@ -130,9 +131,11 @@ def git(root: Path, *args: str) -> str:
     return r.stdout.strip()
 
 
-def rollback(root: Path, head: str, target: str) -> None:
-    git(root, "checkout", head, "--", target)
-    git(root, "clean", "-fdq", "--", target)
+def rollback(root: Path, head: str, paths: list[str]) -> None:
+    """Restore every path (target plus `--also` paths) to `head` and delete untracked files under them."""
+    for path in paths:
+        git(root, "checkout", head, "--", path)
+        git(root, "clean", "-fdq", "--", path)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -144,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--features", action="append", help="feature set to check; repeat for a matrix")
     p.add_argument("--harness-cmd", help="shell command; {features} is replaced; exit 0 = pass")
     p.add_argument("--toolchain", help="rustup toolchain name for cargo, e.g. nightly-2023-04-15")
+    p.add_argument("--also", action="append", default=[], help="extra path restored with the target; repeatable")
     p.add_argument("--snapshot", action="store_true", help="record HEAD and baseline, change nothing")
     p.add_argument("--no-rollback", action="store_true", help="report only; keep the working tree as is")
     return p
@@ -163,7 +167,11 @@ def main(argv: list[str] | None = None) -> int:
             snap.parent.mkdir(exist_ok=True)
             snap.write_text(
                 json.dumps(
-                    {"head": git(root, "rev-parse", "HEAD"), "failing": [r.key for r in results if r.status == "fail"]}
+                    {
+                        "head": git(root, "rev-parse", "HEAD"),
+                        "failing": [r.key for r in results if r.status == "fail"],
+                        "paths": [target, *args.also],
+                    }
                 )
             )
             failing = sum(r.status == "fail" for r in results)
@@ -173,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             json.loads(snap.read_text()) if snap.exists() else {"head": git(root, "rev-parse", "HEAD"), "failing": []}
         )
         baseline = set(saved["failing"])
+        paths = list(dict.fromkeys([target, *saved.get("paths", []), *args.also]))
         results = run_checks(crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, baseline, True)
     except (ValueError, RuntimeError, OSError) as e:
         print(f"gate: {e}", file=sys.stderr)
@@ -183,8 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     if regressions:
         first = regressions[0]
         if not args.no_rollback:
-            rollback(root, str(saved["head"]), target)
-        action = "kept working tree" if args.no_rollback else f"restored {target} to {str(saved['head'])[:8]}"
+            rollback(root, str(saved["head"]), paths)
+        action = "kept working tree" if args.no_rollback else f"restored {', '.join(paths)} to {str(saved['head'])[:8]}"
         print(f"gate: FAIL {args.part}: {first.key}: {first.detail} ({action})", file=sys.stderr)
         return 1
     ok = sum(r.status == "pass" for r in results)
