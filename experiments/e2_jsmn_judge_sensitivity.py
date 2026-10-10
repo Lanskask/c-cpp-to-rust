@@ -40,9 +40,7 @@ def stage2() -> int:
     try:
         LIB.write_text(original.replace("(32..127)", "(32..126)"))
         for feats in FEATURE_SETS:
-            r = subprocess.run(
-                [sys.executable, "-I", str(RUN), "--stage", "2", feats], capture_output=True, text=True
-            )
+            r = subprocess.run([sys.executable, "-I", str(RUN), "--stage", "2", feats], capture_output=True, text=True)
             detected = r.returncode != 0
             missed += not detected
             last = (r.stderr.strip().splitlines() or r.stdout.strip().splitlines() or [""])[-1]

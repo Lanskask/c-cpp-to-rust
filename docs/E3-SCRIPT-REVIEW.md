@@ -28,3 +28,24 @@ The fixes are executor (Sonnet) work; each one needs a test.
 
 Not gaps: path-scoped rollback (decision 17), baseline handling, `--snapshot` (decision 29), atomic
 `parts.tsv` writes, `-I` standalone scripts (decision 30) all match the plan.
+
+## Status of the gaps (updated 2026-10-10, after E3 Stage 2)
+
+| gap | status | where |
+|-----|--------|-------|
+| G1  | closed | gate `--also`, `7bf08be` |
+| G2  | closed | per-stage snapshot names, `77d6ab2` |
+| G3  | closed | Stage 2 `unwrap` and `allow` checks, `8e19962` |
+| G4  | closed | `--min-tests`, `7381680` |
+| G5  | closed | `migration/gate-passed.tsv`, checked by `verify`; `--no-gate-record` for legacy Parts |
+| G7  | closed | `run.py --crate`, `--stage 2`, `3296ba5` |
+| G8  | closed | harness compares raw bytes; a timeout is a DIFF |
+| G9  | closed | harness `--repeat N`, `UNSTABLE` |
+| G11 | closed | `verify` checks `todo!()`, the RUN-NOTES section and that the commit touched the target |
+| G12 | closed | `tier.py` target paths, `--crate-root-part` |
+| G14 | closed | `inventory.py` always runs the regex pass and merges its tags into clang symbols |
+| G15 | closed | ten new tags; idiom rows T11, T12, I7, I8, L4-L6, L10 selected by them |
+| G16 | closed | `# cmd:` header line in `inventory.tsv` |
+| G6, G10, G13, G17, G18, G19 | open | G10 needs no code; G18 (per-model input tokens) is wanted before the E4 extrapolation |
+
+Also fixed, not in the original list: the gate excused a failing Stage 2 Judge through the baseline (`5b07c46`).
