@@ -1,0 +1,3297 @@
+
+
+ENCRUST: Encapsulated Substitution and Agentic Refinement on a Live Scaffold for Safe C-to-Rust Translation
+
+      Report GitHub Issue
+
+      ×
+
+      Title:
+
+      Content selection saved. Describe the issue below:
+
+      Description:
+
+      Submit without GitHub
+      Submit in GitHub
+
+    arXiv is now an independent nonprofit!
+    Learn more
+    ×
+
+      Back to arXiv
+
+    Why HTML?
+
+      Report Issue
+
+      Back to Abstract
+
+      Download PDF
+
+Abstract.
+
+1 Introduction
+
+Verification scope.
+
+Transformation scope.
+
+Encrust.
+
+2 Related Work
+
+2.1 Rule-Based C-to-Rust Transpilation
+
+2.2 LLM-Based C-to-Rust Translation
+
+2.2.1 Function-Level Translation
+
+2.2.2 Project-Scale Translation
+
+3 ENCRUST
+
+3.1 Phase 1: Encapsulated Substitution
+
+3.1.1 Preprocessing
+
+Decomposition.
+
+Translation ordering.
+
+C-to-Rust source mapping.
+
+3.1.2 Struct Translation
+
+Struct Classification
+
+Safe Struct Abstraction
+
+Memory Ownership Discipline
+
+Enforcement.
+
+3.1.3 Per-Function Translation
+
+The Wrapper Pattern
+
+Compile-Test Loop and Snapshot Rollback
+
+3.1.4 Type-Directed Wrapper Elimination (TDWE)
+
+Approach
+
+Compile-and-Test as the Universal Failure Gate
+
+Single Genuine Pre-emptive Skip: Unsafe-Cast Function-Pointer Use
+
+3.2 Phase 2: Agentic Refinement
+
+Task discovery and processing order.
+
+3.2.1 The Agentic Execution Loop
+
+Tool suite.
+
+Verification gate.
+
+Checkpoint and rollback.
+
+Stall recovery.
+
+3.2.2 Static Mut Elimination
+
+Signal-reachability.
+
+Safe replacement strategy.
+
+3.2.3 Wrapper Removal
+
+Removal strategy.
+
+3.3 Struct Migration and Use Update
+
+3.3.1 Function Translation
+
+In-place transformation.
+
+Translation order.
+
+Workflow.
+
+3.3.2 Dead Code Cleanup
+
+4 Experiments
+
+4.1 Benchmarks
+
+GNU Coreutils.
+
+Laertes benchmark.
+
+4.2 Metrics
+
+Safety metrics.
+
+Function compilance pass rate.
+
+Functional correctness.
+
+Idiomatic Rust quality.
+
+4.3 Experimental Setup
+
+LLM configuration.
+
+Baselines.
+
+4.4 Evaluation
+
+Safety reduction on Coreutils.
+
+Safety reduction on Laertes.
+
+Phase 1 translation coverage.
+
+Functional correctness.
+
+4.5 Ablation Study: Phase 2 Contribution
+
+5 Limitations
+
+6 Conclusion
+
+References
+
+    License: arXiv.org perpetual non-exclusive license
+
+arXiv:2604.04527v1 [cs.SE] 06 Apr 2026
+
+ENCRUST: Encapsulated Substitution and Agentic Refinement on a Live Scaffold for Safe C-to-Rust Translation
+
+Journal: PACMPLDOI: XXXXXXX.XXXXXXXCCS: Computing methodologies Artificial intelligenceCCS: Software and its engineering General programming languages
+
+HoHyun Sim
+
+email: tlaghgus0425@korea.ac.kr
+
+Affiliation: Korea University, South Korea
+
+, 
+Hyeonjoong Cho
+
+Note: Corresponding author: Hyeonjoong Cho
+
+email: raycho@korea.ac.kr
+
+Affiliation: Korea University, South Korea
+
+, 
+Ali Shokri
+
+email: ashokri@Central.UH.EDU
+
+Affiliation: University of Houston, United States
+
+, 
+Zhoulai Fu
+
+email: zhoulai.fu@sunykorea.ac.kr
+
+Affiliation: State University of New York Korea, South Korea
+
+ and 
+Binoy Ravindran
+
+email: binoy@vt.edu
+
+Affiliation: Virginia Tech, United States
+
+Received  5 June 2009
+
+Abstract.
+
+We present Encapsulated Substitution and Agentic Refinement on a Live Scaffold for Safe C-to-Rust Translation, a two-phase pipeline for translating real-world C projects to safe Rust. Existing automated approaches either produce wholly unsafe output that offers no memory-safety guarantees, or translate functions in isolation and verify them independently, failing to detect cross-unit type mismatches or handle unsafe constructs that inherently require whole-program reasoning. Furthermore, function-level LLM pipelines require coordinated caller updates whenever a type signature changes, while project-scale systems fail to produce compilable output under real-world dependency complexity. Encrust addresses these limitations by decoupling boundary adaptation from function logic via an Application Binary Interface (ABI)-preserving wrapper pattern and validating every intermediate state against the fully integrated codebase.
+Phase 1 (Encapsulated Substitution) translates each function using an ABI-preserving wrapper pattern that splits it into two components: a caller-transparent shim retaining the original raw-pointer signature, and a safe inner function targeted by the LLM with a clean, scope-limited prompt. This design enables independent per-function type-signature changes with automatic rollback on failure, without requiring coordinated caller updates. A subsequent deterministic, type-directed wrapper elimination pass then removes the wrappers once translation succeeds.
+Phase 2 (Agentic Refinement) resolves unsafe constructs that exceed per-function scope, including static mut globals, skipped wrapper pairs, and failed translations, through an LLM agent operating on the whole codebase under a baseline-aware verification gate.
+We evaluate Encrust on 7 GNU Coreutils programs and 8 libraries from the Laertes benchmark (197,706 LoC, 2,366 functions), demonstrating substantial unsafe-construct reduction across all 15 programs while maintaining full test-vector correctness across all benchmarks.
+
+Keywords: 
+Large Language Model, C-to-Rust, Agent
+
+1. Introduction
+
+C remains one of the most widely deployed systems languages, forming the foundation of operating systems, embedded firmware, cryptographic
+libraries, and critical infrastructure. Yet C provides no bounds checking, no ownership model, and no lifetime tracking; these missing guarantees are the root cause of a
+substantial fraction of real-world security vulnerabilities: buffer
+overflows, use-after-free errors, and data races continue to dominate
+CVE databases despite decades of tooling investment (Szekeres et al., 2013; Akritidis and others, 2010; Oleksenko et al., 2017).
+Rust offers a compelling alternative, providing memory and
+thread safety through a borrow-checked ownership system with no garbage
+collection overhead (Matsakis and Klock, 2014; Jung et al., 2018).
+Migrating existing C codebases to Rust would bring these guarantees to
+code that has already been hardened and battle-tested over decades,
+without discarding accumulated functionality and performance.
+This is a compelling prospect for safety-critical systems where rewrites from
+scratch are infeasible.
+
+Automated translation from C to Rust is, however, technically difficult.
+The closest off-the-shelf solution, C2Rust (Galois, 2018), applies
+syntactic rewriting rules to produce a Rust program that is behaviorally
+equivalent to the C source, but the output is wholly unsafe: every
+C pointer becomes a raw Rust pointer, and no ownership model is
+synthesized.
+The resulting code compiles and runs correctly, but it offers no
+memory-safety guarantees beyond what C already provides.
+Subsequent rule-based tools such as Laertes (Emre et al., 2021),
+Crown (Zhang et al., 2023), and CRustS (Ling et al., 2022) reduce
+unsafe usage incrementally, but they are confined to the syntactic and
+type-level patterns they were explicitly designed for; semantic
+transformations such as replacing pointer arithmetic with iterators,
+converting null-terminated char* to &str, or introducing
+Result-based error handling remain out of reach.
+
+Large language models (LLMs) offer a path beyond pattern-based rewriting:
+they can understand program intent and generate idiomatic Rust that
+captures the semantics of C code in a human-readable, safe form.
+Recent LLM-based translation systems (Yang et al., 2024; Zhou et al., 2025; Cai et al., 2025; Nitin et al., 2025; Wang et al., 2025; Dehghan et al., 2025)
+have demonstrated impressive results on individual functions or small
+benchmarks; they typically translate each function in isolation and
+verify it independently, without assembling or testing the full codebase.
+Scaling to real projects, however, exposes two fundamental challenges
+that these approaches do not fully resolve.
+Function-level LLM pipelines such as C2SaferRust suffer from
+dependency propagation: any change to a function’s type signature must
+be coordinated across all callers, a cascading overhead that grows with
+project scale. Project-scale systems such as EvoC2Rust attempt
+to sidestep this constraint but produce output that does not compile on
+any of the seven Coreutils programs we evaluate (functional correctness
+0% across all seven), because cross-unit dependencies remain unverified
+until the full codebase is assembled. Encrust addresses both
+failure modes.
+
+Challenge 1: decomposing translation complexity at ABI boundaries.
+Real C projects at scale involve deeply interleaved function dependencies:
+functions share types, calling conventions, and global state across many
+files.
+A natural approach is to supply each function to the LLM together with its
+full boundary context—call sites, global variable accesses, and
+imports—so that the model can reason about how the translated function
+will fit into its surroundings.
+This context, however, substantially increases the difficulty of each
+individual translation task: the LLM must simultaneously produce a
+type-correct function body, a signature compatible with every call site,
+and correct handling of any shared global state, all in a single
+generation step.
+The compounded complexity raises the per-function failure rate, depressing
+the overall function compilance pass rate even when each sub-problem is
+individually tractable.
+What is needed is a mechanism that separates the boundary
+adaptation concern from the function logic concern, allowing the LLM to
+focus on one at a time.
+
+Challenge 2: the limits of per-function scope.
+Per-function translation is insufficient in two respects:
+verification scope and transformation scope.
+
+Verification scope.
+
+Even when every individual translation compiles and passes its local
+tests, the integrated crate may still fail: inter-unit dependencies
+invisible at the per-function level surface as type mismatches,
+unresolved symbols, or semantic divergences only when the full codebase
+is assembled.
+Correctness must therefore be verified on the whole integrated crate,
+not on isolated translation units.
+
+Transformation scope.
+
+Several categories of unsafe constructs are inherently intractable
+within a single function’s scope.
+Static mut globals are accessed across many files simultaneously;
+eliminating them safely requires reasoning about every read, write, and
+address-of site across the entire program.
+Similarly, unsafe constructs whose signatures are shared across many call
+sites cannot be resolved without coordinated multi-file edits that a single
+per-function generation step cannot produce.
+
+Both respects call for a translation agent that operates on the
+whole codebase, guided by an end-to-end verification gate.
+
+Encrust.
+
+We present Encrust, a two-phase pipeline that addresses both
+challenges.
+
+Phase 1: Encapsulated Substitution (§3.1) resolves Challenge 1.
+It translates each function using an ABI-preserving wrapper pattern:
+each function is split into a thin wrapper that preserves the original name
+and C-compatible signature, and a safe inner function that implements the
+translation.
+The wrapper body consists exclusively of fixed let-binding
+templates that perform raw-to-safe type conversions at each parameter
+position, isolating all boundary-adaptation work in one dedicated shim.
+Consequently, the LLM prompt for the safe inner function is stripped of
+call-site obligations: it presents only the function’s own logic, the safe
+signatures of already-translated callees, and available safe struct
+definitions, rather than the raw-pointer signatures at every call site or the
+global variable layout.
+This focused prompt directly achieves the separation demanded by
+Challenge 1: the LLM reasons about boundary conversion and function
+logic in two separate, simpler steps rather than in one entangled
+generation.
+Untranslated callers continue to invoke the wrapper by its original name
+with raw pointer types; a failed translation is silently rolled back and
+the original unsafe body retained, so the crate remains compilable and
+test-passing at every step (Live Scaffold Invariant).
+After all functions are processed, a deterministic
+type-directed wrapper elimination pass rewrites call sites to
+invoke the safe inner functions directly, producing a wrapper-free crate.
+
+Phase 2: Agentic Refinement (§3.2) resolves Challenge 2.
+Residual unsafe patterns such as static mut globals involve
+complex cross-file dependencies that no per-function pass can resolve in
+isolation; addressing them requires whole-codebase visibility and
+coordinated multi-file edits.
+Phase 2 meets this requirement with an LLM agent equipped with 17
+code-navigation and code-modification tools that operates on the entire
+codebase, guided by a baseline-aware verification gate: no transformation
+is committed unless the fully integrated crate compiles and passes the
+complete test suite, catching the cross-unit failures that per-function
+verification misses.
+
+We make the following contributions:
+
+• 
+
+Encapsulated Substitution
+(§3.1.3, §3.1.4):
+a translation scheme that splits each function into a thin
+caller-transparent wrapper retaining the original name and
+raw-pointer signature, and a safe inner function with
+idiomatic Rust types that the LLM targets with a focused,
+boundary-free prompt, enabling independent per-function translation
+with silent rollback and no coordinated caller updates, followed by
+a compile-and-test-gated type-directed wrapper elimination (TDWE) pass.
+
+• 
+
+An agentic refinement loop (§3.2): a
+multi-tool LLM agent with a task taxonomy, fixed processing order,
+and baseline-aware verification that resolves unsafe patterns
+requiring whole-codebase reasoning, plus the narrow set of
+unsafe-cast wrappers that TDWE pre-emptively deferred.
+
+• 
+
+Evaluation on real-world benchmarks (§4):
+an assessment on 7 GNU Coreutils programs and 8 Laertes libraries
+(197,706 LoC, 2,366 functions total) showing that Encrust
+substantially reduces unsafe usage while preserving full end-to-end
+correctness across all 15 programs.
+Unlike prior work, which verifies only isolated translation units,
+Encrust validates the fully integrated crate; for the Laertes
+libraries, which ship without test cases, we construct harnesses and
+generate 1,000 inputs per library via AFL++ coverage-guided fuzzing
+to enable this end-to-end check for the first time.
+
+2. Related Work
+
+2.1. Rule-Based C-to-Rust Transpilation
+
+Early efforts to automate C-to-Rust migration rely on rule-based or
+static-analysis-driven transpilation, translating C syntax and semantics
+mechanically without large language models.
+
+C2Rust (Galois, 2018) is the most widely used starting point for automated C-to-Rust translation. It applies a fixed set of syntactic rewriting rules to produce Rust that is behaviorally equivalent to the input C, but the output is extensively unsafe: every C pointer becomes a raw pointer, and no ownership model is synthesized, meaning the generated code offers no memory-safety guarantees beyond what C already provides.
+
+Laertes (Emre et al., 2021) builds on C2Rust output and uses the Rust compiler as a blackbox oracle, iteratively applying transformation rules and fixing type errors until the program compiles, thereby rewriting a subset of raw pointers to safe Rust references. It is restricted, however, to pointers that are unsafe solely due to missing ownership and lifetime information, excluding those involved in pointer arithmetic, unsafe casts, or other confounding factors. Semantic restructuring such as replacing pointer arithmetic with iterators, null-terminated char* with &str, or C error codes with Result lies outside its scope.
+
+Crown (Zhang et al., 2023) builds on C2Rust and applies ownership constraint analysis, using a SAT solver to infer whether each raw pointer is owning or non-owning, and retypes it accordingly to Box or a safe reference.
+
+CRustS (Ling et al., 2022) also post-processes C2Rust output, applying 220 TXL source-to-source transformation rules to reduce unsafe keyword usage in function signatures and narrow the scope of unsafe blocks. Of these rules, 198 are strictly semantics-preserving and 22 are semantics-approximating, trading minor behavioral fidelity for greater safety. As with any rule-based approach, coverage is inherently limited to patterns anticipated at design time.
+
+All of the above tools share a common limitation: they operate on syntactic or type-level patterns that can be identified without understanding program intent. Semantic transformations such as replacing pointer arithmetic with iterators, converting null-terminated char* to &str, or introducing Result-based error handling require a level of comprehension that rule-based systems cannot provide. Our approach addresses this gap by using an LLM for semantic translation while retaining rule-based mechanisms for the systematic, deterministic aspects of type rewriting.
+
+2.2. LLM-Based C-to-Rust Translation
+
+LLM-based approaches split naturally into function-level systems
+that translate and verify each function in isolation, and
+project-scale systems that target whole repositories.
+Encrust belongs to the latter group; we survey both.
+
+2.2.1. Function-Level Translation
+
+Early LLM-based work focuses on individual functions or small benchmarks.
+
+VERT (Yang et al., 2024) combines LLM-based and rule-based translation: it compiles the C program to WebAssembly and lifts it to Rust via rWasm to produce a semantically correct oracle, while in parallel using an LLM to generate a readable Rust candidate. The candidate is verified against the oracle using property-based testing and bounded model checking; if verification fails, a new candidate is regenerated.
+
+FLOURINE (Eniser et al., 2024) replaces the WebAssembly oracle with
+differential fuzzing, checking input/output equivalence between the C
+original and the translated Rust without requiring pre-written tests.
+
+Syzygy (Shetty et al., 2024) combines LLM-driven code and test
+translation guided by dynamic analysis, using execution information
+to ensure that the generated Rust code and its tests are mutually
+consistent and functionally equivalent to the original C.
+
+SmartC2Rust (Shiraishi et al., 2024) segments the C program to fit within the LLM context window, then applies an iterative repair loop in which compilation errors, semantic discrepancies, and unsafe statements are each fed back to the LLM as separate repair signals until all errors are resolved.
+
+SACTOR (Zhou et al., 2025) is a LLM-driven C-to-Rust translation tool that employs a two-step pipeline: an initial unidiomatic translation that preserves C semantics, followed by an idiomatic refinement that eliminates unsafe blocks to conform to Rust standards. Static analysis guides both stages by providing the LLM with hints on pointer semantics and dependency resolution, and correctness is verified via FFI-based end-to-end testing.
+
+SafeTrans (Farrukh et al., 2025) is a framework that iteratively repairs compilation and runtime errors in two phases: a basic repair phase using compiler feedback, followed by a few-shot guided repair phase that provides error-type-specific context and code examples to the LLM. The repair strategies are informed by an analysis of which Rust features LLMs most frequently mistranslate.
+
+TymCrat (Hong and Ryu, 2025) focuses on type migration, i.e., replacing C types with appropriate idiomatic Rust types in function signatures. To handle the challenging many-to-many correspondence between C and Rust types, they introduce three techniques: generating candidates signatures, providing translated callee signatures as context to the LLM, and iteratively fixing type errors using compiler feedback.
+
+2.2.2. Project-Scale Translation
+
+Several systems target whole-project migration, the regime most
+relevant to real-world adoption.
+
+RustMap (Cai et al., 2025) decomposes a C project into translation units ordered by usage dependencies, combining static analysis of syntactic structure with dynamic call graph profiling to determine translation order. Each unit is translated by an LLM with iterative repair driven by compilation and test feedback, and the translated units are composed into a runnable Rust program. A limitation is that correctness cannot be guaranteed for functions not exercised by the provided test cases.
+
+LLMigrate (Liu et al., 2025) addresses LLM “laziness” (the tendency to omit large code sections when processing long contexts) by splitting modules into individual functions using Tree-sitter, translating each independently, and reassembling them in call graph topological order. It is validated on three Linux kernel modules: math, sort, and ramfs.
+
+EvoC2Rust (Wang et al., 2025) introduces a three-stage
+skeleton-guided pipeline for project-level translation: it first
+decomposes the C project into functional modules and uses a
+feature-mapping-enhanced LLM to transform definitions and macros,
+producing type-checked function stubs that form a compilable Rust
+skeleton; it then incrementally fills in each stub with a full
+function translation; finally, it applies a cascading repair chain
+that combines rule-based transformations and LLM-driven refinement
+to resolve remaining compilation errors.
+
+Rustine (Dehghan et al., 2025) is a fully automated pipeline for
+repository-level C-to-Rust translation that works from scratch rather
+than building on C2Rust output. It applies program analysis
+to refactor the C source prior to translation, resolving preprocessor
+directives, minimizing pointer operations, and extracting caller-callee
+and lifetime dependencies to guide translation order, and employs a
+two-tier LLM strategy that escalates to a reasoning model only on
+failure. Compared to six prior approaches, the resulting Rust code is
+safer, more idiomatic, and more readable.
+
+C2SaferRust (Nitin et al., 2025) combines C2Rust and
+LLMs in a neuro-symbolic pipeline: it first uses C2Rust to
+produce an initial unsafe Rust version, then decomposes it into
+function-level slices ordered by static dependency analysis. Each
+slice is augmented with dataflow and call graph context derived from
+static analysis before being passed to an LLM for translation into
+safer Rust, with compiler and test feedback driving iterative repair
+until the slice compiles and passes end-to-end tests.
+
+IRENE (Luo et al., 2025) enhances LLM-based translation by
+combining a rule-augmented retrieval module, which selects relevant
+translation examples using syntactic rules from a static analyzer,
+with a structured summarization module that generates a semantic
+summary of the C code. Both outputs are composed into a single prompt,
+and an error-driven module applies iterative compiler-feedback
+refinement to correct translation errors.
+
+Figure 1. Encrust two-phase translation pipeline.
+Phase 1 (left): for each function, the LLM generates a
+wrapper/safe-function pair verified through a compile-and-test loop;
+successfully translated pairs are collected into rust_safe/.
+After all functions are translated, type-directed wrapper elimination
+rewrites call sites to invoke safe functions directly, yielding a
+wrapper-free crate rust_safe_remap/.
+Phase 2 (right): an LLM agent equipped with 17 tools
+resolves the unsafe patterns deferred from Phase 1—static
+mut globals, unsafe-cast wrapper pairs, failed struct translations,
+and functions that exhausted the per-function retry budget—through
+an iterative loop governed by a compile-and-test verification gate.
+
+3. ENCRUST
+
+3.1. Phase 1: Encapsulated Substitution
+
+Encrust structures the translation as a two-phase pipeline
+(Figure 1) whose design is governed throughout
+by the coexistence constraint: at every intermediate step, the
+partially translated crate must compile and pass the full test suite,
+because untranslated callers continue to depend on already-replaced
+functions using their original raw-pointer signatures.
+
+The C source is first transpiled to unsafe Rust by
+C2Rust, yielding a behaviorally equivalent but
+wholly unsafe base crate (rust/).
+Phase 1 (Figure 1, left) transforms rust/ into a safe
+equivalent through four ordered stages that operate on two parallel
+working copies:
+rust_test/ serves as the live compile-and-test scaffold, while
+rust_safe/ accumulates verified safe function pairs.
+Preprocessing (§3.1.1) computes a leaf-first translation
+order and builds LLM prompting context;
+struct translation (§3.1.2) generates safe counterpart
+types for C-originated structs;
+per-function translation (§3.1.3) replaces each function
+with an ABI-preserving wrapper/safe-function pair verified through
+compile-and-test;
+and type-directed wrapper elimination (§3.1.4) rewrites all call
+sites, producing a wrapper-free crate (rust_safe_remap/).
+
+Phase 2 (§3.2) resolves the unsafe patterns deferred
+from Phase 1: static mut globals, unsafe-cast wrapper pairs
+pre-emptively skipped by TDWE, and failed translations, through an LLM
+agent that navigates, edits, compiles, and tests the Phase 1 output in an
+iterative loop.
+
+Phase 1’s design is governed throughout by the coexistence constraint.
+Three choices follow directly: dual-struct preservation
+(§3.1.2), the wrapper pattern (§3.1.3),
+and per-function failure isolation (§3.1.3). All are
+expressed in the following invariant, which Encrust maintains
+throughout Phase 1:
+
+Invariant 1 (Live Scaffold).
+
+At every point during Phase 1, the rust_test/ crate compiles and passes
+the full test-vector suite.
+Concretely:
+
+(1) 
+
+Before any stage begins: the C2Rust-generated crate
+compiles (ensured by C2Rust itself).
+
+(2) 
+
+After each struct translation step: the newly appended safe struct
+block and its conversion implementations compile; a failure is corrected by
+truncating the file to its pre-insertion length, restoring the prior state.
+
+(3) 
+
+After each per-function translation step: the wrapper/safe pair
+inserted into rust_test/ compiles and all test vectors pass;
+a persistent failure triggers a full-file snapshot rollback and the original
+unsafe body is retained, leaving the crate unchanged.
+
+(4) 
+
+After type-directed wrapper elimination: the remapped crate
+rust_safe_remap/ is verified by rerunning the test-vector suite;
+any regression causes the wrapper to be restored, reverting to
+rust_safe/.
+
+The four stages are described next: preprocessing, struct translation, per-function
+translation, and type-directed wrapper elimination.
+Concrete code examples using gettext_quote
+(quotearg.c) and the quoting_options struct appear
+from §3.1.2 onward, where the running example first
+becomes relevant.
+
+3.1.1. Preprocessing
+
+Before any LLM call is made, Phase 1 establishes the context every
+subsequent stage depends on: a decomposition of the code into
+translatable units, a leaf-first translation order, and a C-to-Rust
+source mapping for prompt construction.
+
+Decomposition.
+
+Encrust decomposes both source representations into function-level records.
+From the C source, each function’s name, source location, and body are extracted,
+along with struct definitions used during struct translation (§3.1.2).
+From the C2Rust Rust output, each function record captures its source text, file span,
+direct callees, referenced globals, extern "C" blocks, and use imports.
+
+Translation ordering.
+
+Encrust orders functions leaf-first using the call graph derived from the Rust
+decomposition: callees are translated before their callers so that each function’s
+safe callee signatures are available for prompt construction.
+For genuine strongly connected components, an arbitrary order is chosen
+(deterministically by function name); any resulting type mismatches surface
+as compile errors in the per-function retry loop and are repaired there.
+
+C-to-Rust source mapping.
+
+Since C2Rust preserves C function names verbatim, each Rust function record
+is matched to its C source by name lookup.
+
+3.1.2. Struct Translation
+
+Before translating functions, Encrust generates safe counterparts for
+c2rust-produced structs with raw pointer fields.
+For each such struct S, replacing it in place would break all call sites the moment any field type
+changed; Encrust instead preserves S unchanged and appends a
+parallel safe struct S^ (Definition 3.1) to the same source file as the dual-struct
+representation, so that safe code operates on S^ while the C ABI
+boundary remains intact.
+
+Struct Classification
+
+Structs are classified into three mutually exclusive categories:
+
+• 
+
+System structs: types whose definitions originate from
+OS or libc headers (FILE, stat,
+passwd, dirent, etc.).
+These represent kernel-defined layouts that must remain
+#[repr(C)]; generating a safe counterpart would serve
+no purpose since they cannot be reconstructed from safe Rust types.
+They are retained as-is.
+
+• 
+
+Pointer-free structs: structs whose every field is a
+primitive, a fixed-size array, or another pointer-free struct.
+Rust’s type system already provides full safety guarantees for such
+types; no transformation is needed.
+
+• 
+
+Translatable structs: structs that originate from C
+source (not from anonymous c2rust-internal unions) and
+contain at least one raw pointer field.
+These are the sole target of safe struct abstraction generation.
+
+Safe Struct Abstraction
+
+For each translatable struct, the LLM prompt supplies two inputs:
+(1) the c2rust-generated unsafe Rust struct S already present
+in rust_test, which defines the exact field names and raw types
+the LLM must work with; and (2) optionally, the original C struct source
+as a semantic hint, helping the LLM infer field intent
+(e.g., whether a *mut c_uint is a nullable scalar or a
+length-bounded array).
+The C source is context only; the transformation target is always S,
+the unsafe Rust struct.
+
+Definition 0 (Safe Struct Abstraction).
+
+Given a c2rust-generated unsafe Rust struct S already present
+in rust_test, a safe struct abstraction for S consists of
+three components:
+
+• 
+
+A safe struct S^: a pub struct named
+in CamelCase whose fields replace the raw pointer types
+of S with safe Rust counterparts: string pointers become
+Option<CString>, length-paired pointers become
+Vec<T>, nullable scalar pointers become
+Option<Box<T>>, and primitives are unchanged.
+
+• 
+
+A materialisation function
+𝑓𝑟𝑜𝑚S:&S→S^, realised as
+impl From<&S> forS^, that copies
+all pointer-reachable data of S into fresh Rust-owned
+allocations (Invariant 2).
+
+• 
+
+A projection function
+𝑡𝑜​_​𝑟𝑎𝑤S:&S^→S, realised as a
+to_raw(&self) -> S method, that constructs a value
+of type S whose pointer fields alias into S^’s
+allocations.
+The returned S borrows from S^ and must not outlive it.
+
+Safe code operates exclusively on S^; wrappers call 𝑓𝑟𝑜𝑚S
+at entry and 𝑡𝑜​_​𝑟𝑎𝑤S at C-ABI boundaries (§3.1.3).
+
+A representative safe struct abstraction for quoting_options
+is shown in the supplementary material.
+When an array length cannot be reliably inferred from the C source
+(no integer field is paired with the pointer in the struct), the LLM
+is instructed to use a conservative fixed bound and annotate it with a
+// FIXME: inferred length comment; if the compile-and-test loop
+rejects the result, the struct translation is rolled back and the struct
+is recorded in failed_structs for Phase 2 struct migration
+(§3.3).
+
+Memory Ownership Discipline
+
+The correctness of the materialisation function 𝑓𝑟𝑜𝑚S rests
+on a non-obvious ownership constraint that arises specifically from the
+incremental nature of Phase 1. During translation, safe and unsafe functions coexist in the
+same crate. An untranslated function may hold a live reference to the
+same raw struct S that a translated function has just converted via
+𝑓𝑟𝑜𝑚S.
+If 𝑓𝑟𝑜𝑚S transferred ownership of a pointer field (e.g., via
+CString::from_raw(raw.left_quote)), the resulting
+CString would free the C-allocated memory when it is dropped
+at the end of the safe function’s scope. Any subsequent access to
+raw.left_quote by the still-live untranslated function would
+then constitute a use-after-free.
+This hazard is especially acute for string literals: in C, string literals
+reside in read-only memory segments; calling free on them
+causes an immediate trap.
+
+We therefore require the following invariant, which is communicated
+verbatim to the LLM in its prompt alongside counterexamples:
+
+Invariant 2 (Copy, Never Own).
+
+Every 𝑓𝑟𝑜𝑚S implementation must copy all
+pointer-reachable data into fresh Rust-owned allocations.
+Specifically:
+
+(1) 
+
+String fields: use
+CStr::from_ptr(p).to_owned().
+CString::from_raw(p) is prohibited: it claims
+ownership of C memory and frees it on drop.
+
+(2) 
+
+Buffer fields: use
+slice::from_raw_parts(p, n).to_vec().
+Vec::from_raw_parts(p, n, cap) is prohibited.
+
+(3) 
+
+Scalar pointer fields: use Box::new(*p) to
+copy the pointed-at value.
+
+(4) 
+
+In to_raw(): return pointers via
+.as_ptr() into the safe struct’s allocations; never
+call Box::into_raw() on a cloned value, as that leaks
+memory. The caller must ensure the returned S does not outlive
+S^.
+
+Enforcement.
+
+The compile-and-test loop provides a dynamic safety net for violations of
+Invariant 2: a generated from implementation that
+incorrectly transfers ownership will typically trigger a use-after-free or
+double-free detectable at test time.
+Because test-vector coverage is not exhaustive, enforcement is best-effort;
+violations in untested code paths remain undetected.
+
+With safe struct abstractions appended to rust_test/,
+per-function translation can use S^ types in safe function bodies
+while the original #[repr(C)] structs remain intact at every
+C-ABI boundary.
+
+3.1.3. Per-Function Translation
+
+Per-function translation processes each function in leaf-first order.
+The central challenge is how to replace a function’s implementation
+without breaking the call sites of untranslated callers;
+the wrapper pattern resolves this.
+
+The Wrapper Pattern
+
+A direct replacement of a function body would change its type signature,
+breaking every call site that still passes raw C types.
+To preserve callability across the translation boundary, Encrust
+replaces the original function with two definitions:
+
+Definition 0 (Wrapper Pattern).
+
+Given an unsafe function f with C-compatible signature
+f:T1×⋯×Tn→Tr, the wrapper pattern
+produces:
+
+• 
+
+f_safe:T^1×⋯×T^n→T^r,
+the safe inner function.
+It carries the suffix _safe and accepts safe Rust types
+T^i: C strings become &CStr, length-paired
+pointers become slices (&[T] / &mut [T]),
+nullable pointers become Option<&T>, and primitives are
+unchanged. It implements the function’s logic without raw pointer
+operations wherever possible.
+
+• 
+
+f:T1×⋯×Tn→Tr,
+the wrapper function.
+It preserves the original name, signature, and qualifiers
+(unsafe, pub, extern "C",
+#[no_mangle], #[inline]).
+Its body consists exclusively of type-conversion let
+bindings that shadow the original parameter names, followed by a
+single call to f_safe.
+
+This decomposition has three essential properties:
+ABI preservation (the wrapper retains the original name, signature,
+and calling convention, so all call sites compile unchanged);
+safety isolation (unsafe operations are confined to the wrapper’s
+simple let-bindings, while the safe function is maximally free of unsafe);
+and the name-shadowing property (each parameter is re-bound under its
+original identifier, enabling the TDWE pass (§3.1.4) to rewrite
+call sites by textual substitution without alpha-renaming).
+
+⬇
+
+                  1
+
+                // (1) Safe inner function: safe Rust types
+
+                  2
+
+                fn quotearg_safe(
+
+                  3
+
+                    name:  &std::ffi::CStr,
+
+                  4
+
+                    count: &mut libc::c_int,
+
+                  5
+
+                ) {
+
+                  6
+
+                    let s = name.to_str().unwrap_or("");
+
+                  7
+
+                    *count += s.chars()
+
+                  8
+
+                               .filter(|c| *c == ’"’)
+
+                  9
+
+                               .count() as libc::c_int;
+
+                  10
+
+                }
+
+                  11
+
+                  12
+
+                // (2) Wrapper: identical signature to the c2rust original
+
+                  13
+
+                #[no_mangle]
+
+                  14
+
+                pub unsafe extern "C" fn quotearg(
+
+                  15
+
+                    name:  *const libc::c_char,
+
+                  16
+
+                    count: *mut libc::c_int,
+
+                  17
+
+                ) {
+
+                  18
+
+                    // name-shadowing: same identifier, converted type
+
+                  19
+
+                    let name  = std::ffi::CStr::from_ptr(name);
+
+                  20
+
+                    let count = &mut *count;
+
+                  21
+
+                    quotearg_safe(name, count)
+
+                  22
+
+                }
+
+Listing 1: Wrapper pattern for a function taking a C string and a
+pointer-to-integer. Lines 13–14 show the name-shadowing property:
+the same identifier is reused for the converted value.
+
+Compile-Test Loop and Snapshot Rollback
+
+The LLM prompt for each function f supplies the original C source,
+the C2Rust Rust body, safe callee signatures, and safe struct definitions
+S^; the LLM emits a pair conforming to Definition 3.2.
+Once the candidate pair is emitted, Encrust inserts it into
+rust_test and attempts to compile the crate.
+A compile failure triggers a retry: the compiler error message is
+appended to the prompt and a new candidate is requested.
+If compilation succeeds, Encrust runs the project’s test-vector suite;
+a test failure is likewise fed back as a repair signal.
+To prevent a failed candidate from corrupting subsequent translations,
+the target source file is snapshotted before each insertion and restored
+on any persistent failure.
+If a function cannot be translated within the retry budget (five attempts),
+its original unsafe body is retained and translation proceeds
+to the next function in order; the live scaffold invariant ensures the
+crate continues to compile throughout.
+We treat compile-and-test passage as the per-function correctness
+criterion: a translation is accepted when the crate compiles without
+errors and all test vectors pass, establishing behavioral compatibility
+with the original C program on the provided inputs.
+
+3.1.4. Type-Directed Wrapper Elimination (TDWE)
+
+With every translated function represented as a wrapper/safe pair,
+the wrappers are now redundant: call sites can invoke f​_​𝑠𝑎𝑓𝑒
+directly, giving every exported symbol a safe Rust signature and
+eliminating the naming indirection and wrapper boilerplate.
+
+Approach
+
+Wrapper elimination is tractable because the wrapper pattern
+(§3.1.3) enforces a uniform structure: each wrapper body is
+a flat sequence of let-bindings followed by a single tail call to
+f​_​𝑠𝑎𝑓𝑒, so the per-parameter conversions are already written
+down and need not be re-derived.
+
+The pass extracts these conversions from each wrapper’s let-bindings
+(using the last binding for re-bound parameters) and rewrites every
+call site f⁡(a1,…,an) to
+f​_​𝑠𝑎𝑓𝑒​(𝑐𝑣𝑡⁡(a1),…,𝑐𝑣𝑡⁡(an)).
+
+When direct extraction is ambiguous (e.g., the wrapper body contains control
+flow or the caller has already partially converted its arguments), the pass
+applies a six-layer fallback strategy in order:
+
+(1) 
+
+Direct match: if the argument type already equals the safe
+parameter type, it is passed through unchanged.
+
+(2) 
+
+Cross-module struct: detect *const S arguments
+corresponding to cross-module struct types and synthesize a conversion
+using the struct’s From implementation.
+
+(3) 
+
+Null-pointer optimization: null_mut() arguments
+in already-translated callers become None for
+Option-typed parameters.
+
+(4) 
+
+Safe-caller undo: if the call site is inside an
+already-translated safe function, undo any prior safe-to-raw
+conversion applied to the argument.
+
+(5) 
+
+Slice synthesis: merge a (*mut T, size)
+argument pair into \&mut [T] via
+from\_raw\_parts\_mut.
+
+(6) 
+
+Type-level fallback: synthesize a conversion from the raw
+and safe parameter types alone, without consulting the wrapper body.
+
+If none of the six layers produces a valid conversion for a given call site,
+the call to f is left unchanged and the wrapper is retained; the crate
+remains compilable.
+
+Listing 2 illustrates the pass on the running example.
+gettext_quote in rust_safe/ consists of a safe inner
+function (gettext_quote_safe) and a wrapper that accepts a raw
+*const c_char and converts it to &CStr via
+CStr::from_ptr.
+The remapping pass (1) reads the single let-binding
+let msgid = CStr::from_ptr(msgid) from the wrapper body to
+derive 𝑐𝑣𝑡⁡(𝚖𝚜𝚐𝚒𝚍)=𝙲𝚂𝚝𝚛::𝚏𝚛𝚘𝚖​_​𝚙𝚝𝚛​(𝚖𝚜𝚐𝚒𝚍);
+(2) removes the wrapper; (3) renames gettext_quote_safe to
+gettext_quote and promotes it to pub; and
+(4) rewrites every call site to apply the extracted conversion to each
+raw-pointer argument.
+
+⬇
+
+                  1
+
+                // ===== rust_safe/ (before elimination) =====
+
+                  2
+
+                  3
+
+                // Safe inner function (private)
+
+                  4
+
+                fn gettext_quote_safe(msgid: &CStr, s: quoting_style) -> *const libc::c_char { /* ... */ }
+
+                  5
+
+                  6
+
+                // Wrapper: accepts raw pointer, converts, delegates
+
+                  7
+
+                unsafe extern "C" fn gettext_quote(
+
+                  8
+
+                    mut msgid: *const libc::c_char, mut s: quoting_style,
+
+                  9
+
+                ) -> *const libc::c_char {
+
+                  10
+
+                    let msgid = CStr::from_ptr(msgid);   // cvt extracted here
+
+                  11
+
+                    gettext_quote_safe(msgid, s)
+
+                  12
+
+                }
+
+                  13
+
+                  14
+
+                // Call sites pass raw pointers directly to wrapper
+
+                  15
+
+                left_quote  = gettext_quote(b"‘\0" as *const u8 as *const libc::c_char, quoting_style);
+
+                  16
+
+                right_quote = gettext_quote(b"’\0" as *const u8 as *const libc::c_char, quoting_style);
+
+                  17
+
+                  18
+
+                // ===== rust_safe_remap/ (after elimination) =====
+
+                  19
+
+                  20
+
+                // Wrapper removed; safe function promoted to public API
+
+                  21
+
+                pub fn gettext_quote(msgid: &CStr, s: quoting_style) -> *const libc::c_char { /* ... */ }
+
+                  22
+
+                  23
+
+                // Call sites rewritten
+
+                  24
+
+                left_quote  = gettext_quote(
+
+                  25
+
+                    unsafe { CStr::from_ptr(b"‘\0" as *const u8 as *const libc::c_char) }, quoting_style);
+
+                  26
+
+                right_quote = gettext_quote(
+
+                  27
+
+                    unsafe { CStr::from_ptr(b"’\0" as *const u8 as *const libc::c_char) }, quoting_style);
+
+Listing 2: Type-directed wrapper elimination for gettext_quote
+(GNU Coreutils cat).
+Before: rust_safe/ contains a wrapper/safe pair
+(Definition 3.2); call sites pass raw *const c_char pointers.
+After: the wrapper is removed, gettext_quote_safe is promoted to
+pub gettext_quote, and every call site is rewritten by applying
+and every call site is rewritten accordingly.
+
+Compile-and-Test as the Universal Failure Gate
+
+TDWE attempts elimination on every wrapper/safe pair and relies on the
+same compile-and-test gate that governs Phase 1 function translation
+(§3.1.3) to decide whether each attempt succeeds.
+Before attempting elimination of f, TDWE snapshots the affected source
+files; after rewriting the call sites and deleting f, it compiles the
+crate and runs the full test-vector suite.
+If both stages pass, the elimination is committed; otherwise the snapshot
+is restored and f’s wrapper is retained unchanged, preserving the Live
+Scaffold Invariant.
+
+This design is consistent with the system’s broader correctness principle
+and renders pre-emptive classification of “hard” cases unnecessary.
+Cases that earlier wrapper-elimination approaches handled conservatively
+all produce detectable failures under compile-and-test:
+variadic signatures cannot be given a safe Rust call-site rewrite
+and produce a compile error;
+complex return or parameter types (e.g., Result<T,E>,
+slice-of-references) cause type-mismatch errors at rewritten call sites;
+chain dependencies (a call site inside a not-yet-remapped wrapper)
+produce either a type error or a test failure that the gate intercepts.
+In every such case the rollback fires and the wrapper is retained without
+any special-case logic.
+
+TDWE processes wrappers in the same leaf-first order established by Phase 1
+(§3.1.1), so callees are remapped before their callers.
+This ordering minimises chain-dependency conflicts without requiring explicit
+deferral logic: when a caller’s call site is rewritten, its callees have
+already been remapped to safe signatures and the types are consistent.
+
+Single Genuine Pre-emptive Skip: Unsafe-Cast Function-Pointer Use
+
+One category requires a targeted pre-check because compile-and-test alone
+cannot detect the failure.
+When f is referenced in an unsafe-cast expression such as
+f as *const (), f as *mut (),
+or f as unsafe extern "C" fn(...), the
+cast discards f’s type, so renaming f’s signature from raw-pointer to
+safe types leaves the cast expression syntactically valid and the crate
+continues to compile.
+The stored raw address, however, now refers to a function with a different
+calling convention, producing undefined behaviour at the call site without
+any compile error or test signal unless the unsafe-cast code path happens
+to be exercised by the test suite.
+
+For typed function-pointer use (e.g., let fp: fn(*const c_char) = f
+or Some(f)), a signature change produces a type-mismatch compile
+error that the rollback gate intercepts correctly; no pre-check is needed.
+
+TDWE therefore applies one targeted scan before attempting elimination:
+it searches all source files for occurrences of the pattern
+f as *const/f as *mut/f as unsafe.
+If any unsafe-cast site referencing f is found, the pair is deferred
+to Phase 2’s wrapper_removal task (§3.2.3),
+which can retain a minimal unsafe extern "C" shim preserving
+the C-ABI address while documenting the remaining unsafe contract.
+In all other cases the wrapper is left in place only when the compile-and-test
+gate fires, so the crate continues to compile and pass the test suite unchanged.
+
+When the same wrapper/safe pair appears in two different source files
+(a duplicate arising from multi-file crates), the pass designates one file as the canonical module (chosen
+deterministically by lexicographic file path for reproducibility) and
+applies full remapping there; the duplicate module has its wrapper and safe
+function replaced by a use re-export of the canonical name,
+preserving ABI visibility without duplicating code.
+
+A final reduce_unsafe_constructs pass removes residual
+unsafe block wrappers around calls that no longer require them.
+Phase 1 thus delivers rust_safe_remap/: a crate that
+compiles, passes the test suite, and is free of wrapper indirection.
+Three categories of unsafe constructs remain deferred to Phase 2 by
+their nature, plus a narrow fourth category arising from the single
+pre-emptive skip:
+static mut globals (require whole-program reasoning),
+unsafe-cast wrapper/safe pairs deferred by TDWE’s pre-check
+(§3.1.4), failed struct translations, and functions that
+exhausted Phase 1’s per-function retry budget.
+Phase 2 (§3.2) resolves these through six task types.
+The four deferred categories map directly to static_mut,
+wrapper_removal, struct_migration, and
+function_translate tasks; struct_use_migrate is a
+follow-on that updates call sites after struct migration completes; and
+dead_code is a final cleanup sweep run after all translations
+finish.
+
+3.2. Phase 2: Agentic Refinement
+
+The four deferred categories from §3.1.4 are addressed by
+Phase 2 (Figure 1, right) with an LLM agent equipped with 17 tools.
+Three of the four categories require
+multi-step, whole-codebase reasoning that inherently exceeds Phase 1’s
+per-function scope: static mut globals, failed struct
+translations, and functions that exhausted the retry budget.
+The fourth, unsafe-cast wrapper pairs, was pre-emptively skipped by TDWE
+because the compile-and-test gate cannot detect the resulting silent
+undefined behaviour; Phase 2 handles these agentically with explicit
+unsafe-cast site inspection.
+Phase 2 addresses all four with an LLM agent equipped with 17 tools
+(Table 1), running an iterative loop that reads, edits,
+compiles, and tests until each task passes a verification gate.
+Because Phase 1 has already migrated most callers to safe types, Phase 2
+transforms code in place rather than introducing new wrapper pairs.
+Intermediate results are persisted to disk so that an interrupted run can
+be resumed without repeating completed tasks.
+
+Task discovery and processing order.
+
+Phase 2 decomposes residual work into transformation tasks and
+processes them in a fixed type-level order:
+
+(1) 
+
+static_mut — one task per static mut
+declaration found by scanning the workspace.
+
+(2) 
+
+wrapper_removal — one task per
+f/f_safe pair that TDWE pre-emptively skipped
+due to an unsafe-cast site referencing f
+(§3.1.4), identified by rescanning the workspace
+for the pattern f as *const/f as *mut.
+
+(3) 
+
+struct_migration — one task per struct that
+Phase 1 failed to translate.
+
+(4) 
+
+struct_use_migrate — one task per function
+whose signature references a raw struct type S for which
+struct_migration just produced a safe counterpart S^;
+updates the function’s parameter types and all call sites from S
+to S^. This task type always runs immediately after
+struct_migration is complete.
+
+(5) 
+
+function_translate — one task per function that
+exhausted Phase 1’s retry budget, sorted leaf-first by call-graph
+order.
+
+(6) 
+
+dead_code — a single cleanup task run last,
+after all translations are complete.
+
+The rationale for this order is as follows.
+static_mut elimination runs first so that subsequent tasks
+never encounter unresolved global state.
+wrapper_removal runs second: the unsafe-cast wrappers it
+handles are already written in terms of Phase 1-safe types, so their
+call-site rewrites are independent of struct layout; resolving them
+before struct migration avoids ambiguity between raw and safe struct
+uses during call-site rewriting.
+struct_migration and struct_use_migrate then
+complete the struct API before function_translate begins,
+ensuring that function translation tasks can assume a fully migrated
+type environment.
+
+3.2.1. The Agentic Execution Loop
+
+Each task is handled by a single agent conversation: an LLM
+equipped with a task-specific system prompt and 17 tools, running in a
+loop until it calls complete_task or exhausts the iteration
+budget (MAX_ITER = 40).
+The loop is governed by three mechanisms: a verification gate that enforces
+behavioral correctness, checkpoints for safe rollback, and stall-detection
+heuristics to escape repetitive tool-call patterns.
+
+Tool suite.
+
+Table 1 lists the 17 tools grouped into five categories
+(Navigation, Modification, Analysis, Verification, Control).
+
+Table 1. Phase 2 tool suite (17 tools). All tools operate on the
+working copy of rust_safe_remap/.
+
+Category
+Tool
+
+Description
+
+Navigation
+grep
+
+Regex search across the workspace; returns matching file:line pairs with surrounding context
+
+read_file
+
+Read file contents with an optional start/end line range
+
+read_function
+
+Extract a complete function body by brace-depth counting
+
+get_function_signatures
+
+List all function signatures declared in a given file
+
+list_files
+
+Enumerate all .rs source files in the workspace
+
+Modification
+replace
+
+Exact-match replacement of a unique string in a single file
+
+regex_replace
+
+Regex-based replacement with capture-group back-references
+
+replace_function
+
+Replace an entire function body identified by its name
+
+delete_function
+
+Delete a function together with its preceding attributes
+
+batch_replace
+
+Atomic multi-file replacement applied in a single operation
+
+Analysis
+find_static_mut_usages
+
+Classify all read, write, and address-of sites of a static mut; performs signal-reachability analysis
+
+self_reflect
+
+Count remaining unsafe blocks, unsafe functions, and raw pointer occurrences
+
+Verification
+compile
+
+Run cargo build in debug or release mode; return compiler diagnostics on failure
+
+run_tests
+
+Build the release binary and execute the full test-vector suite
+
+Control
+checkpoint
+
+Snapshot all .rs files and Cargo.toml to a named restore point
+
+rollback
+
+Restore the workspace to a previously saved named snapshot
+
+complete_task
+
+Signal task completion; triggers the two-stage verification gate
+
+Verification gate.
+
+The LLM signals completion by calling complete_task(summary).
+This call does not immediately mark the task done; the loop
+intercepts it and runs a two-stage gate: (1) cargo build
+(debug): on failure the compile errors are returned as a tool result
+and the LLM must fix them before calling complete_task again;
+(2) cargo build --release followed by all test vectors: on
+failure the failing tests are returned.
+Only when both stages pass is the task marked Completed.
+The gate additionally applies baseline-aware acceptance: before
+Phase 2 begins, the orchestrator records which test vectors pass on the
+unmodified Phase 1 output.
+If stage (2) fails but every failing test also failed in that baseline,
+the gate treats the outcome as non-regressing and still marks the task
+Completed, preventing pre-existing Phase 1 failures from
+permanently blocking otherwise correct transformations.
+
+Claim 1 (Verification Gate Soundness).
+
+A task is marked Completed only when cargo build
+succeeds and no test vector that passed in the Phase 1 baseline is
+caused to fail. No completed task introduces a new compilation error
+or a test regression relative to the Phase 1 baseline.
+
+Proof. By construction of the two-stage gate
+(§3.2.1).
+
+Checkpoint and rollback.
+
+Before each task begins, the orchestrator snapshots the workspace state.
+The LLM can roll back to this snapshot at any point to discard partial
+edits and restart from a clean state.
+If a task exhausts its iteration budget without passing the verification
+gate, the orchestrator automatically restores the pre-task snapshot,
+ensuring failed tasks do not corrupt the workspace for subsequent tasks.
+Completed tasks are never rolled back; subsequent tasks therefore see
+exactly the cumulative effect of all previously completed work.
+
+Stall recovery.
+
+After five consecutive compile failures, the loop injects a
+task-specific hint (try a simpler type, rollback, or retain
+unsafe fn with a // SAFETY: comment).
+Cyclic tool-call patterns are detected via a sliding window of
+(tool, argument-hash) fingerprints: period-1 spins
+(same call repeated), period-2 alternations (A,B,A,B,…), and
+period-3 cycles (A,B,C,A,B,C,…) each trigger a diagnostic hint
+and clear the window.
+
+The complete pseudocode is given in the supplementary material.
+
+3.2.2. Static Mut Elimination
+
+static mut declarations in C2Rust output represent
+C global variables; every access requires an unsafe block and
+is classified as undefined behaviour without additional synchronisation.
+One task is created per unique variable found by scanning the workspace.
+
+Signal-reachability.
+
+find_static_mut_usages determines whether a variable is
+reachable from a signal handler by BFS from registered handlers over
+an approximate call graph, and annotates each usage site with a
+signal_reachable flag.
+
+Safe replacement strategy.
+
+The LLM calls find_static_mut_usages("NAME") to classify all
+reads, writes, and address-of sites, then selects the simplest safe
+pattern from the following priority-ordered rules:
+
+(1) 
+
+No writes, compile-time value → const X: T = val
+
+(2) 
+
+No writes, runtime-init value → static X: T = val (non-mut)
+
+(3) 
+
+Single write, init pattern → static X: OnceLock<T>
+
+(4) 
+
+Scalar, any writes → static X: AtomicT
+
+(5) 
+
+Complex / non-scalar → static X: OnceLock<Mutex<T>>
+
+Signal-reachable variables are restricted to rules 1, 2, and 4;
+OnceLock and Mutex are excluded because they are not
+async-signal-safe.
+After selecting a safe type, the LLM applies batch_replace to
+update the declaration and every usage site across all files, then
+iterates with compile until the crate builds cleanly.
+
+Listing 3 shows a representative transformation.
+
+⬇
+
+                  1
+
+                // BEFORE: c2rust output
+
+                  2
+
+                static mut lines_printed: libc::c_int = 0 as libc::c_int;
+
+                  3
+
+                unsafe { lines_printed += 1; }
+
+                  4
+
+                unsafe { if lines_printed > limit { ... } }
+
+                  5
+
+                  6
+
+                // AFTER: LLM chose AtomicI32 (signal-reachable)
+
+                  7
+
+                use std::sync::atomic::{AtomicI32, Ordering};
+
+                  8
+
+                static LINES_PRINTED: AtomicI32 = AtomicI32::new(0);
+
+                  9
+
+                LINES_PRINTED.fetch_add(1, Ordering::SeqCst);
+
+                  10
+
+                if LINES_PRINTED.load(Ordering::SeqCst) > limit { ... }
+
+Listing 3: Before and after Phase 2 static_mut elimination for
+a counter accessed from signal-handler context.
+
+3.2.3. Wrapper Removal
+
+TDWE eliminates all wrapper/safe pairs except those pre-emptively skipped
+due to unsafe-cast function-pointer use (§3.1.4).
+Phase 2’s wrapper_removal task targets only this narrow residual
+set, discovered by rescanning the workspace for f/f_safe
+pairs where at least one f as *const/f as *mut
+site triggered TDWE’s pre-emptive skip.
+
+Removal strategy.
+
+The LLM inspects every unsafe-cast site and determines whether the
+C-ABI address of f must remain stable (e.g., the pointer is passed to
+an external C callback registration such as atexit or
+signal) or whether the cast is incidental and can be
+rewritten to use the renamed safe function directly.
+If the address must be preserved, the LLM retains a minimal
+unsafe extern "C" shim for f and inlines the safe logic into
+f_safe, documenting the retained contract with a
+// SAFETY: comment.
+If the cast can be rewritten, the LLM updates all unsafe-cast sites,
+rewrites direct call sites, deletes the wrapper, and renames
+f_safe to f restoring its original visibility and ABI
+attributes, then verifies through the standard compile-and-test gate.
+
+3.3. Struct Migration and Use Update
+
+Phase 2 generates one struct_migration task per struct that
+Phase 1 failed to translate, following the same strategy as
+§3.1.2: replace pointer fields with owned types,
+implement From<&RawS> (copying, never owning) and
+to_raw(), and append the safe struct in the same file.
+
+Once all struct_migration tasks complete, one
+struct_use_migrate task is run per function whose signature
+still references a raw struct type S for which a safe counterpart S^
+was just produced.
+The LLM updates the function’s parameter types from S to S^,
+rewrites the body to operate on S^ fields directly (using
+to_raw() only at C-ABI boundaries), and propagates call-site
+updates across the workspace.
+Both task types complete before function_translate begins,
+ensuring a fully migrated type environment for subsequent translation.
+
+3.3.1. Function Translation
+
+In-place transformation.
+
+Unlike Phase 1, Phase 2 transforms failed functions in place
+(no new wrapper pair is introduced), since most callers have already
+been migrated to safe types:
+
+• 
+
+Remove unsafe from the signature (keep pub,
+extern "C", #[no_mangle] as present).
+
+• 
+
+Replace raw pointer parameters with safe Rust types
+(*const c_char→&CStr,
+*mut T→&mut T, etc.).
+
+• 
+
+Rewrite the body with safe idioms; wrap unavoidable unsafe
+operations in minimal unsafe { // SAFETY: ... }
+blocks.
+
+• 
+
+Apply batch_replace to update all call sites across
+the workspace.
+
+This avoids introducing new wrapper pairs that would require further
+cleanup.
+
+Translation order.
+
+Tasks are sorted leaf-first by call-graph order: a function is scheduled
+only after its failed callees have been resolved, so each translation can
+assume its callees already have safe signatures.
+
+Workflow.
+
+The LLM reads the function and its call sites, rewrites the function
+in place, iterates compile until clean, then signals completion.
+For genuine FFI boundaries that cannot be made safe, the LLM retains
+unsafe fn with a // SAFETY: comment.
+
+3.3.2. Dead Code Cleanup
+
+A single dead_code task runs after all other task types are
+complete.
+The LLM identifies and removes dead artifacts produced by earlier
+translation stages: wrapper functions whose paired safe function was
+subsequently inlined or renamed, unused safe structs and their conversion
+impls, unused imports, and empty extern "C" {} blocks.
+Each batch of removals is followed by recompilation to confirm no
+regressions.
+Formal correctness claims (behavioral preservation and ordering soundness)
+are stated in the supplementary material.
+
+4. Experiments
+
+4.1. Benchmarks
+
+We evaluate on two benchmark suites comprising 15 real-world C programs
+in total (Table 2 and Table 3).
+Both suites are used by prior C-to-Rust translation
+work (Nitin et al., 2025; Emre et al., 2021; Zhang et al., 2023), enabling direct comparison.
+A key property of our evaluation is that all 15 programs are
+evaluated with correctness verification: unlike prior work on the Laertes
+suite, which reports safety metrics only because the libraries ship without
+test cases, we construct test harnesses and collect inputs via grey-box
+fuzzing for the Laertes libraries, enabling end-to-end behavioral
+validation on the full benchmark.
+
+GNU Coreutils.
+
+We use the 7-program GNU Coreutils benchmark introduced by
+Nitin et al. (Nitin et al., 2025).
+The programs range from 5,859 (pwd) to 14,423 (tail)
+lines of C, totalling 65,117 LoC and 1,210 functions, of which 314 are
+exercised by the test suite.
+Each program ships with 2–30 shell test scripts (63 scripts total) that
+were constructed using coverage-guided fuzzing by the benchmark
+authors (Nitin et al., 2025); we use these scripts directly as our
+correctness oracle.
+
+Table 2. GNU Coreutils benchmark statistics (Nitin et al., 2025).
+“Covered” = functions exercised by the test suite.
+
+Program
+LoC
+Functions
+Covered
+Test scripts
+
+split
+13,848
+207
+73
+12
+
+pwd
+5,859
+127
+16
+2
+
+cat
+7,460
+166
+37
+4
+
+truncate
+7,181
+124
+33
+8
+
+uniq
+8,299
+167
+34
+3
+
+tail
+14,423
+266
+76
+30
+
+head
+8,047
+153
+45
+4
+
+Total
+65,117
+1,210
+314
+63
+
+Laertes benchmark.
+
+We additionally evaluate on 8 of the 10 libraries in the Laertes
+benchmark (Emre et al., 2021), excluding xzoom and grabc
+because their graphical interfaces preclude automated test execution in a
+headless environment.
+The remaining 8 libraries range from 49 (qsort) to 106,123
+(optipng) lines of C, totalling 132,589 LoC and 1,156 functions.
+
+The Laertes libraries ship without test cases.
+To enable correctness verification and to match the end-to-end
+evaluation methodology of the Coreutils suite, we write a lightweight
+driver harness for each library that feeds arbitrary byte sequences from
+the fuzzer to the library’s public API, then collect test inputs using
+AFL++ (Fioraldi et al., 2020).
+Each candidate input is first executed against the original C binary;
+inputs that crash the C binary or produce non-deterministic output across
+two identical runs are discarded, retaining only inputs for which the C
+binary yields a stable, reproducible output to serve as a ground-truth
+oracle.
+From the surviving inputs we select 1,000 per library.
+The resulting inputs serve both as the correctness oracle for Phase 1’s
+compile-test loop and as the baseline for Phase 2’s verification gate.
+
+Table 3. Laertes benchmark statistics (Emre et al., 2021).
+Test inputs are collected via AFL++ fuzzing (1,000 per library).
+
+Library
+LoC
+Functions
+Covered
+Test inputs
+
+tulipindicators
+12,565
+270
+211
+1,000
+
+optipng
+106,123
+495
+224
+1,000
+
+bzip2
+4,417
+65
+31
+1,000
+
+snudown
+5,426
+140
+72
+1,000
+
+lil
+3,565
+148
+72
+1,000
+
+genann
+410
+13
+7
+1,000
+
+urlparser
+34
+21
+10
+1,000
+
+qsort
+49
+4
+4
+1,000
+
+Total
+132,589
+1,156
+631
+8,000
+
+4.2. Metrics
+
+We measure translation quality along four dimensions.
+
+Safety metrics.
+
+To enable direct comparison with C2SaferRust (Nitin et al., 2025), we
+adopt their five safety metrics:
+raw pointer declarations (*const T / *mut T type annotations),
+raw pointer dereferences (*<expr> occurrences in executable code),
+unsafe lines of code (total source lines enclosed in unsafe{} blocks),
+unsafe type casts (transmute calls and unsafe coercions), and
+unsafe call expressions (function calls that appear inside unsafe blocks).
+The five metrics capture distinct facets of unsafety: a tool may
+eliminate unsafe blocks while leaving raw pointer declarations intact,
+or reduce dereferences without removing the enclosing unsafe scope.
+Reporting all five prevents misleading single-metric summaries and allows
+fine-grained comparison.
+For each program we report the absolute count under each metric before
+and after translation and compute the percentage reduction relative to the
+C2Rust baseline.
+
+Function compilance pass rate.
+
+We define the function compilance pass rate as the fraction of
+all functions whose LLM-based translation compiled successfully within
+the tool’s retry budget:
+
+Function comiliance pass rate=functions whose translation compiledtotal functions.
+
+A function counts as passing if the translated code compiles; it counts
+as failing if every attempt results in a compilation error and the
+tool retains or falls back to the original unsafe body.
+The function compilance pass rate is applicable to any LLM-based translation
+tool that attempts per-function translation with compilation verification,
+including both Encrust and C2SaferRust, which both perform
+incremental function-level translation with compile-and-test checking to
+maintain functional equivalence throughout the process.
+This metric measures the compile success rate of LLM-driven translation,
+independent of whether the resulting code passes test vectors
+(which is captured separately by the functional correctness metric).
+Crucially, the function compilance pass rate is also independent of the five
+safety metrics: a function whose unsafe body is retained due to a failed
+translation may still contribute to safety metric reduction through other
+transformations such as struct migration.
+
+Functional correctness.
+
+We verify end-to-end behavioral equivalence between the translated Rust
+binary and the original C program using two complementary counts.
+The test-script pass rate measures the fraction of test
+scripts that pass: for the Coreutils programs, these are the 63 shell
+scripts provided by the benchmark (Nitin et al., 2025); for the Laertes
+libraries, we count the fraction of the 1,000 AFL++-generated test inputs
+on which the translated binary agrees with the C oracle.
+The test-vector pass rate reports the same agreement at the
+granularity of individual input/output pairs, which is the unit used by
+Phase 1’s compile-test loop and Phase 2’s verification gate.
+By the Live Scaffold Invariant (Invariant 1), both
+measures must equal 100% at every intermediate step and in the final
+output; any deviation constitutes a correctness regression.
+Reporting functional correctness for both suites is a direct
+advantage over prior work: C2SaferRust (Nitin et al., 2025),
+Laertes (Emre et al., 2021), and Crown (Zhang et al., 2023) cannot provide correctness
+verification for the Laertes libraries because those libraries ship without
+test inputs.
+
+Idiomatic Rust quality.
+
+Beyond eliminating unsafe constructs, a high-quality C-to-Rust translation
+should produce code that follows idiomatic Rust conventions.
+We measure idiomatic quality by the number of Clippy warnings
+emitted on the final translated crate:
+
+Clippy warnings=cargo clippy 2>&1 | grep -c "ˆwarning".
+
+Clippy is the official Rust linter and flags patterns that compile
+correctly but deviate from community best practices, including redundant
+clones, inefficient iterator usage, unnecessary unsafe blocks that wrap
+safe operations, and opportunities to replace raw-pointer patterns with
+idiomatic slice or reference APIs.
+Fewer warnings indicate that the translated code is not merely safe but
+also conforms to the style expected by Rust developers, which directly
+affects maintainability.
+A lower Clippy warning count is better; a count of zero means
+Clippy raises no objections against the translated codebase.
+Unlike the five safety metrics, the Clippy warning count is independent of
+whether unsafe blocks are present: safe but non-idiomatic code
+(e.g., manual index loops instead of iterators) also raises warnings.
+We report this metric for Encrust’s final output and for each
+baseline to characterise the idiomaticity gap between approaches.
+
+4.3. Experimental Setup
+
+LLM configuration.
+
+All translation steps in both phases use GPT-4o.
+Phase 1 allows up to five compile-test retries per function: on each
+retry the LLM receives the compiler error or test-failure output as
+additional context and regenerates the wrapper/safe-function pair.
+If all five attempts fail, the pipeline rolls back to the original unsafe
+body and advances to the next function.
+Phase 2 caps the agentic loop at 40 tool-call iterations per task; if the
+loop reaches the cap without the verification gate passing, the workspace
+is rolled back to the pre-task snapshot and the task is marked failed.
+All LLM calls use temperature =0.0 to make the pipeline deterministic
+conditioned on the model’s weights and prompt.
+
+Baselines.
+
+We compare Encrust against three baselines, all run on the same
+Coreutils and Laertes programs under identical conditions.
+(B1) C2Rust (Galois, 2018): the raw transpiler output
+with no further safety work; this serves as the lower bound and defines
+the safety-metric baselines from which all tools reduce.
+(B2) C2SaferRust (Nitin et al., 2025): a neuro-symbolic
+LLM-based pipeline evaluated on the same two benchmark suites with the
+same five safety metrics, enabling direct numeric comparison.
+(B3) EvoC2Rust (Wang et al., 2025): a skeleton-guided,
+project-scale LLM pipeline that first generates compilable Rust stubs for
+the entire project and then fills each stub with a full function
+translation, making it the most architecturally comparable large-scale
+baseline.
+To ensure a controlled comparison, we run both C2SaferRust and
+EvoC2Rust with GPT-4o at temperature =0.0, matching the
+configuration used by Encrust.
+Unlike C2Rust and C2SaferRust, EvoC2Rust
+translates C directly to Rust without relying on C2Rust as an
+intermediate; when it fails to translate a function, that function is
+absent from the output rather than present as unsafe code.
+Measuring the five safety metrics on an incomplete program would therefore
+undercount unsafe constructs and artificially inflate EvoC2Rust’s
+apparent safety score.
+To ensure a fair comparison, we apply the following normalisation: for
+every function that EvoC2Rust fails to produce, we substitute
+the C2Rust-transpiled unsafe body of that function.
+Safety metrics are then measured on this completed, compilable crate,
+so that all three baselines and Encrust are evaluated on programs
+with the same set of functions.
+
+We evaluate Encrust along two dimensions.
+(1) Overall safety improvement covers Phase 1 translation coverage
+(function compilance pass rate), functional correctness preservation, and
+unsafe-construct reduction relative to baselines across five safety metrics,
+reported jointly in §4.4. And
+(2) the marginal contribution of Phase 2 agentic refinement, examined as an
+ablation (§4.5).
+All experiments use the benchmarks and metrics defined in §4.1
+and §4.2.
+
+Table 4. Safety and correctness metrics on the GNU Coreutils benchmark.
+Columns (all ↓ lower is better unless noted):
+Ptr.Decl = raw pointer declarations;
+Ptr.Deref = raw pointer dereferences;
+Unsafe LoC = unsafe lines of code;
+Unsafe Cast = unsafe type casts;
+Unsafe Call = unsafe call expressions;
+Comp.Rate (↑) = fraction of LLM-translated functions that compiled
+(N/A for systems without LLM function translation);
+Correct. (↑) = test-script pass rate;
+Clippy = cargo clippy warning count.
+EvoC2Rust Correct. = 0% and Clippy = N/A because the translated
+project does not compile.
+Best value per metric per program bolded; second-best underlined.
+
+Program
+System
+Ptr.Decl ↓
+Ptr.Deref ↓
+Unsafe LoC ↓
+Unsafe Cast ↓
+Unsafe Call ↓
+Comp.Rate ↑
+Correct. ↑
+Clippy ↓
+
+cat
+C2Rust
+192
+317
+5,625
+3,116
+1,038
+N/A
+100%
+546
+
+C2SaferRust
+120
+240
+4,189
+1,992
+912
+75.3%
+100%
+239
+
+EvoC2Rust
+81
+231
+2,338
+1,082
+525
+64%
+0%
+N/A
+
+Encrust
+95
+170
+3,407
+1,463
+1,076
+95.8%
+100%
+211
+
+head
+C2Rust
+192
+442
+6,245
+3,488
+1,378
+N/A
+100%
+410
+
+C2SaferRust
+141
+351
+4,699
+2,464
+1,189
+69.9%
+100%
+247
+
+EvoC2Rust
+65
+309
+3,525
+1,799
+902
+59%
+0%
+N/A
+
+Encrust
+109
+155
+2,244
+806
+1,071
+97.1%
+100%
+136
+
+pwd
+C2Rust
+164
+295
+4,201
+2,248
+875
+N/A
+100%
+370
+
+C2SaferRust
+129
+225
+3,151
+1,563
+871
+70.9%
+100%
+204
+
+EvoC2Rust
+62
+178
+1,756
+575
+548
+68%
+0%
+N/A
+
+Encrust
+80
+49
+1,180
+228
+748
+99.2%
+100%
+108
+
+split
+C2Rust
+252
+656
+11,324
+5,979
+2,353
+N/A
+100%
+547
+
+C2SaferRust
+214
+540
+9,250
+4,663
+2,212
+53.6%
+100%
+394
+
+EvoC2Rust
+91
+437
+6,022
+3,107
+1,383
+58%
+0%
+N/A
+
+Encrust
+135
+295
+6,645
+3,090
+2,099
+96.2%
+100%
+211
+
+tail
+C2Rust
+389
+1,092
+11,663
+5,869
+2,580
+N/A
+100%
+718
+
+C2SaferRust
+297
+847
+8,818
+3,739
+2,433
+61.7%
+100%
+469
+
+EvoC2Rust
+173
+812
+7,870
+3,805
+1,918
+49%
+0%
+N/A
+
+Encrust
+212
+559
+6,352
+2,383
+2,231
+96.8%
+100%
+266
+
+truncate
+C2Rust
+156
+326
+5,544
+3,357
+1,040
+N/A
+100%
+386
+
+C2SaferRust
+124
+263
+4,443
+2,521
+952
+70.2%
+100%
+241
+
+EvoC2Rust
+49
+203
+2,808
+1,733
+543
+66%
+0%
+N/A
+
+Encrust
+76
+174
+3,427
+1,586
+1,074
+94.0%
+100%
+214
+
+uniq
+C2Rust
+227
+343
+6,066
+3,590
+1,150
+N/A
+100%
+470
+
+C2SaferRust
+166
+250
+4,397
+2,340
+1,025
+68.9%
+100%
+293
+
+EvoC2Rust
+67
+215
+2,656
+1,429
+556
+64%
+0%
+N/A
+
+Encrust
+122
+87
+2,469
+1,070
+1,037
+95.9%
+100%
+349
+
+Total
+C2Rust
+1,572
+3,471
+50,668
+27,647
+10,414
+N/A
+100%
+2,951
+
+C2SaferRust
+1,191
+2,716
+38,947
+19,282
+9,594
+66.0%
+100%
+2,087
+
+EvoC2Rust
+588
+2,385
+26,975
+13,530
+6,375
+59.7%
+0%
+N/A
+
+Encrust
+829
+1,489
+25,724
+10,626
+9,336
+96.4%
+100%
+1,495
+
+4.4. Evaluation
+
+Tables 4 and 5 report
+the five safety metrics for all four systems on the Coreutils and Laertes
+benchmarks respectively; Table 5 additionally reports
+the function compilance pass rate, functional correctness, and Clippy warning count.
+
+Safety reduction on Coreutils.
+
+Across all seven Coreutils programs Encrust reduces raw pointer
+dereferences by 55% and unsafe type casts by 60% relative to the
+C2Rust baseline, the two metrics where the wrapper pattern is most
+effective: safe inner functions eliminate pointer arithmetic entirely, and
+struct materialisation via From removes explicit as casts.
+Raw pointer declarations and unsafe lines of code are reduced by 44% and
+46% respectively.
+Unsafe call expressions show only a 7% reduction, because each wrapper
+function itself constitutes an unsafe call site; this metric therefore
+improves primarily through Phase 2 wrapper removal.
+
+Compared with C2SaferRust, Encrust reduces raw pointer
+dereferences by a further 42% and unsafe type casts by a further 42%,
+reflecting the structural advantage of the wrapper pattern over
+C2SaferRust’s inline pointer annotation approach.
+EvoC2Rust reports nominally lower raw pointer declaration, unsafe
+lines, and unsafe call expression totals, but produces output that does not
+compile (functional correctness = 0% on all seven programs); its safety
+numbers are therefore not directly comparable.
+Encrust is the only system achieving both unsafe-construct
+reduction and 100% test correctness across the full Coreutils benchmark.
+
+Safety reduction on Laertes.
+
+Results for Laertes cover all eight libraries.
+Over the eight completed libraries, Encrust reduces raw pointer
+dereferences by 57% and unsafe type casts by 38% relative to C2Rust,
+consistent with the Coreutils trend.
+qsort and snudown show the largest relative reductions
+(raw pointer dereferences near zero for qsort), while lil and
+urlparser show more modest gains owing to their heavy use of
+multi-level pointers and function callbacks that the wrapper pattern does
+not fully eliminate.
+EvoC2Rust achieves lower totals on the Laertes suite, but
+correctness verification is unavailable for its output on these libraries,
+so the comparison is one-dimensional.
+
+Table 5. Safety and correctness metrics on the Laertes benchmark.
+Column definitions as in Table 4.
+Comp.Rate: fraction of LLM-translated functions that compiled within
+the retry budget (Encrust and EvoC2Rust);
+N/A for C2Rust (no LLM translation).
+Correct.: test-vector pass rate (100% = all inputs match C reference output).
+All 8 libraries have Encrust results.
+Best value per metric per library bolded; second-best underlined.
+
+Library
+System
+Ptr.Decl ↓
+Ptr.Deref ↓
+Unsafe LoC ↓
+Unsafe Cast ↓
+Unsafe Call ↓
+Comp.Rate ↑
+Correct. ↑
+Clippy ↓
+
+bzip2
+C2Rust
+147
+3,614
+9,304
+6,601
+1,686
+N/A
+100%
+254
+
+C2SaferRust
+85
+2,217
+7,688
+3,397
+1,252
+57.58
+100%
+417
+
+EvoC2Rust
+65
+391
+1,459
+548
+327
+83.00
+0%
+N/A
+
+Encrust
+79
+384
+1,907
+886
+572
+93.94
+100%
+146
+
+genann
+C2Rust
+48
+158
+557
+231
+116
+N/A
+100%
+32
+
+C2SaferRust
+38
+127
+479
+174
+102
+57.14
+100%
+29
+
+EvoC2Rust
+3
+6
+111
+57
+19
+80.65
+0%
+N/A
+
+Encrust
+19
+39
+333
+92
+127
+92.86
+100%
+59
+
+lil
+C2Rust
+416
+1,674
+5,416
+2,231
+1,729
+N/A
+100%
+583
+
+C2SaferRust
+391
+983
+4,519
+1,241
+1,651
+47.65
+100%
+670
+
+EvoC2Rust
+4
+2
+61
+25
+23
+23.28
+0%
+N/A
+
+Encrust
+382
+887
+3,012
+800
+1,751
+97.32
+100%
+698
+
+optipng
+C2Rust
+1,157
+5,297
+49,444
+26,824
+7,044
+N/A
+100%
+4,964
+
+C2SaferRust
+625
+3,452
+34,178
+20,744
+5,974
+65.32
+100%
+4,984
+
+EvoC2Rust
+820
+4,488
+40,486
+22,775
+5,217
+63.59
+0%
+N/A
+
+Encrust
+634
+2,087
+37,111
+18,548
+6,117
+96.76
+100%
+4,555
+
+qsort
+C2Rust
+4
+11
+67
+34
+21
+N/A
+100%
+7
+
+C2SaferRust
+1
+0
+14
+5
+4
+80.00
+100%
+6
+
+EvoC2Rust
+0
+1
+26
+21
+8
+87.50
+0%
+N/A
+
+Encrust
+1
+0
+45
+19
+22
+100.00
+100%
+16
+
+snudown
+C2Rust
+56
+287
+1,678
+1,809
+449
+N/A
+100%
+238
+
+C2SaferRust
+21
+113
+869
+591
+313
+74.19
+100%
+96
+
+EvoC2Rust
+2
+11
+42
+30
+17
+82.66
+0%
+N/A
+
+Encrust
+25
+99
+410
+209
+199
+93.55
+100%
+69
+
+tulipindicators
+C2Rust
+1,081
+3,047
+19,408
+12,349
+3,336
+N/A
+100%
+943
+
+C2SaferRust
+977
+2,652
+18,426
+11,499
+3,045
+42.43
+100%
+727
+
+EvoC2Rust
+149
+119
+702
+291
+157
+53.49
+0%
+N/A
+
+Encrust
+865
+1,169
+15,781
+8,716
+3,031
+92.25
+100%
+714
+
+urlparser
+C2Rust
+82
+89
+1,627
+573
+832
+N/A
+100%
+153
+
+C2SaferRust
+76
+36
+1,039
+394
+517
+36.36
+100%
+105
+
+EvoC2Rust
+4
+36
+1,090
+575
+295
+90.00
+0%
+N/A
+
+Encrust
+76
+64
+1,591
+771
+663
+90.91
+100%
+196
+
+Total
+C2Rust
+2,991
+14,177
+87,501
+50,652
+15,213
+N/A
+100%
+7,174
+
+C2SaferRust
+2,214
+9,580
+67,212
+38,045
+12,858
+56.07
+100%
+7,034
+
+EvoC2Rust
+1,047
+5,054
+43,977
+24,322
+6,063
+61.74
+0%
+N/A
+
+Encrust
+2,081
+4,729
+60,190
+30,041
+12,482
+95.09
+100%
+6,453
+
+Phase 1 translation coverage.
+
+Across all seven Coreutils programs, Encrust successfully translated
+999 of 1,097 functions in Phase 1 (within the five-retry budget), and
+Phase 2 function_translate tasks recovered an additional 59
+functions, yielding an overall function compilance pass rate of 96.4% (1,058/1,097).
+Per-program rates range from 94.0% (truncate) to 99.2%
+(pwd), with the remaining 3.6% of functions retained as their
+original unsafe bodies because every LLM attempt either failed to compile
+or failed the test-vector suite within the combined retry budget of both
+phases.
+
+Functional correctness.
+
+Encrust achieves 100% correctness on all seven Coreutils programs
+and all eight Laertes libraries (Tables 4–5),
+confirming that the Live Scaffold Invariant (§3.1.3) prevents
+any behavioral regression throughout translation.
+By contrast, EvoC2Rust scores 0% on both benchmarks because its
+translated projects do not compile.
+
+Table 6. Ablation: incremental contribution of each phase, aggregated
+over the Coreutils (7 programs) and Laertes (8 libraries) benchmarks.
+Encrust Phase 1 = after Type-Directed Wrapper Elimination only;
+Encrust (Phase 1+2) = full pipeline.
+All metrics ↓ lower is better.
+
+Suite
+Configuration
+Ptr.Decl
+Ptr.Deref
+Unsafe LoC
+Unsafe Cast
+Unsafe Call
+Clippy
+
+Coreutils
+C2Rust
+1,572
+3,471
+50,668
+27,647
+10,414
+2,951
+
+Encrust Phase 1
+886
+1,585
+27,424
+11,227
+9,659
+1,463
+
+Encrust (Phase 1+2)
+829
+1,489
+25,724
+10,626
+9,336
+1,495
+
+Laertes
+C2Rust
+2,991
+14,177
+87,501
+50,652
+15,213
+7,174
+
+Encrust Phase 1
+2,269
+8,278
+69,009
+36,107
+13,795
+6,465
+
+Encrust (Phase 1+2)
+2,081
+4,729
+60,190
+30,041
+12,482
+6,453
+
+Table 7. Phase 2 task completion breakdown aggregated over all 15 programs
+(7 Coreutils + 8 Laertes).
+Rate = Completed / Discovered.
+Avg. iters = mean agentic loop iterations per completed task.
+
+Task type
+Disc.
+Compl.
+Failed
+Rate
+Avg. iters
+
+static_mut
+363
+227
+136
+62.5%
+21.8
+
+wrapper_removal
+454
+347
+107
+76.4%
+20.6
+
+struct_migration
+23
+21
+2
+91.3%
+10.7
+
+struct_use_migrate
+15
+14
+1
+93.3%
+3.8
+
+function_translate
+263
+174
+89
+66.2%
+23.7
+
+dead_code
+15
+7
+8
+46.7%
+18.3
+
+Total
+1,133
+790
+343
+69.7%
+21.0
+
+4.5. Ablation Study: Phase 2 Contribution
+
+To isolate the contribution of each phase, Table 6
+compares three configurations on the five safety metrics and Clippy
+warning count: C2Rust (no translation), Phase 1 only
+(rust_safe_remap/, after Type-Directed Wrapper Elimination),
+and the full Encrust pipeline (Phase 1 + Phase 2).
+Phase 1 alone reduces unsafe lines of code by 45.9% on Coreutils and
+21.1% on Laertes relative to C2Rust, with the TDWE remapping
+step accepting 79.9% (1,210/1,514) of wrapper–safe function pairs.
+Raw pointer dereferences see the largest Phase 1 reduction (54.3% on
+Coreutils, 41.6% on Laertes), while unsafe call expressions improve only
+modestly (7.2% and 9.3% respectively), since each retained wrapper
+constitutes an unsafe call site.
+Phase 2 adds a further 6.1% relative reduction in raw pointer
+dereferences on Coreutils (total 57.1% over C2Rust) and 42.9%
+on Laertes (total 66.6%), and reduces unsafe lines of code by a further
+6.2% and 12.8% respectively, with all five metrics improving across
+both benchmark suites.
+
+Table 7 shows the Phase 2 task breakdown aggregated
+over all 15 programs.
+Encrust discovers 1,133 tasks and completes 790 (69.7%),
+averaging 21.0 agentic loop iterations per completed task.
+Structural tasks achieve the highest rates: struct_migration
+at 91.3% and struct_use_migrate at 93.3%, owing to their
+localised, well-typed rewrites (mean 10.7 and 3.8 iterations).
+dead_code cleanup is lowest (46.7%) because whole-project
+reachability reasoning frequently exceeds the 40-iteration budget.
+wrapper_removal is the most frequent task type (454 tasks)
+and achieves 76.4%, as most residual wrapper–safe pairs have tractable
+type mismatches given full codebase context.
+
+5. Limitations
+
+Test-vector coverage.
+Correctness is verified only for code paths exercised by the test suite;
+functions never called during testing are translated without behavioral
+verification.
+As reported in Tables 2 and 3,
+the covered fraction varies substantially across programs, so the true
+correctness of the full translated codebase cannot be guaranteed beyond
+the tested paths.
+
+TDWE completeness and agentic scope.
+Phase 1’s Type-Directed Wrapper Elimination operates on a best-effort basis:
+it successfully eliminates wrapper–safe function pairs for 79.9% of
+translated functions, but does not guarantee that the resulting safe
+function bodies are themselves free of residual unsafe constructs such as
+raw pointer manipulation or unchecked indexing.
+Crucially, functions whose wrappers are removed by TDWE are not
+subsequently re-examined by the Phase 2 agentic loop, which targets only
+the task categories discovered in the post-TDWE codebase
+(static_mut, wrapper_removal, struct_migration,
+function_translate, dead_code).
+Any unsafe code that survives inside TDWE-translated function bodies outside
+these categories therefore remains in the final output without further
+refinement.
+
+6. Conclusion
+
+We presented ENCRUST, a two-phase pipeline that translates real-world C
+programs to safe Rust while guaranteeing behavioral equivalence throughout.
+The first phase, Encapsulated Substitution, introduces an ABI-preserving
+wrapper pattern that decouples per-function type-signature changes from their
+call sites, enabling independent LLM-driven translation with silent rollback,
+followed by a deterministic type-directed wrapper elimination pass.
+The second phase, Agentic Refinement, targets the residual unsafe
+constructs that exceed per-function scope, namely static mut globals,
+skipped wrapper pairs, and failed translations, through a tool-equipped LLM
+agent operating on the whole codebase under a baseline-aware verification gate
+that prevents correctness regressions.
+
+Evaluated on 15 programs spanning 197,706 lines of C, Encrust
+reduces unsafe lines of code by 37.8% over the C2Rust
+baseline while achieving 100% test-vector correctness on all programs.
+Phase 1 alone accounts for 34.3% of this reduction; Phase 2 contributes
+an additional 5.4% relative reduction by targeting unsafe constructs that
+are intractable within per-function scope by design, completing 790 of
+1,133 discovered tasks at an average of 21.0 agentic loop iterations per task.
+Across both benchmark suites, Encrust surpasses C2SaferRust
+on unsafe-construct reduction while maintaining the same 100% test correctness,
+and unlike EvoC2Rust, achieves this reduction without sacrificing
+functional equivalence.
+These results demonstrate that decomposing the translation problem into
+encapsulated per-function substitution followed by whole-codebase agentic
+refinement is an effective strategy for scaling correctness-preserving
+C-to-safe-Rust translation to real-world programs.
+
+Several directions remain open.
+Extending Phase 1 to handle inline assembly and setjmp/longjmp
+would widen the class of C programs within scope.
+Replacing GPT-4o with open-weight models would reduce cost and improve
+reproducibility across model updates.
+Finally, integrating a lightweight static pointer-provenance analysis could
+expand the set of wrapper pairs eligible for elimination, closing the gap
+between Phase 1-only and full Encrust output on programs with
+heavy pointer arithmetic.
+
+Data-Availability Statement
+
+The test cases and data for Coreutils used in this paper are taken
+from the publicly available C2SaferRust repository (Nitin et al., 2025).
+The test vectors for Laertes will be made available on GitHub upon publication.
+
+References
+
+Akritidis et al. (2010)
+P. Akritidis et al.
+
+Cling: a memory allocator to mitigate dangling pointers.
+
+In 19th USENIX Security Symposium (USENIX Security 10),
+
+Cited by: §1.
+
+Cai et al. (2025)
+X. Cai, J. Liu, X. Huang, Y. Yu, H. Wu, C. Li, B. Wang, I. N. B. Yusuf, and L. Jiang
+
+Rustmap: towards project-scale c-to-rust migration via program analysis and llm.
+
+In International Conference on Engineering of Complex Computer Systems,
+
+pp. 283–302.
+
+Cited by: §1,
+§2.2.2.
+
+Dehghan et al. (2025)
+S. Dehghan, T. Sun, T. Wu, Z. Li, and R. Jabbarvand
+
+Translating large-scale c repositories to idiomatic rust.
+
+arXiv preprint arXiv:2511.20617.
+
+Cited by: §1,
+§2.2.2.
+
+Emre et al. (2021)
+M. Emre, R. Schroeder, K. Dewey, and B. Hardekopf
+
+Translating c to safer rust.
+
+Proceedings of the ACM on Programming Languages 5 (OOPSLA), pp. 1–29.
+
+Cited by: §1,
+§2.1,
+§4.1,
+§4.1,
+§4.2,
+Table 3.
+
+Eniser et al. (2024)
+H. F. Eniser, H. Zhang, C. David, M. Wang, M. Christakis, B. Paulsen, J. Dodds, and D. Kroening
+
+Towards translating real-world code with llms: a study of translating to rust.
+
+arXiv preprint arXiv:2405.11514.
+
+Cited by: §2.2.1.
+
+Farrukh et al. (2025)
+M. Farrukh, S. Shah, B. Coskun, and M. Polychronakis
+
+Safetrans: llm-assisted transpilation from c to rust.
+
+arXiv preprint arXiv:2505.10708.
+
+Cited by: §2.2.1.
+
+Fioraldi et al. (2020)
+A. Fioraldi, D. Maier, H. Eißfeldt, and M. Heuse
+
+{afl++}: Combining incremental steps of fuzzing research.
+
+In 14th USENIX workshop on offensive technologies (WOOT 20),
+
+Cited by: §4.1.
+
+Galois (2018)
+Galois
+
+C2Rust.
+
+External Links: Link
+
+Cited by: §1,
+§2.1,
+§4.3.
+
+Hong and Ryu (2025)
+J. Hong and S. Ryu
+
+Type-migrating c-to-rust translation using a large language model.
+
+Empirical Software Engineering 30 (1), pp. 3.
+
+Cited by: §2.2.1.
+
+Jung et al. (2018)
+R. Jung, J. Jourdan, R. Krebbers, and D. Dreyer
+
+RustBelt: securing the foundations of the Rust programming language.
+
+Proceedings of the ACM on Programming Languages 2 (POPL), pp. 66:1–66:34.
+
+External Links: Document
+
+Cited by: §1.
+
+Ling et al. (2022)
+M. Ling, Y. Yu, H. Wu, Y. Wang, J. R. Cordy, and A. E. Hassan
+
+In rust we trust: a transpiler from unsafe c to safer rust.
+
+In Proceedings of the ACM/IEEE 44th international conference on software engineering: companion proceedings,
+
+pp. 354–355.
+
+Cited by: §1,
+§2.1.
+
+Liu et al. (2025)
+Y. Liu, J. Hu, Y. Shan, G. Li, Y. Zou, Y. Dong, and T. Xie
+
+LLMigrate: transforming" lazy" large language models into efficient source code migrators.
+
+arXiv preprint arXiv:2503.23791.
+
+Cited by: §2.2.2.
+
+Luo et al. (2025)
+F. Luo, K. Ji, C. Gao, S. Gao, J. Feng, K. Liu, X. Xia, and M. R. Lyu
+
+Integrating rules and semantics for llm-based c-to-rust translation.
+
+In 2025 IEEE International Conference on Software Maintenance and Evolution (ICSME),
+
+pp. 685–696.
+
+Cited by: §2.2.2.
+
+Matsakis and Klock (2014)
+N. D. Matsakis and F. S. Klock
+
+The Rust language.
+
+In Proceedings of the 2014 ACM SIGAda Annual Conference on
+High Integrity Language Technology,
+
+HILT ’14, pp. 103–104.
+
+External Links: Document
+
+Cited by: §1.
+
+Nitin et al. (2025)
+V. Nitin, R. Krishna, L. L. do Valle, and B. Ray
+
+C2 saferrust: transforming c projects into safer rust with neurosymbolic techniques.
+
+IEEE Transactions on Software Engineering.
+
+Cited by: §1,
+§2.2.2,
+§4.1,
+§4.1,
+§4.2,
+§4.2,
+§4.3,
+Table 2,
+Data-Availability Statement.
+
+Oleksenko et al. (2017)
+O. Oleksenko, D. Kuvaiskii, P. Bhatotia, P. Felber, and C. Fetzer
+
+Intel mpx explained: an empirical study of intel mpx and software-based bounds checking approaches.
+
+arXiv preprint arXiv:1702.00719.
+
+Cited by: §1.
+
+Shetty et al. (2024)
+M. Shetty, N. Jain, A. Godbole, S. A. Seshia, and K. Sen
+
+Syzygy: dual code-test c to (safe) rust translation using llms and dynamic analysis.
+
+arXiv preprint arXiv:2412.14234.
+
+Cited by: §2.2.1.
+
+Shiraishi et al. (2024)
+M. Shiraishi, Y. Cao, and T. Shinagawa
+
+SmartC2Rust: iterative, feedback-driven c-to-rust translation via large language models for safety and equivalence.
+
+arXiv preprint arXiv:2409.10506.
+
+Cited by: §2.2.1.
+
+Szekeres et al. (2013)
+L. Szekeres, M. Payer, T. Wei, and D. Song
+
+SoK: eternal war in memory.
+
+In Proceedings of the 2013 IEEE Symposium on Security and Privacy,
+
+SP ’13, pp. 48–62.
+
+External Links: Document
+
+Cited by: §1.
+
+Wang et al. (2025)
+C. Wang, T. Yu, B. Shen, J. Wang, D. Chen, W. Zhang, Y. Shi, C. Xie, and X. Gu
+
+Evoc2rust: a skeleton-guided framework for project-level c-to-rust translation.
+
+arXiv preprint arXiv:2508.04295.
+
+Cited by: §1,
+§2.2.2,
+§4.3.
+
+Yang et al. (2024)
+A. Z. Yang, Y. Takashima, B. Paulsen, J. Dodds, and D. Kroening
+
+Vert: verified equivalent rust transpilation with large language models as few-shot learners.
+
+arXiv preprint arXiv:2404.18852.
+
+Cited by: §1,
+§2.2.1.
+
+Zhang et al. (2023)
+H. Zhang, C. David, Y. Yu, and M. Wang
+
+Ownership guided c to rust translation.
+
+In International Conference on Computer Aided Verification,
+
+pp. 459–482.
+
+Cited by: §1,
+§2.1,
+§4.1,
+§4.2.
+
+Zhou et al. (2025)
+T. Zhou, Z. Zhang, H. Lin, S. Jha, M. Christodorescu, K. Levchenko, and V. Chandrasekaran
+
+SACTOR: llm-driven correct and idiomatic c to rust translation with static analysis and ffi-based verification.
+
+arXiv preprint arXiv:2503.12511.
+
+Cited by: §1,
+§2.2.1.
+
+    Experimental support, please
+    view the build logs
+    for errors. Generated by
+
+        L
+        A
+        T
+        E
+
+      xml
+
+    .
+
+    Instructions for reporting errors
+
+    We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:
+
+      Click the "Report Issue" (
+
+          ) button, located in the page header.
+
+    Tip: You can select the relevant text first, to include it in your report.
+
+    Our team has already identified the following issues. We appreciate your time reviewing and reporting rendering errors we
+      may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+      should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+      all.
+
+    Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion, and welcome developer contributions.
+
+        We gratefully acknowledge support from
+        our major funders,
+        member institutions, ,
+        and all contributors.
+
+        About
+        ·
+        Help
+        ·
+        Contact
+        ·
+        Subscribe
+        ·
+        Copyright
+        ·
+        Privacy
+        ·
+        Accessibility
+        ·
+        Operational Status (opens in new tab)
+
+      Major funding support from
+
