@@ -1,6 +1,6 @@
 # RULEBOOK: jsmn (https://github.com/zserge/jsmn @ 25647e6)
 
-Status: deviations-approved (2026-10-10, user approved D1-D3). Stress test incomplete: 1 of 2 translations (RUN-NOTES); provisional rules RP1-RP5 applied 2026-10-10 (§12).
+Status: deviations-approved (2026-10-10, user approved D1-D3); stress-tested (2026-10-10): translations A-D, rules RP1-RP13 applied (§12, RUN-NOTES "Stress test closed").
 Idiom table: `skill/c-to-rust/references/idiom-table-c.md` (rows apply unless §2
 overrides them).
 Template: `skill/c-to-rust/references/rulebook-template.md`.
@@ -280,3 +280,4 @@ Stage 1 (bytes read as `u8`, §0; Stage 1 keeps C's D1/D2 behaviour) and
 | 2026-10-10 | E3 stress test (RP12) | §2 C4, §4 | `#ifdef`-guarded case labels become separate `#[cfg]` arms in C order, shared body written once per arm; no merged `_` arm with `matches!`, no `cfg!` guard; Q5 sits above the two `#[cfg(not(feature = "strict"))]` arms | accepted, B's shape (= Faithful port): HARD RULE 2 puts `#[cfg]` where `jsmn.h` has `#ifdef`, and each feature set then compiles one copy of the tail as C does; C's `cfg!`/`matches!` shape makes the label set a runtime test and leaves the Q5 site ambiguous |
 | 2026-10-10 | E3 stress test (RP13) | §0 | Stage 1 emits `pub type jsmnerr = c_int` and types `JSMN_ERROR_*` as `jsmnerr` | accepted: `jsmn.h` declares the named `enum jsmnerr`; the Faithful port and c2rust emit the alias. Nothing in the adapter, `dump.rs` or the Judge uses the name, so it fixes a free choice, not behaviour |
 | 2026-10-10 | E3-prep Judge validation | §10 | corpus 932 → 1188 inputs (primitive-continuation byte class) | accepted: 932-input corpus missed the E2 mutant in both `strict` sets |
+| 2026-10-10 | E3 stress test close (Opus) | status line | C vs D diff (16 hunks, 85 lines): 10 cosmetic, 6 covered by RP12/RP13, 0 new; status set to `stress-tested (2026-10-10)` | accepted: the same-model run with RP1-RP13 produced no new disagreement. Limits: n=2 per rule set, one Part, Judge blind to style (RUN-NOTES "Stress test closed") |

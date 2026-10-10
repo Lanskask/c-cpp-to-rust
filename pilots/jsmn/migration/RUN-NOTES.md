@@ -215,3 +215,40 @@ the two non-strict arms, strict arms unmarked) yes. RP1-RP11 also still followed
 New disagreements D vs C: 0. Every difference is covered by RP12-RP13 (C predates them) or cosmetic, so no RP14 is
 proposed. The lines the rulebook pins down (Stage 1 items, C4 `#ifdef` shape, marker table) produced the same
 observable shape in D as in B/the Faithful port. Single run per translation.
+
+## Stress test closed (Opus, 2026-10-10)
+
+Checked the "D vs C: 0 new disagreements" claim by reading
+`diff stress/c/rust/src/lib.rs stress/d/rust/src/lib.rs` (16 hunks, 85 `<`/`>` lines; line numbers C → D):
+
+| hunk | change | class |
+|---|---|---|
+| 1c1 | `//!` header names the commit | cosmetic (comment) |
+| 3,8c3,5 | doc text; `#![allow]` set (C: `unused_*`; D: `non_upper_case_globals, non_snake_case`) | cosmetic (lint attributes, no codegen) |
+| 22,24c19,21 | `JSMN_ERROR_*: c_int` → `: jsmnerr` | covered by RP13 (`jsmnerr = c_int`, same type) |
+| 58c55 | `start = -1` → `start = end` after `end = -1` (C `a = b = -1`) | cosmetic (assignment form, same values) |
+| 89,90c86 | `let c` local dropped in the primitive loop | cosmetic (local binding) |
+| 92,94c88,89 | `:` or-pattern with `cfg!` guard → own `#[cfg(not(strict))] b':'` arm first | covered by RP12 |
+| 97a93,96 | whitespace/`,]}` arm split out | covered by RP12 |
+| 101c100,102 | D3 check reads `*js.add(pos)` twice instead of `c` | cosmetic (local binding; no write between reads) |
+| 113a115,116 | `// found:` comment, `let _ = found;` | cosmetic (comment, no-op binding) |
+| 170c173 | redundant parentheses | cosmetic |
+| 183d185 | `let h` local dropped (hex escape) | cosmetic (local binding) |
+| 185c187,192 | hex range test on repeated reads instead of `h` | cosmetic (local binding) |
+| 224c231 | `let mut type_0` → `let type_0` | cosmetic |
+| 356,363c363,368 | merged `_` arm with `matches!` → `#[cfg(strict)]` arm for `-`/digits/`t`/`f`/`n` | covered by RP12 |
+| 366,373d370 | strict key check moves into that arm | covered by RP12 |
+| 383a381,394 | `#[cfg(not(strict))] _` arm (Q5 marker above `#[cfg]`) + `#[cfg(strict)] _ => INVAL` | covered by RP12 / §4 Q5 row |
+
+Counts: 10 cosmetic, 6 covered by a rule (RP12: 5, RP13: 1), 0 semantic and uncovered. No public item, arithmetic
+form, marker count or `unsafe` use differs outside RP12/RP13; marker counts in D match the §4 table. The claim
+holds, so no RP14. RULEBOOK status set to `stress-tested (2026-10-10)` (§12 row "E3 stress test close").
+
+Limits of this result:
+- n=2 per rule set: each rulebook version (RP1-RP5, RP1-RP11, RP1-RP13) was tested by one pair of runs. "0 new
+  disagreements" in D vs C is one sample; a third same-rulebook run could still find a choice the rules leave open.
+- One Part: jsmn is a single `judgment` Part (`jsmn.h`), so SKILL.md step 2's "3 hardest Parts" is 1 here. Shapes
+  that only show up in other code (unions, `goto` chains, function pointers) were not exercised.
+- The Judge is blind to style: all four translations pass 1188/1188 × 4 sets, so every disagreement above was found
+  by reading the diffs, not by the Judge. Rules that fix shape (RP8-RP12) are enforced only by review.
+- Translations A and B differ in model (Haiku vs Sonnet) as well as rules; C and D are same-model (Sonnet 5.5).
