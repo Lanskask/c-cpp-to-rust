@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** todo
+**Status:** done
 
 - [ ] original tests link to the Rust crate (C only)
 - [ ] driver and deterministic corpus per feature set

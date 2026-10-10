@@ -1,6 +1,7 @@
 # 01: Mapping (Stage 0) (cjson)
 
-**What to build:** The Source project is inventoried, its dependencies mapped, Parts tiered, and a RULEBOOK drafted whose Deviations table the user can approve.
+**What to build:** The Source project is inventoried, its dependencies mapped, Parts tiered, and a RULEBOOK drafted
+whose Deviations table the user can approve.
 
 **Blocked by:** None (can start immediately)
 

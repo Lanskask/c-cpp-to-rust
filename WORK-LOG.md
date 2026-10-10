@@ -407,3 +407,26 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the ticket chain had a dependency the Skill text never stated; only a real run on a second Pilot
   exposed it. Not yet exercised: the C++ stub route (tinyxml2, E6) and the "no c2rust" route.
 - **Next:** the cJSON Translation session re-reads SKILL.md step 5 and builds the scratch crates for ticket 02.
+
+## 29. E4 cJSON: Stage 1 Judge built and validated (ticket 02 done)
+- **Date:** 2026-10-10 (after entry 28)
+- **Who:** Sonnet 5.5 subagent built it; the governor re-ran it
+- **Done:** `pilots/cjson/migration/harness/` (`run.py`, `make_scratch.py`, `shim/common.h`, `dump.c`,
+  `make_inputs.py`), `migration/RUN-NOTES.md`. Governor re-run, both feature sets on the c2rust scratch crates:
+  `run.py --scratch` and `run.py --scratch locales` exit 0, 163 upstream tests / 0 failures / 1 ignored, harness
+  3849/3849 match each. Mutants re-run by the governor: `hex-digit` (caught by `parse_hex4` and 2 harness inputs),
+  `array-index-digit` in both sets (not caught by any upstream test, caught by 2 of 3849 inputs). The other 5 of
+  the 8 mutants are the subagent's report only (not re-run). RULEBOOK §9 gained Q25 (`cJSON_Compare` exponential in
+  depth, measured; driver skips Compare above depth 14).
+- **Tells us:** the array-index digit mutant passes all 21 upstream test programs, so the corpus is the only
+  guard there and only 2 inputs cover it; extend with pointer round-trips for every digit. c2rust needed 5 hand
+  tweaks (`lib.rs`/`Cargo.toml`, `f128` -> `f64`, `#[linkage]`, `#[no_mangle]` on inline `tolower`, 27 fns + 2 statics
+  `pub` under `test-internals`): these become Stage 1 work for ticket 04.
+- **Skill bugs:** (a) `mv` of `harness/e4_cjson_judge_sensitivity.py` into `pilots/cjson/experiments/` was denied
+  for the governor, and Write to that directory was refused for the subagent, so the script stays in `harness/`;
+  its path fallback works from both places. (b) A global `Read(./build/**)` rule denies Bash commands that contain
+  a `build/` path: the subagent had to avoid them. (c) Spend: the row counts 26,874 output tokens for a window with a
+  subagent that reported 247,849 total tokens; subagent output may be undercounted (see entry 26). E4 total in
+  `SPEND.md`: 115,691 output tokens (budget gate 490k not reached).
+- **Next:** ticket 03 (stress test): the Skill defines it for LLM translation (2 independent translations per hard
+  Part, diff the decisions). With c2rust the diff is of polished Parts; decide whether the stress test is still needed.
