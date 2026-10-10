@@ -18,7 +18,9 @@ Paths below are relative to the repository root; `<ws>` is the Pilot workspace (
 Run `python3 -I $S/workqueue.py --parts <ws>/migration/parts.tsv verify` and `status` (and the same for
 `parts-stage2.tsv` if it exists), read `<ws>/migration/RUN-NOTES.md`, then take the **first** branch
 below whose condition holds. `verify` failing means a Part marked `done` has no file or no commit: run
-`verify --fix` and continue.
+`verify --fix` and continue. `verify` also needs a gate-pass row for every `done` Part in
+`<ws>/migration/gate-passed.tsv` (written by `gate.py`); for Parts accepted before that file existed pass
+`--no-gate-record` (jsmn Stage 1).
 
 ### 1. `<ws>/migration/` is absent → Stage 0 (map and rules)
 1. `make spend-now`; note the timestamp.
