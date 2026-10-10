@@ -17,7 +17,6 @@ STUB_ARGS = {
     "inventory.py": [".", "--lang", "c"],
     "tier.py": ["inv.tsv", "order.txt"],
     "tm.py": ["build"],
-    "workqueue.py": ["status"],
 }
 STUBS = sorted(STUB_ARGS)
 
