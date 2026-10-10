@@ -14,6 +14,7 @@ Pilots (`pilots/`) first. Vocabulary: `CONTEXT.md`. Plan: `PLAN.md`. Decisions: 
 | `make fmt`                                         | auto-format and auto-fix Python                                                                                                                       |
 | `make pilot-jsmn`                                  | gate the jsmn Part over all 4 feature sets: cargo check/test, original C tests via staticlib, differential harness (`STAGE=2` adds clippy/fmt/unsafe) |
 | `make pilot-jsmn-snapshot`                         | record HEAD and baseline before editing the Part                                                                                                      |
+| `make tickets [PILOT=cjson] [TASKS=1]`             | ticket status of a run; `TASKS=1` also lists every task as `[x]` / `[ ]` (`tickets.py status --tasks`)                                                |
 | `make spend-now`                                   | print a UTC timestamp; note it at the start of a phase                                                                                                |
 | `make spend PHASE=E1 SINCE=<timestamp> NOTE="..."` | sum Claude Code token usage since then into `SPEND.md`                                                                                                |
 

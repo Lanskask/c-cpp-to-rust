@@ -43,3 +43,16 @@ def test_ready_marks_first_unblocked_todo(tmp_path: Path, capsys) -> None:  # no
 
 def test_status_without_tickets_fails(tmp_path: Path) -> None:
     assert run(tmp_path / "none", "status") == 1
+
+
+def test_status_tasks_lists_checkboxes(tmp_path: Path, capsys) -> None:  # noqa: ANN001
+    ws = tmp_path / "p"
+    run(ws, "init")
+    f = next((ws / "migration" / "tickets").glob("01-*.md"))
+    f.write_text(f.read_text().replace("- [ ] inventory.tsv", "- [x] inventory.tsv", 1))
+    run(ws, "mark", "01", "done")
+    run(ws, "status", "--tasks")
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "Ticket_01 done Mapping (Stage 0) (p)"
+    assert lines[1].startswith("  - [x] inventory.tsv") and lines[2].startswith("  - [ ] every config-macro")
+    assert any(ln == "Ticket_02 todo READY Stage 1 Judge (p)" for ln in lines)

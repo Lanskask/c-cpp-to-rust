@@ -5,8 +5,9 @@ A run on a Pilot is seven tickets in a chain (tracer-bullet phases, each demoabl
   01 Mapping (Stage 0) -> 02 Stage 1 Judge -> 03 Stress test -> 04 Stage 1 Faithful port ->
   05 Stage 2 Judge -> 06 Stage 2 Idiomatic pass -> 07 Report.
 `init` writes the files (refuses to overwrite unless `--force`); `status` prints each ticket's state and whether
-it is unblocked; `mark NN <todo|in_progress|done>` changes the `**Status:**` line and refuses `done`/`in_progress`
-while a blocker is not done. The governor reads `status` at the start of every session, next to `parts.tsv`.
+it is unblocked, and `status --tasks` also lists every checkbox task under its ticket (`[x]` done, `[ ]` open);
+`mark NN <todo|in_progress|done>` changes the `**Status:**` line and refuses `done`/`in_progress` while a blocker
+is not done. The governor reads `status` at the start of every session, next to `parts.tsv`.
 Exit code 0 on success, 1 on failure.
 """
 
@@ -158,10 +159,23 @@ def cmd_init(ws: Path, force: bool) -> int:
     return 0
 
 
-def cmd_status(ws: Path) -> int:
+def title_and_tasks(path: Path) -> tuple[str, list[str]]:
+    text = path.read_text()
+    m = re.search(r"^# \d{2}: (.*)$", text, re.M)
+    tasks = [f"  - [{c.lower()}] {t}" for c, t in re.findall(r"^- \[([ xX])\] (.*)$", text, re.M)]
+    return (m.group(1) if m else path.stem[3:]), tasks
+
+
+def cmd_status(ws: Path, with_tasks: bool = False) -> int:
     tickets = load(ws)
     state = {n: read_state(p) for n, p in tickets.items()}
     for n, p in tickets.items():
+        if with_tasks:
+            title, tasks = title_and_tasks(p)
+            ready = state[n] == "todo" and all(state.get(b) == "done" for b in blockers(p))
+            print(f"Ticket_{n} {state[n]}{' READY' if ready else ''} {title}")
+            print("\n".join(tasks))
+            continue
         free = all(state.get(b) == "done" for b in blockers(p))
         mark = "READY" if state[n] == "todo" and free else ""
         print(f"{n}\t{state[n]}\t{mark}\t{p.stem[3:]}")
@@ -190,7 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     i = sub.add_parser("init")
     i.add_argument("--force", action="store_true")
-    sub.add_parser("status")
+    st = sub.add_parser("status")
+    st.add_argument("--tasks", action="store_true", help="also list each ticket's checkbox tasks with [x] / [ ]")
     m = sub.add_parser("mark")
     m.add_argument("num")
     m.add_argument("state", choices=STATES)
@@ -199,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "init":
             return cmd_init(args.ws, args.force)
         if args.cmd == "status":
-            return cmd_status(args.ws)
+            return cmd_status(args.ws, args.tasks)
         return cmd_mark(args.ws, args.num, args.state)
     except (ValueError, OSError) as e:
         print(f"tickets: {e}", file=sys.stderr)

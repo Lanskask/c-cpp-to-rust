@@ -26,6 +26,10 @@ fmt:              ## auto-format Python
 
 check: test lint  ## everything CI would run
 
+PILOT ?= cjson
+tickets:          ## ticket status of a run: make tickets [PILOT=cjson] [TASKS=1 lists every task with [x]/[ ]]
+	@python3 -I $(SCRIPTS)/tickets.py --ws pilots/$(PILOT) status $(if $(TASKS),--tasks)
+
 spend-now:        ## print a UTC timestamp to mark the start of a phase
 	@python3 -I $(SCRIPTS)/spend.py now
 

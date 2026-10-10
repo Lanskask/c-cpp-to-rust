@@ -24,7 +24,8 @@ below whose condition holds. `verify` failing means a Part marked `done` has no 
 
 ### 0. Tickets (every session)
 
-`python3 -I $S/tickets.py --ws <ws> status`. If `<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws>
+`python3 -I $S/tickets.py --ws <ws> status` (add `--tasks` for every checkbox task; tick a task `[x]` in the ticket file
+when its criterion is met, before `mark NN done`). If `<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws>
 init` first: it writes the seven tickets of the run (Mapping, Stage 1 Judge, stress test, Stage 1 Faithful port,
 Stage 2 Judge, Stage 2 Idiomatic pass, report) with their blocking edges. Work the `READY` ticket, `tickets.py mark NN
 in_progress` when you start it and `mark NN done` when its acceptance list holds. The ticket state and `parts.tsv`

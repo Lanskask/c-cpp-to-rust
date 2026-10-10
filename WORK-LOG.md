@@ -459,3 +459,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   (line 31). `Edit(experiments/**)` in `assets/settings.json` denied my fix, so I ran a temporary patched copy (deleted
   afterwards). The user must change `build` to `work` on that line.
 - **Next:** ticket 03 decision (user), then `tickets.py mark 04 in_progress` and the guard proof.
+
+## 31. `tickets.py status --tasks` and `make tickets`
+- **Date:** 2026-10-10
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's request
+- **Done:** `status --tasks` prints `Ticket_NN <state> [READY] <title>` with each `- [ ]`/`- [x]` task under it;
+  plain `status` unchanged. `make tickets [PILOT=cjson] [TASKS=1]` wraps it. Test added; pytest 92 passed, 1 skipped;
+  `make lint` clean. SKILL.md step 0 tells the session to tick criteria before `mark NN done`.
+- **Tells us:** cJSON tickets 01 and 02 are `done` with every task still `[ ]`: the session marks status but never
+  ticks criteria, so `--tasks` shows done tickets with open boxes until it follows the new line.
+- **Next:** none needed; the cJSON session picks it up at its next `status`.
