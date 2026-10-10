@@ -21,6 +21,7 @@ Exit code 0 on success, 1 on failure.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import shlex
@@ -33,6 +34,8 @@ from pathlib import Path
 C_EXT = {".c", ".h"}
 CPP_EXT = {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".inl"}
 SKIP_DIRS = {".git", "build", "target", "node_modules"}
+# vendored or non-library directories that never become Parts (extend per project with --exclude)
+VENDORED_DIRS = {"fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity"}
 KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "else", "do", "catch", "defined"}
 TAG_PATTERNS: dict[str, re.Pattern[str]] = {
     "virtual": re.compile(r"\bvirtual\b"),
@@ -236,7 +239,8 @@ def scan_regex(text: str, rel: str, lang: str = "c") -> list[Symbol]:
         if not h:
             return None
         m = re.match(r"^(?:typedef\s+)?(?:\w+\s+)*?(struct|class|union|enum)\s+(?:class\s+)?(\w+)", h)
-        if m and "(" not in h.split(m.group(2))[0]:
+        # `static enum E f(void) {` is a function returning an enum, not the definition of E (found on cJSON)
+        if m and "(" not in h.split(m.group(2))[0] and "(" not in h[m.end() :]:
             return ("enum" if m.group(1) == "enum" else "record", m.group(2))
         if re.match(r"^(typedef\s+)?(struct|union|enum|class)\b", h):
             return ("enum" if "enum" in h.split()[:2] else "record", "")  # anonymous: name from trailing typedef
@@ -387,9 +391,15 @@ def scan_clang(db_entry: dict[str, object], root: Path, lang: str = "c") -> list
     return syms
 
 
-def source_files(root: Path, lang: str) -> list[Path]:
+def source_files(root: Path, lang: str, exclude: tuple[str, ...] = ()) -> list[Path]:
     exts = C_EXT if lang == "c" else CPP_EXT
-    return sorted(p for p in root.rglob("*") if p.suffix in exts and p.is_file() and not (SKIP_DIRS & set(p.parts)))
+    skip = SKIP_DIRS | VENDORED_DIRS
+
+    def kept(p: Path) -> bool:
+        rel = p.relative_to(root)
+        return not (skip & set(rel.parts)) and not any(fnmatch.fnmatch(str(rel), g) for g in exclude)
+
+    return sorted(p for p in root.rglob("*") if p.suffix in exts and p.is_file() and kept(p))
 
 
 def overlaps(a: Symbol, b: Symbol) -> bool:
@@ -413,7 +423,7 @@ def merge_regex(clang_syms: list[Symbol], rx: list[Symbol]) -> list[Symbol]:
     return macros + sorted([*clang_syms, *extra], key=lambda s: (s.start, s.end))
 
 
-def inventory(root: Path, lang: str, db: Path | None) -> tuple[list[Symbol], str]:
+def inventory(root: Path, lang: str, db: Path | None, exclude: tuple[str, ...] = ()) -> tuple[list[Symbol], str]:
     syms: list[Symbol] = []
     engine = "regex"
     entries: dict[str, dict[str, object]] = {}
@@ -421,7 +431,7 @@ def inventory(root: Path, lang: str, db: Path | None) -> tuple[list[Symbol], str
         for e in json.loads(db.read_text()):
             entries[str(Path(str(e["directory"])) / str(e["file"]))] = e
     used_clang = False
-    for f in source_files(root, lang):
+    for f in source_files(root, lang, exclude):
         rel = str(f.relative_to(root))
         entry = entries.get(str(f.resolve())) or entries.get(str(f))
         got = scan_clang(entry, root, lang) if entry else None
@@ -443,6 +453,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lang", choices=["c", "cpp"], required=True)
     p.add_argument("--compile-commands", help="path to compile_commands.json")
     p.add_argument("--out", default="migration/inventory.tsv")
+    p.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="source-root-relative glob to leave out (repeatable); vendored dirs like fuzzing/ and unity/ are "
+        "always skipped",
+    )
     return p
 
 
@@ -454,7 +472,9 @@ def main(argv: list[str] | None = None) -> int:
     if not root.is_dir():
         print(f"inventory: {root} is not a directory", file=sys.stderr)
         return 1
-    syms, engine = inventory(root, args.lang, Path(args.compile_commands) if args.compile_commands else None)
+    syms, engine = inventory(
+        root, args.lang, Path(args.compile_commands) if args.compile_commands else None, tuple(args.exclude)
+    )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     rows = [f"{s.name}\t{s.kind}\t{s.file}\t{s.start}-{s.end}\t{','.join(dict.fromkeys(s.tags))}" for s in syms]

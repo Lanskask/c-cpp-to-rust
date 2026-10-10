@@ -29,7 +29,7 @@ JUDGMENT = {
     "fnptr", "bitfield", "float-format", "strtod", "qsort", "asm", "signal", "thread",
 }  # fmt: skip
 # `ctype` and `long` stay mechanical: their idiom rows (L4-L6, T1) are plain mappings
-TEST_DIRS = {"test", "tests", "unittest", "unittests"}
+TEST_DIRS = {"test", "tests", "unittest", "unittests", "fuzz", "fuzzing"}
 EXAMPLE_DIRS = {"example", "examples", "sample", "samples", "demo", "bench", "benchmark"}
 
 

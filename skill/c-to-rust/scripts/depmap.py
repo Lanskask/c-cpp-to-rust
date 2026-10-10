@@ -29,6 +29,8 @@ INHERIT = re.compile(r"\b(?:class|struct)\s+(\w+)\s*(?:final\s*)?:\s*([^{;]+)\{"
 IDENT = re.compile(r"[A-Za-z_]\w*")
 CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 TEST_DIRS = {"test", "tests", "unittest", "unittests"}
+# same list as inventory.py: vendored or non-library directories never take part in the graph
+VENDORED_DIRS = {"fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity", ".git", "build"}
 
 Sym = tuple[str, str, str, int, int, str]  # name, kind, file, start, end, tags
 
@@ -182,7 +184,9 @@ def build(root: Path, syms: list[Sym]) -> tuple[list[tuple[str, str, str]], list
     files = {s[2] for s in syms} | {
         str(p.relative_to(root))
         for p in root.rglob("*")
-        if p.suffix in {".h", ".hpp", ".c", ".cc", ".cpp"} and p.is_file()
+        if p.suffix in {".h", ".hpp", ".c", ".cc", ".cpp"}
+        and p.is_file()
+        and not (VENDORED_DIRS & set(p.relative_to(root).parts))
     }
     edges = include_edges(root, files) + symbol_edges(root, syms)
     parts = {part_of(f) for f in {s[2] for s in syms}}

@@ -97,3 +97,28 @@ def test_tm_build_and_search(tmp_path: Path) -> None:
     assert "error" in kinds
     assert tm.search(db, "negative offset")[0][0] == "note"
     assert tm.search(db, "!!!") == []
+
+
+def test_inventory_skips_vendored_dirs_and_exclude_globs(tmp_path: Path) -> None:
+    import inventory
+
+    src = tmp_path / "src"
+    for rel in ("lib.c", "fuzzing/fuzz.c", "tests/unity/unity.c", "gen/skip_me.c", "keep/ok.c"):
+        f = src / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("int f(void) { return 0; }\n")
+    names = {str(p.relative_to(src)) for p in inventory.source_files(src, "c", ("gen/*",))}
+    assert names == {"lib.c", "keep/ok.c"}
+
+
+def test_function_returning_an_enum_is_a_function_not_an_enum(tmp_path: Path) -> None:
+    import inventory
+
+    code = (
+        "enum op { ADD, REMOVE };\n"
+        "static enum op decode(const char *s)\n{\n    if (s) { return ADD; }\n    return REMOVE;\n}\n"
+        "int after(void)\n{\n    return 1;\n}\n"
+    )
+    syms = {(s.name, s.kind) for s in inventory.scan_regex(code, "a.c")}
+    assert ("decode", "function") in syms and ("after", "function") in syms and ("op", "enum") in syms
+    assert not any(n in ("if", "return") for n, _ in syms)

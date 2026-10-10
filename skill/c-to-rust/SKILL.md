@@ -32,7 +32,9 @@ are the resume points; commit ticket changes with the step they belong to.
 
 ### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
 1. `make spend-now`; note the timestamp.
-2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] --out <ws>/migration/inventory.tsv`
+2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] [--exclude GLOB]... --out <ws>/migration/inventory.tsv`
+   (vendored directories such as `fuzzing/`, `unity/`, `vendor/`, `third_party/` are skipped; add `--exclude` globs for
+   anything else that is not library code. Test and example files are never Parts.)
 3. `depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`
 4. `tier.py <ws>/migration/inventory.tsv <ws>/migration/order.txt --out <ws>/migration/parts.tsv`
 5. Build the Judge and prove it can fail: `references/judge.md`.
@@ -54,6 +56,8 @@ Done when the rulebook status line says `stress-tested (<date>)` and RUN-NOTES r
 1. Install deny-rules: the fan-out session is started from the repo root with
    `claude --settings skill/c-to-rust/assets/settings.json`. **Verify** them first: an `Edit` of
    `<ws>/migration/RULEBOOK.md` must be refused. If it is not refused, stop and tell the user.
+   A crate with several Parts needs a `rust/src/lib.rs` that declares them (`pub mod <stem>;`) and the cargo features of
+   rulebook §3, written by the governor before the first batch (`tier.py --crate-root-part NAME` makes one Part the root).
 2. `workqueue.py next --batch N`; for each Part run the loop in `references/stage1-prompt.md`
    (snapshot → implementer → gate → review with `references/review-prompt.md` → commit → mark).
    Parts with no unfinished deps may run in parallel; each Part writes only its own `target_path`.
