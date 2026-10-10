@@ -32,7 +32,7 @@ EXTRA = [
     b'"\\u12\x00"', b'["\\u1\x00]',  # G-S2-2 (Q1): the `\u` hex loop stops on NUL (C: PART)
     b'{}:}', b'[]:]',  # G-S2-3 (Q8): `}`/`]` with a closed root and toksuper != -1
     b'"a":,', b'1:,',  # G-S2-4 (Q8): `,` with no open container and a non-container toksuper
-    b'[[],[]]', b'{"a":[1,2],"b":{}}', b'[1,[2,[3]]]',  # G-S2-5 / RP14 (Q9): phase 6, num_tokens below toknext
+    b'[[]]', b'[[],[]]', b'{"a":[1,2],"b":{}}', b'[1,[2,[3]]]',  # G-S2-5 / RP14 (Q9): phase 6, num_tokens below toknext
 ]
 
 
