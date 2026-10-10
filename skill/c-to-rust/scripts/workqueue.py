@@ -3,7 +3,11 @@
 
 `parts.tsv` columns: part_id kind source_paths target_path tier deps state attempts model last_error commit updated.
 `deps` is a comma-separated list of part_ids. Paths are relative to the workspace root (parent of `migration/`).
-A Part is `done` only if its target file is non-empty and its commit exists (`verify`).
+A Part is `done` only if its target file is non-empty, its commit exists and touched the target, and the gate
+recorded a pass for it (`migration/gate-passed.tsv`, written by gate.py; `verify --no-gate-record` skips that
+last check for Parts accepted before the record existed). A record taken after the commit also counts if the
+target is unchanged between the commit and the recorded HEAD. A `stubbed` Part must contain `todo!()` and have a
+`## <part>` section in RUN-NOTES.md (`verify`).
 After MAX_ATTEMPTS failed attempts a Part becomes `stubbed` (PLAN.md §4 retry policy).
 Exit code 0 on success, 1 on failure (verify: 1 if any done Part is not really done).
 """
@@ -11,6 +15,7 @@ Exit code 0 on success, 1 on failure (verify: 1 if any done Part is not really d
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import tempfile
@@ -97,15 +102,79 @@ def output_nonempty(path: Path) -> bool:
     return path.is_dir() and any(p.is_file() and p.stat().st_size > 0 for p in path.rglob("*"))
 
 
-def verify(rows: list[Row], root: Path) -> list[str]:
+def stage_of(parts: Path) -> int:
+    m = re.search(r"stage(\d+)", parts.name)
+    return int(m.group(1)) if m else 1
+
+
+def git_is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    r = subprocess.run(
+        ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant], capture_output=True
+    )
+    return r.returncode == 0
+
+
+def commit_touches(root: Path, commit: str, target: str) -> bool:
+    r = subprocess.run(
+        ["git", "-C", str(root), "show", "--name-only", "--format=", commit, "--", target],
+        capture_output=True,
+        text=True,
+    )
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def unchanged_since(root: Path, commit: str, head: str, target: str) -> bool:
+    """`target` has the same content at `head` as at `commit` (a gate re-run after the fact still counts)."""
+    r = subprocess.run(["git", "-C", str(root), "diff", "--quiet", commit, head, "--", target], capture_output=True)
+    return r.returncode == 0
+
+
+def gate_records(root: Path) -> list[dict[str, str]]:
+    path = root / "migration" / "gate-passed.tsv"
+    if not path.is_file():
+        return []
+    lines = [ln.split("\t") for ln in path.read_text().splitlines() if ln.strip()]
+    return [dict(zip(lines[0], cells, strict=False)) for cells in lines[1:]]
+
+
+def verify(rows: list[Row], root: Path, stage: int = 1, require_gate_record: bool = True) -> list[str]:
     problems: list[str] = []
+    records = gate_records(root)
     for r in rows:
+        part = r["part_id"]
+        if r["state"] == "stubbed":
+            target = root / r["target_path"]
+            if not target.is_file() or "todo!()" not in target.read_text():
+                problems.append(f"{part}: stubbed but {r['target_path']} has no todo!()")
+            notes = root / "migration" / "RUN-NOTES.md"
+            if not notes.is_file() or not re.search(rf"^## {re.escape(part)}\b", notes.read_text(), re.M):
+                problems.append(f"{part}: stubbed but RUN-NOTES.md has no '## {part}' section")
+            continue
         if r["state"] != "done":
             continue
         if not output_nonempty(root / r["target_path"]):
-            problems.append(f"{r['part_id']}: target {r['target_path']} missing or empty")
+            problems.append(f"{part}: target {r['target_path']} missing or empty")
         if not r["commit"] or not git_has_commit(root, r["commit"]):
-            problems.append(f"{r['part_id']}: commit {r['commit'] or '(none)'} not found")
+            problems.append(f"{part}: commit {r['commit'] or '(none)'} not found")
+            continue
+        if not commit_touches(root, r["commit"], r["target_path"]):
+            problems.append(f"{part}: commit {r['commit'][:8]} did not touch {r['target_path']}")
+        if require_gate_record:
+            mine = [x for x in records if x.get("part") == part and x.get("stage") == str(stage)]
+            if not any(
+                x.get("head")
+                and (
+                    git_is_ancestor(root, x["head"], r["commit"])
+                    or (
+                        git_is_ancestor(root, r["commit"], x["head"])
+                        and unchanged_since(root, r["commit"], x["head"], r["target_path"])
+                    )
+                )
+                for x in mine
+            ):
+                problems.append(
+                    f"{part}: no gate pass recorded for stage {stage} at or before commit {r['commit'][:8]}"
+                )
     return problems
 
 
@@ -122,6 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--commit")
     m.add_argument("--error")
     v = sub.add_parser("verify")
+    v.add_argument(
+        "--no-gate-record", action="store_true", help="do not require migration/gate-passed.tsv (legacy Parts)"
+    )
     v.add_argument("--fix", action="store_true", help="reset Parts that fail verification to todo")
     return p
 
@@ -146,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"workqueue: {row['part_id']} -> {row['state']} (attempts {row['attempts']})", file=sys.stderr)
         elif args.cmd == "verify":
             root = path.resolve().parent.parent
-            problems = verify(rows, root)
+            problems = verify(rows, root, stage_of(path), not args.no_gate_record)
             for pr in problems:
                 print(pr)
             if problems and args.fix:

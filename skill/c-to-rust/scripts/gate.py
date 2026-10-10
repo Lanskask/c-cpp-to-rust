@@ -12,6 +12,8 @@ regression, except at Stage 2 the Judge checks `test` and `harness`, which alway
 Rollback is path-scoped (decision 17): `git checkout <HEAD> -- <path>` plus `git clean` of that path, for the
 Part's target_path and every `--also PATH` (relative to the workspace root, e.g. rust/tests/adapter/mod.rs).
 Cargo is called with `--manifest-path` (decision 25); pass `--toolchain nightly-2023-04-15` if needed.
+A PASS appends `part, stage, head, features, time` to `migration/gate-passed.tsv`; `workqueue.py verify`
+requires such a row for every `done` Part (decision 7: done = gate passed and commit exists).
 Output: TSV lines `check<TAB>features<TAB>pass|fail|skip<TAB>detail`, summary on stderr. Exit 0 pass, 1 fail.
 """
 
@@ -24,6 +26,7 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 # At Stage 2 the Judge checks are never excused by the baseline: a snapshot taken while the Judge already
@@ -195,6 +198,23 @@ def git(root: Path, *args: str) -> str:
     return r.stdout.strip()
 
 
+def record_pass(root: Path, part: str, stage: int, features: list[str]) -> None:
+    """Append one row to migration/gate-passed.tsv (tracked, unlike gate/*.json) for `workqueue.py verify`."""
+    path = root / "migration" / "gate-passed.tsv"
+    header = "part\tstage\thead\tfeatures\ttime\n"
+    if not path.is_file():
+        path.write_text(header)
+    row = [
+        part,
+        str(stage),
+        git(root, "rev-parse", "HEAD"),
+        "|".join(features),
+        datetime.now(UTC).isoformat(timespec="seconds"),
+    ]
+    with path.open("a") as f:
+        f.write("\t".join(row) + "\n")
+
+
 def rollback(root: Path, head: str, paths: list[str]) -> None:
     """Restore every path (target plus `--also` paths) to `head` and delete untracked files under them."""
     for path in paths:
@@ -265,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gate: FAIL {args.part}: {first.key}: {first.detail} ({action})", file=sys.stderr)
         return 1
     ok = sum(r.status == "pass" for r in results)
+    record_pass(root, args.part, args.stage, feature_sets)
     print(f"gate: PASS {args.part} ({ok} checks passed, stage {args.stage})", file=sys.stderr)
     return 0
 

@@ -57,6 +57,6 @@ def test_verify_checks_output_and_commit(tmp_path: Path) -> None:
     git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x")
     head = git("rev-parse", "HEAD").strip()
     rows = [row("a", "done", commit=head), row("b", "done", commit=head), row("c", "done", commit="deadbeef")]
-    problems = wq.verify(rows, tmp_path)
+    problems = wq.verify(rows, tmp_path, require_gate_record=False)
     assert len(problems) == 3  # b empty, c missing file, c missing commit
     assert not any(p.startswith("a:") for p in problems)
