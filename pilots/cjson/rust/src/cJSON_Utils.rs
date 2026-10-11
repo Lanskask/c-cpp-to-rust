@@ -83,6 +83,7 @@ fn malloc_string(text: &[u8], size: usize) -> Vec<u8> {
 }
 
 /// `compare_strings` (`cJSON_Utils.c:60-85`): NULL pointers are never equal; the sign of the difference.
+// QUIRK(port): Q2
 fn compare_strings(string1: Option<&[u8]>, string2: Option<&[u8]>, case_sensitive: bool) -> i32 {
     let (Some(s1), Some(s2)) = (string1, string2) else {
         return 1;
@@ -376,6 +377,7 @@ fn detach_path_in(
 /// `sort_list` (`cJSON_Utils.c:507-602`): merge sort over the `next`/`prev` links, as C does, so the
 /// first element's `prev` is left as the merge produced it (Q18).
 // QUIRK(port): Q18
+// DEVIATION(port): D10
 fn sort_list(store: &mut Store, list: Option<NodeId>, case_sensitive: bool) -> Option<NodeId> {
     let key_less = |store: &Store, a: Option<NodeId>, b: Option<NodeId>| -> bool {
         compare_strings(store.key_bytes(a), store.key_bytes(b), case_sensitive) < 0
@@ -476,6 +478,7 @@ fn different(a: Option<&[u8]>, b: Option<&[u8]>) -> bool {
 /// `compare_json` (`cJSON_Utils.c:614-700`): sorts the objects it compares (Q18).
 // QUIRK(port): Q17
 // QUIRK(port): Q18
+// DEVIATION(port): D10
 fn compare_json(
     store: &mut Store,
     a: Option<NodeId>,
@@ -594,6 +597,7 @@ enum PatchOperation {
 }
 
 /// `decode_patch_operation` (`cJSON_Utils.c:752-794`).
+// DEVIATION(port): D22
 fn decode_patch_operation(
     store: &Store,
     patch: Option<NodeId>,
@@ -703,6 +707,7 @@ fn apply_patch_in(
     }
 
     // special case for replacing the root
+    // DEVIATION(port): D22
     if path_text.as_deref().is_some_and(|p| at(p, 0) == 0) {
         if opcode == PatchOperation::Remove {
             let invalid = Node::zeroed();
@@ -952,6 +957,7 @@ fn key_copy(store: &Store, id: Option<NodeId>) -> Option<Vec<u8>> {
 
 /// `create_patches` (`cJSON_Utils.c:1142-1271`).
 // QUIRK(port): Q22
+// DEVIATION(port): D10
 fn create_patches(
     store: &mut Store,
     patches: Option<NodeId>,
@@ -992,8 +998,8 @@ fn create_patches(
             // room for a 64 bit integer: log10(2^64) = 20
             let size = path.len() + 20 + 2;
             // C writes through `new_path` unchecked only at cJSON_Utils.c:1188 and :1203 (D2: the sprintf of an
-            // element path and of a leftover index): a failed
-            // allocation aborts at the first of those writes, not here.
+            // element path and of a leftover index): a failed allocation aborts at the first of those writes,
+            // not here.
             let new_path_ok = alloc_event(size);
             // the `sprintf` of the first write: abort if the allocation failed (D2)
             let abort_if_unallocated = || {
@@ -1051,6 +1057,7 @@ fn create_patches(
             }
         }
         flags::OBJECT => {
+            // QUIRK(port): Q18
             sort_object_impl(store, from, case_sensitive);
             sort_object_impl(store, to, case_sensitive);
             let mut from_child = store.child_of(from);
@@ -1152,6 +1159,7 @@ pub fn generate_patches_case_sensitive(
 }
 
 /// `merge_patch` (`cJSON_Utils.c:1304-1382`).
+// DEVIATION(port): D10
 fn merge_patch_impl(
     store: &mut Store,
     target: Option<NodeId>,
@@ -1218,6 +1226,7 @@ pub fn merge_patch_case_sensitive(
 
 /// `generate_merge_patch` (`cJSON_Utils.c:1384-1478`).
 // QUIRK(port): Q21
+// DEVIATION(port): D10
 fn generate_merge_patch_impl(
     store: &mut Store,
     from: Option<NodeId>,
@@ -1231,6 +1240,7 @@ fn generate_merge_patch_impl(
     if !store.is_object(to) || !store.is_object(from) {
         return store.duplicate(to, true);
     }
+    // QUIRK(port): Q18
     sort_object_impl(store, from, case_sensitive);
     sort_object_impl(store, to, case_sensitive);
     let mut from_child = store.child_of(from);
@@ -1304,4 +1314,4 @@ pub fn generate_merge_patch_case_sensitive(
     generate_merge_patch_impl(store, from, to, true)
 }
 
-// PORT STATUS: stage=2 confidence=medium todos=0 deviations=D2,D12,D19,D20,D22
+// PORT STATUS: stage=2 confidence=medium todos=0 deviations=D2,D10,D12,D19,D20,D22

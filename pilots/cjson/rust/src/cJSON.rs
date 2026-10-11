@@ -275,7 +275,7 @@ impl Store {
                 };
             }
         }
-        // 2^32 live nodes would need 64 GiB of slots: the index cannot overflow in any run.
+        // 2^32 slots (live plus retired) would need 64 GiB: the index cannot overflow in any run.
         let index = self.slots.len() as u32;
         self.slots.push(Slot {
             generation: 0,
@@ -407,6 +407,7 @@ impl Store {
     }
 
     // DEVIATION(port): D10
+    // DEVIATION(port): D11
     fn delete_list(&mut self, start: NodeId) {
         enum Work {
             List(NodeId),
@@ -609,6 +610,7 @@ impl Store {
     }
 
     /// `get_array_item` (`cJSON.c:1932-1948`).
+    // DEVIATION(port): D17
     pub fn get_array_item(&self, array: Option<NodeId>, index: usize) -> Option<NodeId> {
         self.n(array)?;
         let mut current = self.child_of(array);
@@ -691,6 +693,7 @@ impl Store {
         self.create_kind(NULL)
     }
 
+    // QUIRK(port): Q5
     pub fn create_true(&mut self) -> Option<NodeId> {
         self.create_kind(TRUE)
     }
@@ -699,6 +702,7 @@ impl Store {
         self.create_kind(FALSE)
     }
 
+    // QUIRK(port): Q5
     pub fn create_bool(&mut self, boolean: bool) -> Option<NodeId> {
         self.create_kind(if boolean { TRUE } else { FALSE })
     }
@@ -927,6 +931,7 @@ impl Store {
     }
 
     /// `cJSON_AddItemToObject`: the key is copied.
+    // DEVIATION(port): D7
     pub fn add_item_to_object(
         &mut self,
         object: Option<NodeId>,
@@ -1532,6 +1537,8 @@ impl Store {
     /// `cJSON_Compare` (`cJSON.c:3066-3190`).
     // QUIRK(port): Q17
     // QUIRK(port): Q25
+    // DEVIATION(port): D10
+    // DEVIATION(port): D11
     pub fn compare(&self, a: Option<NodeId>, b: Option<NodeId>, case_sensitive: bool) -> bool {
         let (Some(na), Some(nb)) = (self.n(a), self.n(b)) else {
             return false;
@@ -1600,6 +1607,7 @@ impl Store {
     /// `strlen + 1` (Q13). NULL input leaves the error position unchanged (Q26).
     // QUIRK(port): Q13
     // QUIRK(port): Q26
+    // DEVIATION(port): D8
     pub fn parse_with_opts(
         &mut self,
         value: Option<&[u8]>,
@@ -1617,6 +1625,7 @@ impl Store {
     }
 
     /// `cJSON_ParseWithLength`.
+    // DEVIATION(port): D8
     pub fn parse_with_length(
         &mut self,
         value: Option<&[u8]>,
@@ -1634,6 +1643,7 @@ impl Store {
         buffer_length: usize,
         require_null_terminated: bool,
     ) -> Result<Parsed, ParseError> {
+        // QUIRK(port): Q26
         ERROR_OFFSET.with(|e| e.set(None));
         let Some(content) = value else {
             return Err(ParseError::NoInput);
@@ -1647,6 +1657,8 @@ impl Store {
 
     /// The body of `cJSON_ParseWithLengthOpts` after the NULL check: `length` bytes of `content` are counted,
     /// bytes past the end of the slice read as NUL.
+    // QUIRK(port): Q12
+    // QUIRK(port): Q13
     fn parse_counted(
         &mut self,
         content: &[u8],
@@ -1703,6 +1715,7 @@ impl Store {
 
     /// `print` (`cJSON.c:1239-1304`): 256-byte buffer, shrunk to `offset + 1` at the end.
     // QUIRK(port): Q6
+    // DEVIATION(port): D16
     fn print_item(&self, item: Option<NodeId>, format: bool) -> Option<Printed> {
         const DEFAULT_BUFFER_SIZE: usize = 256;
         if !alloc_event(DEFAULT_BUFFER_SIZE) {
@@ -1746,6 +1759,8 @@ impl Store {
     }
 
     /// `cJSON_PrintBuffered`: the buffer is returned as it is, not shrunk (Q6).
+    // QUIRK(port): Q6
+    // DEVIATION(port): D17
     pub fn print_buffered(
         &self,
         item: Option<NodeId>,
@@ -1775,6 +1790,8 @@ impl Store {
 
     /// `cJSON_PrintPreallocated`: `buffer` is the caller's buffer of `length` bytes; the bytes written so far
     /// stay in it after a failure (Q6).
+    // QUIRK(port): Q6
+    // DEVIATION(port): D17
     pub fn print_preallocated(
         &self,
         item: Option<NodeId>,
@@ -1967,6 +1984,7 @@ struct PrintBuffer {
 impl PrintBuffer {
     /// `ensure` (`cJSON.c:490-573`): the write position for `needed` more bytes, growing as Q6 says.
     // QUIRK(port): Q6
+    // DEVIATION(port): D16
     fn ensure(&mut self, needed: usize) -> Option<usize> {
         self.buffer.as_ref()?;
         if self.length > 0 && self.offset >= self.length {
@@ -2026,6 +2044,7 @@ impl PrintBuffer {
     }
 
     /// `update_offset` (`cJSON.c:577-587`): advance by the `strlen` of what was written at the offset.
+    // DEVIATION(port): D16
     fn update_offset(&mut self) {
         let Some(buffer) = self.buffer.as_ref() else {
             return;
@@ -2038,6 +2057,7 @@ impl PrintBuffer {
 /// `print_number` (`cJSON.c:596-663`).
 // QUIRK(port): Q3
 // QUIRK(port): Q4
+// DEVIATION(port): D3
 fn print_number(valueint: i32, d: f64, out: &mut PrintBuffer) -> bool {
     let decimal_point = get_decimal_point();
     let mut text: Vec<u8> = if d.is_nan() || d.is_infinite() {
@@ -2718,4 +2738,4 @@ pub fn minify(json: &mut [u8]) {
     put(json, into, 0);
 }
 
-// PORT STATUS: stage=2 confidence=high todos=0 deviations=D1,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D17,D19,D21
+// PORT STATUS: stage=2 confidence=high todos=0 deviations=D1,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D16,D17,D19,D21
