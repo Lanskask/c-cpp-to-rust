@@ -1,1547 +1,1279 @@
-extern "C" {
-    fn __tolower(_: __darwin_ct_rune_t) -> __darwin_ct_rune_t;
-    fn memcpy(
-        __dst: *mut ::core::ffi::c_void,
-        __src: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> *mut ::core::ffi::c_void;
-    fn strcat(
-        __s1: *mut ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> *mut ::core::ffi::c_char;
-    fn strcmp(
-        __s1: *const ::core::ffi::c_char,
-        __s2: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
-    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
-    fn strrchr(
-        __s: *const ::core::ffi::c_char,
-        __c: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    fn sprintf(
-        _: *mut ::core::ffi::c_char,
-        _: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
-    fn fabs(_: ::core::ffi::c_double) -> ::core::ffi::c_double;
-    fn cJSON_Delete(item: *mut cJSON);
-    fn cJSON_GetObjectItem(object: *const cJSON, string: *const ::core::ffi::c_char) -> *mut cJSON;
-    fn cJSON_GetObjectItemCaseSensitive(
-        object: *const cJSON,
-        string: *const ::core::ffi::c_char,
-    ) -> *mut cJSON;
-    fn cJSON_IsNull(item: *const cJSON) -> cJSON_bool;
-    fn cJSON_IsString(item: *const cJSON) -> cJSON_bool;
-    fn cJSON_IsArray(item: *const cJSON) -> cJSON_bool;
-    fn cJSON_IsObject(item: *const cJSON) -> cJSON_bool;
-    fn cJSON_CreateNull() -> *mut cJSON;
-    fn cJSON_CreateString(string: *const ::core::ffi::c_char) -> *mut cJSON;
-    fn cJSON_CreateArray() -> *mut cJSON;
-    fn cJSON_CreateObject() -> *mut cJSON;
-    fn cJSON_AddItemToArray(array: *mut cJSON, item: *mut cJSON) -> cJSON_bool;
-    fn cJSON_AddItemToObject(
-        object: *mut cJSON,
-        string: *const ::core::ffi::c_char,
-        item: *mut cJSON,
-    ) -> cJSON_bool;
-    fn cJSON_DetachItemFromObject(
-        object: *mut cJSON,
-        string: *const ::core::ffi::c_char,
-    ) -> *mut cJSON;
-    fn cJSON_DetachItemFromObjectCaseSensitive(
-        object: *mut cJSON,
-        string: *const ::core::ffi::c_char,
-    ) -> *mut cJSON;
-    fn cJSON_DeleteItemFromObject(object: *mut cJSON, string: *const ::core::ffi::c_char);
-    fn cJSON_DeleteItemFromObjectCaseSensitive(
-        object: *mut cJSON,
-        string: *const ::core::ffi::c_char,
-    );
-    fn cJSON_Duplicate(item: *const cJSON, recurse: cJSON_bool) -> *mut cJSON;
-    fn cJSON_malloc(size: size_t) -> *mut ::core::ffi::c_void;
-    fn cJSON_free(object: *mut ::core::ffi::c_void);
+//! Idiomatic port (Stage 2) of `cJSON_Utils.c` @ 6d9f244: JSON Pointer, JSON Patch (RFC 6902), JSON Merge
+//! Patch (RFC 7396) and object sorting over the [`Store`] of the `cJSON` Part.
+
+use std::cmp::Ordering;
+
+use crate::cJSON::{
+    alloc_event, c_str, compare_double, flags, free_event, strdup, Node, NodeId, Printed, Store,
+    Text,
+};
+
+/// A JSON Patch status of `cJSONUtils_ApplyPatches` (`cJSON_Utils.c:807-1062`, Q23).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PatchError {
+    /// The patch list is not an array (1).
+    NotAnArray,
+    /// A `test` operation found a different value (1).
+    TestFailed,
+    /// No string `path` (2).
+    MissingPath,
+    /// No valid `op` (3).
+    BadOperation,
+    /// `move`/`copy` without a string `from` (4).
+    MissingFrom,
+    /// `from` does not exist (5).
+    FromNotFound,
+    /// `copy`/`move`: the value could not be duplicated (6).
+    DuplicateFailed,
+    /// `add`/`replace` without `value` (7).
+    MissingValue,
+    /// `add`/`replace`: the value could not be duplicated (8).
+    ValueDuplicateFailed,
+    /// The parent of `path` does not exist (9).
+    NoParent,
+    /// Array insert past the end (10).
+    InsertPastEnd,
+    /// Bad array index (11).
+    BadIndex,
+    /// `remove`/`replace` of a path that does not exist (13).
+    NothingToRemove,
 }
-pub type __darwin_ct_rune_t = ::core::ffi::c_int;
-pub type __darwin_size_t = usize;
-pub type size_t = __darwin_size_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct cJSON {
-    pub next: *mut cJSON,
-    pub prev: *mut cJSON,
-    pub child: *mut cJSON,
-    pub type_0: ::core::ffi::c_int,
-    pub valuestring: *mut ::core::ffi::c_char,
-    pub valueint: ::core::ffi::c_int,
-    pub valuedouble: ::core::ffi::c_double,
-    pub string: *mut ::core::ffi::c_char,
-}
-pub type cJSON_bool = ::core::ffi::c_int;
-pub const COPY: patch_operation = 5;
-pub type patch_operation = ::core::ffi::c_uint;
-pub const TEST: patch_operation = 6;
-pub const MOVE: patch_operation = 4;
-pub const REPLACE: patch_operation = 3;
-pub const REMOVE: patch_operation = 2;
-pub const ADD: patch_operation = 1;
-pub const INVALID: patch_operation = 0;
-pub const __DARWIN_NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-#[inline]
-pub unsafe extern "C" fn tolower(mut _c: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    return __tolower(_c as __darwin_ct_rune_t) as ::core::ffi::c_int;
-}
-pub const ULONG_MAX: ::core::ffi::c_ulong = 0xffffffffffffffff as ::core::ffi::c_ulong;
-pub const DBL_EPSILON: ::core::ffi::c_double = __DBL_EPSILON__;
-pub const cJSON_Invalid: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const cJSON_Number: ::core::ffi::c_int = 8;
-pub const cJSON_String: ::core::ffi::c_int = 16;
-pub const cJSON_Array: ::core::ffi::c_int = 32;
-pub const cJSON_Object: ::core::ffi::c_int = 64;
-pub const true_0: cJSON_bool = 1 as ::core::ffi::c_int;
-pub const false_0: cJSON_bool = 0 as ::core::ffi::c_int;
-unsafe extern "C" fn cJSONUtils_strdup(
-    string: *const ::core::ffi::c_uchar,
-) -> *mut ::core::ffi::c_uchar {
-    let mut length: size_t = 0 as size_t;
-    let mut copy: *mut ::core::ffi::c_uchar = ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    length = strlen(string as *const ::core::ffi::c_char)
-        .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 1]>() as size_t);
-    copy = cJSON_malloc(length) as *mut ::core::ffi::c_uchar;
-    if copy.is_null() {
-        return ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    }
-    memcpy(
-        copy as *mut ::core::ffi::c_void,
-        string as *const ::core::ffi::c_void,
-        length,
-    );
-    return copy;
-}
-unsafe extern "C" fn compare_strings(
-    mut string1: *const ::core::ffi::c_uchar,
-    mut string2: *const ::core::ffi::c_uchar,
-    case_sensitive: cJSON_bool,
-) -> ::core::ffi::c_int {
-    if string1.is_null() || string2.is_null() {
-        return 1 as ::core::ffi::c_int;
-    }
-    if string1 == string2 {
-        return 0 as ::core::ffi::c_int;
-    }
-    if case_sensitive != 0 {
-        return strcmp(
-            string1 as *const ::core::ffi::c_char,
-            string2 as *const ::core::ffi::c_char,
-        );
-    }
-    while tolower(*string1 as ::core::ffi::c_int) == tolower(*string2 as ::core::ffi::c_int) {
-        if *string1 as ::core::ffi::c_int == '\0' as i32 {
-            return 0 as ::core::ffi::c_int;
+
+impl PatchError {
+    /// The exact C status code.
+    pub fn code(self) -> i32 {
+        match self {
+            PatchError::NotAnArray | PatchError::TestFailed => 1,
+            PatchError::MissingPath => 2,
+            PatchError::BadOperation => 3,
+            PatchError::MissingFrom => 4,
+            PatchError::FromNotFound => 5,
+            PatchError::DuplicateFailed => 6,
+            PatchError::MissingValue => 7,
+            PatchError::ValueDuplicateFailed => 8,
+            PatchError::NoParent => 9,
+            PatchError::InsertPastEnd => 10,
+            PatchError::BadIndex => 11,
+            PatchError::NothingToRemove => 13,
         }
-        string1 = string1.offset(1);
-        string2 = string2.offset(1);
     }
-    return tolower(*string1 as ::core::ffi::c_int) - tolower(*string2 as ::core::ffi::c_int);
 }
-unsafe extern "C" fn compare_double(
-    mut a: ::core::ffi::c_double,
-    mut b: ::core::ffi::c_double,
-) -> cJSON_bool {
-    let mut maxVal: ::core::ffi::c_double = if fabs(a) > fabs(b) { fabs(a) } else { fabs(b) };
-    return (fabs(a - b) <= maxVal * DBL_EPSILON) as ::core::ffi::c_int;
+
+fn at(bytes: &[u8], index: usize) -> u8 {
+    bytes.get(index).copied().unwrap_or(0)
 }
-unsafe extern "C" fn compare_pointers(
-    mut name: *const ::core::ffi::c_uchar,
-    mut pointer: *const ::core::ffi::c_uchar,
-    case_sensitive: cJSON_bool,
-) -> cJSON_bool {
-    if name.is_null() || pointer.is_null() {
-        return false_0;
+
+/// A `cJSON_malloc` whose result C writes through without a NULL check (`cJSON_Utils.c:224/234`, ...).
+fn malloc_unchecked(size: usize) -> Vec<u8> {
+    if !alloc_event(size) {
+        // DEVIATION(port): D2
+        std::process::abort();
     }
-    while *name as ::core::ffi::c_int != '\0' as i32
-        && *pointer as ::core::ffi::c_int != '\0' as i32
-        && *pointer as ::core::ffi::c_int != '/' as i32
-    {
-        if *pointer as ::core::ffi::c_int == '~' as i32 {
-            if (*pointer.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != '0' as i32
-                || *name as ::core::ffi::c_int != '~' as i32)
-                && (*pointer.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    != '1' as i32
-                    || *name as ::core::ffi::c_int != '/' as i32)
-            {
-                return false_0;
-            } else {
-                pointer = pointer.offset(1);
-            }
-        } else if case_sensitive == 0
-            && tolower(*name as ::core::ffi::c_int) != tolower(*pointer as ::core::ffi::c_int)
-            || case_sensitive != 0 && *name as ::core::ffi::c_int != *pointer as ::core::ffi::c_int
-        {
-            return false_0;
-        }
-        name = name.offset(1);
-        pointer = pointer.offset(1);
-    }
-    if (*pointer as ::core::ffi::c_int != 0 as ::core::ffi::c_int
-        && *pointer as ::core::ffi::c_int != '/' as i32) as ::core::ffi::c_int
-        != (*name as ::core::ffi::c_int != 0 as ::core::ffi::c_int) as ::core::ffi::c_int
-    {
-        return false_0;
-    }
-    return true_0;
+    vec![0; size]
 }
-unsafe extern "C" fn pointer_encoded_length(mut string: *const ::core::ffi::c_uchar) -> size_t {
-    let mut length: size_t = 0;
-    length = 0 as size_t;
-    while *string as ::core::ffi::c_int != '\0' as i32 {
-        if *string as ::core::ffi::c_int == '~' as i32
-            || *string as ::core::ffi::c_int == '/' as i32
-        {
-            length = length.wrapping_add(1);
-        }
-        string = string.offset(1);
-        length = length.wrapping_add(1);
-    }
-    return length;
+
+/// A `cJSON_malloc` of `size` bytes holding the C string `text`.
+fn malloc_string(text: &[u8], size: usize) -> Vec<u8> {
+    let mut buffer = malloc_unchecked(size.max(text.len() + 1));
+    buffer[..text.len()].copy_from_slice(text);
+    buffer
 }
-unsafe extern "C" fn encode_string_as_pointer(
-    mut destination: *mut ::core::ffi::c_uchar,
-    mut source: *const ::core::ffi::c_uchar,
-) {
-    while *source.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != '\0' as i32 {
-        if *source.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == '/' as i32 {
-            *destination.offset(0 as ::core::ffi::c_int as isize) =
-                '~' as i32 as ::core::ffi::c_uchar;
-            *destination.offset(1 as ::core::ffi::c_int as isize) =
-                '1' as i32 as ::core::ffi::c_uchar;
-            destination = destination.offset(1);
-        } else if *source.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-            == '~' as i32
-        {
-            *destination.offset(0 as ::core::ffi::c_int as isize) =
-                '~' as i32 as ::core::ffi::c_uchar;
-            *destination.offset(1 as ::core::ffi::c_int as isize) =
-                '0' as i32 as ::core::ffi::c_uchar;
-            destination = destination.offset(1);
-        } else {
-            *destination.offset(0 as ::core::ffi::c_int as isize) =
-                *source.offset(0 as ::core::ffi::c_int as isize);
-        }
-        source = source.offset(1);
-        destination = destination.offset(1);
-    }
-    *destination.offset(0 as ::core::ffi::c_int as isize) = '\0' as i32 as ::core::ffi::c_uchar;
-}
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_FindPointerFromObjectTo(
-    object: *const cJSON,
-    target: *const cJSON,
-) -> *mut ::core::ffi::c_char {
-    let mut child_index: size_t = 0 as size_t;
-    let mut current_child: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if object.is_null() || target.is_null() {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-    if object == target {
-        return cJSONUtils_strdup(
-            b"\0" as *const u8 as *const ::core::ffi::c_char as *const ::core::ffi::c_uchar,
-        ) as *mut ::core::ffi::c_char;
-    }
-    current_child = (*object).child as *mut cJSON;
-    while !current_child.is_null() {
-        let mut target_pointer: *mut ::core::ffi::c_uchar =
-            cJSONUtils_FindPointerFromObjectTo(current_child, target) as *mut ::core::ffi::c_uchar;
-        if !target_pointer.is_null() {
-            if cJSON_IsArray(object) != 0 {
-                let mut full_pointer: *mut ::core::ffi::c_uchar = cJSON_malloc(
-                    strlen(target_pointer as *mut ::core::ffi::c_char)
-                        .wrapping_add(20 as size_t)
-                        .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 2]>() as size_t),
-                )
-                    as *mut ::core::ffi::c_uchar;
-                if child_index > ULONG_MAX as size_t {
-                    cJSON_free(target_pointer as *mut ::core::ffi::c_void);
-                    cJSON_free(full_pointer as *mut ::core::ffi::c_void);
-                    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-                }
-                sprintf(
-                    full_pointer as *mut ::core::ffi::c_char,
-                    b"/%lu%s\0" as *const u8 as *const ::core::ffi::c_char,
-                    child_index as ::core::ffi::c_ulong,
-                    target_pointer,
-                );
-                cJSON_free(target_pointer as *mut ::core::ffi::c_void);
-                return full_pointer as *mut ::core::ffi::c_char;
-            }
-            if cJSON_IsObject(object) != 0 {
-                let mut full_pointer_0: *mut ::core::ffi::c_uchar = cJSON_malloc(
-                    strlen(target_pointer as *mut ::core::ffi::c_char)
-                        .wrapping_add(pointer_encoded_length(
-                            (*current_child).string as *mut ::core::ffi::c_uchar,
-                        ))
-                        .wrapping_add(2 as size_t),
-                )
-                    as *mut ::core::ffi::c_uchar;
-                *full_pointer_0.offset(0 as ::core::ffi::c_int as isize) =
-                    '/' as i32 as ::core::ffi::c_uchar;
-                encode_string_as_pointer(
-                    full_pointer_0.offset(1 as ::core::ffi::c_int as isize),
-                    (*current_child).string as *mut ::core::ffi::c_uchar,
-                );
-                strcat(
-                    full_pointer_0 as *mut ::core::ffi::c_char,
-                    target_pointer as *mut ::core::ffi::c_char,
-                );
-                cJSON_free(target_pointer as *mut ::core::ffi::c_void);
-                return full_pointer_0 as *mut ::core::ffi::c_char;
-            }
-            cJSON_free(target_pointer as *mut ::core::ffi::c_void);
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        current_child = (*current_child).next as *mut cJSON;
-        child_index = child_index.wrapping_add(1);
-    }
-    return ::core::ptr::null_mut::<::core::ffi::c_char>();
-}
-unsafe extern "C" fn get_array_item(mut array: *const cJSON, mut item: size_t) -> *mut cJSON {
-    let mut child: *mut cJSON = if !array.is_null() {
-        (*array).child as *mut cJSON
-    } else {
-        ::core::ptr::null_mut::<cJSON>()
+
+/// `compare_strings` (`cJSON_Utils.c:60-85`): NULL pointers are never equal; the sign of the difference.
+fn compare_strings(string1: Option<&[u8]>, string2: Option<&[u8]>, case_sensitive: bool) -> i32 {
+    let (Some(s1), Some(s2)) = (string1, string2) else {
+        return 1;
     };
-    while !child.is_null() && item > 0 as size_t {
-        item = item.wrapping_sub(1);
-        child = (*child).next as *mut cJSON;
+    let (s1, s2) = (c_str(s1), c_str(s2));
+    // DEVIATION(port): D19
+    let key = |c: &u8| {
+        if case_sensitive {
+            *c
+        } else {
+            c.to_ascii_lowercase()
+        }
+    };
+    match s1.iter().map(key).cmp(s2.iter().map(key)) {
+        Ordering::Less => -1,
+        Ordering::Equal => 0,
+        Ordering::Greater => 1,
     }
-    return child;
 }
-unsafe extern "C" fn decode_array_index_from_pointer(
-    pointer: *const ::core::ffi::c_uchar,
-    index: *mut size_t,
-) -> cJSON_bool {
-    let mut parsed_index: size_t = 0 as size_t;
-    let mut position: size_t = 0 as size_t;
-    if *pointer.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == '0' as i32
-        && (*pointer.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != '\0' as i32
-            && *pointer.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                != '/' as i32)
-    {
-        return 0 as cJSON_bool;
-    }
-    position = 0 as size_t;
-    while *pointer.offset(position as isize) as ::core::ffi::c_int >= '0' as i32
-        && *pointer.offset(position as isize) as ::core::ffi::c_int <= '9' as i32
-    {
-        parsed_index = (10 as size_t).wrapping_mul(parsed_index).wrapping_add(
-            (*pointer.offset(position as isize) as ::core::ffi::c_int - '0' as i32) as size_t,
-        );
-        position = position.wrapping_add(1);
-    }
-    if *pointer.offset(position as isize) as ::core::ffi::c_int != '\0' as i32
-        && *pointer.offset(position as isize) as ::core::ffi::c_int != '/' as i32
-    {
-        return 0 as cJSON_bool;
-    }
-    *index = parsed_index;
-    return 1 as cJSON_bool;
-}
-unsafe extern "C" fn get_item_from_pointer(
-    object: *mut cJSON,
-    mut pointer: *const ::core::ffi::c_char,
-    case_sensitive: cJSON_bool,
-) -> *mut cJSON {
-    let mut current_element: *mut cJSON = object;
-    if pointer.is_null() {
-        return ::core::ptr::null_mut::<cJSON>();
-    }
-    while *pointer.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == '/' as i32
-        && !current_element.is_null()
-    {
-        pointer = pointer.offset(1);
-        if cJSON_IsArray(current_element) != 0 {
-            let mut index: size_t = 0 as size_t;
-            if decode_array_index_from_pointer(
-                pointer as *const ::core::ffi::c_uchar,
-                &raw mut index,
-            ) == 0
-            {
-                return ::core::ptr::null_mut::<cJSON>();
+
+/// `compare_pointers` (`cJSON_Utils.c:112-146`): the next path element of a JSON pointer against a key.
+// QUIRK(port): Q2
+fn compare_pointers(name: Option<&[u8]>, pointer: &[u8], case_sensitive: bool) -> bool {
+    let Some(name) = name else { return false };
+    let name = c_str(name);
+    let (mut n, mut p) = (0, 0);
+    while at(name, n) != 0 && at(pointer, p) != 0 && at(pointer, p) != b'/' {
+        if at(pointer, p) == b'~' {
+            let escaped_tilde = at(pointer, p + 1) == b'0' && at(name, n) == b'~';
+            let escaped_slash = at(pointer, p + 1) == b'1' && at(name, n) == b'/';
+            if !escaped_tilde && !escaped_slash {
+                return false;
             }
-            current_element = get_array_item(current_element, index);
-        } else if cJSON_IsObject(current_element) != 0 {
-            current_element = (*current_element).child as *mut cJSON;
-            while !current_element.is_null()
-                && compare_pointers(
-                    (*current_element).string as *mut ::core::ffi::c_uchar,
-                    pointer as *const ::core::ffi::c_uchar,
-                    case_sensitive,
-                ) == 0
-            {
-                current_element = (*current_element).next as *mut cJSON;
+            p += 1;
+        } else if case_sensitive {
+            if at(name, n) != at(pointer, p) {
+                return false;
+            }
+        } else if !at(name, n).eq_ignore_ascii_case(&at(pointer, p)) {
+            return false;
+        }
+        n += 1;
+        p += 1;
+    }
+    (at(pointer, p) != 0 && at(pointer, p) != b'/') == (at(name, n) != 0)
+}
+
+/// `encode_string_as_pointer` (`cJSON_Utils.c:170-195`): `/` becomes `~1`, `~` becomes `~0`.
+fn encode_pointer(source: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(source.len() + 1);
+    for &c in c_str(source) {
+        match c {
+            b'/' => out.extend_from_slice(b"~1"),
+            b'~' => out.extend_from_slice(b"~0"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// `cJSONUtils_FindPointerFromObjectTo` (`cJSON_Utils.c:197-276`): the pointer string as a `Printed`.
+pub fn find_pointer_from_object_to(
+    store: &Store,
+    object: Option<NodeId>,
+    target: Option<NodeId>,
+) -> Option<Printed> {
+    let (object_id, target_id) = (object?, target?);
+    if object_id == target_id {
+        // cJSONUtils_strdup("") through cJSON_malloc(1)
+        return Some(Printed::from_vec(malloc_unchecked(1)));
+    }
+    let mut child_index: usize = 0;
+    let mut current = store.child_of(object);
+    while let Some(child) = current {
+        if let Some(target_pointer) = find_pointer_from_object_to(store, Some(child), target) {
+            if store.is_array(object) {
+                // room for a 64 bit integer, '/' and NUL
+                let size = target_pointer.bytes().len() + 20 + 2;
+                let mut text = format!("/{child_index}").into_bytes();
+                text.extend_from_slice(target_pointer.bytes());
+                let buffer = malloc_string(&text, size);
+                drop(target_pointer);
+                return Some(Printed::from_vec(buffer));
+            }
+            if store.is_object(object) {
+                let key = encode_pointer(store.key_bytes(Some(child)).unwrap_or(&[]));
+                let size = target_pointer.bytes().len() + key.len() + 2;
+                let mut text = vec![b'/'];
+                text.extend_from_slice(&key);
+                text.extend_from_slice(target_pointer.bytes());
+                let buffer = malloc_string(&text, size);
+                drop(target_pointer);
+                return Some(Printed::from_vec(buffer));
+            }
+            // reached a leaf of the tree, found nothing
+            drop(target_pointer);
+            return None;
+        }
+        current = store.next_of(Some(child));
+        child_index += 1;
+    }
+    None
+}
+
+/// `get_array_item` (`cJSON_Utils.c:278-290`): without the `int` index of `cJSON_GetArrayItem`.
+fn get_array_item(store: &Store, array: Option<NodeId>, mut item: usize) -> Option<NodeId> {
+    let mut child = store.child_of(array);
+    while let Some(c) = child {
+        if item == 0 {
+            break;
+        }
+        item -= 1;
+        child = store.next_of(Some(c));
+    }
+    child
+}
+
+/// `decode_array_index_from_pointer` (`cJSON_Utils.c:292-318`).
+// QUIRK(port): Q19
+fn decode_array_index_from_pointer(pointer: &[u8]) -> Option<usize> {
+    if at(pointer, 0) == b'0' && at(pointer, 1) != 0 && at(pointer, 1) != b'/' {
+        // leading zeroes are not permitted
+        return None;
+    }
+    let mut parsed_index: usize = 0;
+    let mut position = 0;
+    while at(pointer, position).is_ascii_digit() {
+        parsed_index = parsed_index
+            .wrapping_mul(10)
+            .wrapping_add(usize::from(at(pointer, position) - b'0'));
+        position += 1;
+    }
+    if at(pointer, position) != 0 && at(pointer, position) != b'/' {
+        return None;
+    }
+    Some(parsed_index)
+}
+
+/// `get_item_from_pointer` (`cJSON_Utils.c:320-370`).
+fn get_item_from_pointer(
+    store: &Store,
+    object: Option<NodeId>,
+    pointer: Option<&[u8]>,
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    let pointer = c_str(pointer?);
+    let mut current = object;
+    let mut p = 0;
+    while at(pointer, p) == b'/' && current.is_some() {
+        p += 1;
+        let rest = pointer.get(p..).unwrap_or(&[]);
+        if store.is_array(current) {
+            let index = decode_array_index_from_pointer(rest)?;
+            current = get_array_item(store, current, index);
+        } else if store.is_object(current) {
+            current = store.child_of(current);
+            while let Some(c) = current {
+                if compare_pointers(store.key_bytes(Some(c)), rest, case_sensitive) {
+                    break;
+                }
+                current = store.next_of(Some(c));
             }
         } else {
-            return ::core::ptr::null_mut::<cJSON>();
+            return None;
         }
-        while *pointer.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != '\0' as i32
-            && *pointer.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int != '/' as i32
-        {
-            pointer = pointer.offset(1);
+        // skip to the next path token or end of string
+        while at(pointer, p) != 0 && at(pointer, p) != b'/' {
+            p += 1;
         }
     }
-    return current_element;
+    current
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_GetPointer(
-    object: *mut cJSON,
-    mut pointer: *const ::core::ffi::c_char,
-) -> *mut cJSON {
-    return get_item_from_pointer(object, pointer, false_0);
+
+/// `cJSONUtils_GetPointer`.
+pub fn get_pointer(
+    store: &Store,
+    object: Option<NodeId>,
+    pointer: Option<&[u8]>,
+) -> Option<NodeId> {
+    get_item_from_pointer(store, object, pointer, false)
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_GetPointerCaseSensitive(
-    object: *mut cJSON,
-    mut pointer: *const ::core::ffi::c_char,
-) -> *mut cJSON {
-    return get_item_from_pointer(object, pointer, true_0);
+
+/// `cJSONUtils_GetPointerCaseSensitive`.
+pub fn get_pointer_case_sensitive(
+    store: &Store,
+    object: Option<NodeId>,
+    pointer: Option<&[u8]>,
+) -> Option<NodeId> {
+    get_item_from_pointer(store, object, pointer, true)
 }
-unsafe extern "C" fn decode_pointer_inplace(mut string: *mut ::core::ffi::c_uchar) {
-    let mut decoded_string: *mut ::core::ffi::c_uchar = string;
-    if string.is_null() {
-        return;
+
+/// `decode_pointer_inplace` (`cJSON_Utils.c:372-408`), bug included: plain characters after an escape are
+/// never copied back and `~1` writes its `/` one byte too far.
+// QUIRK(port): Q20
+// BUG(port): Q20
+fn decode_pointer_inplace(string: &mut [u8]) {
+    fn put(buffer: &mut [u8], index: usize, value: u8) {
+        if let Some(b) = buffer.get_mut(index) {
+            *b = value;
+        }
     }
-    while *string != 0 {
-        if *string.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == '~' as i32 {
-            if *string.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int == '0' as i32
-            {
-                *decoded_string.offset(0 as ::core::ffi::c_int as isize) =
-                    '~' as i32 as ::core::ffi::c_uchar;
-            } else if *string.offset(1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '1' as i32
-            {
-                *decoded_string.offset(1 as ::core::ffi::c_int as isize) =
-                    '/' as i32 as ::core::ffi::c_uchar;
-            } else {
-                return;
+    let (mut s, mut d) = (0, 0);
+    while at(string, s) != 0 {
+        if at(string, s) == b'~' {
+            match at(string, s + 1) {
+                b'0' => put(string, d, b'~'),
+                b'1' => put(string, d + 1, b'/'),
+                // invalid escape sequence
+                _ => return,
             }
-            string = string.offset(1);
+            s += 1;
         }
-        decoded_string = decoded_string.offset(1);
-        string = string.offset(1);
+        d += 1;
+        s += 1;
     }
-    *decoded_string.offset(0 as ::core::ffi::c_int as isize) = '\0' as i32 as ::core::ffi::c_uchar;
+    put(string, d, 0);
 }
-unsafe extern "C" fn detach_item_from_array(
-    mut array: *mut cJSON,
-    mut which: size_t,
-) -> *mut cJSON {
-    let mut c: *mut cJSON = (*array).child as *mut cJSON;
-    while !c.is_null() && which > 0 as size_t {
-        c = (*c).next as *mut cJSON;
-        which = which.wrapping_sub(1);
-    }
-    if c.is_null() {
-        return ::core::ptr::null_mut::<cJSON>();
-    }
-    if c != (*array).child {
-        (*(*c).prev).next = (*c).next;
-    }
-    if !(*c).next.is_null() {
-        (*(*c).next).prev = (*c).prev;
-    }
-    if c == (*array).child {
-        (*array).child = (*c).next;
-    } else if (*c).next.is_null() {
-        (*(*array).child).prev = (*c).prev;
-    }
-    (*c).next = ::core::ptr::null_mut::<cJSON>();
-    (*c).prev = (*c).next;
-    return c;
-}
-unsafe extern "C" fn detach_path(
-    mut object: *mut cJSON,
-    mut path: *const ::core::ffi::c_uchar,
-    case_sensitive: cJSON_bool,
-) -> *mut cJSON {
-    let mut parent_pointer: *mut ::core::ffi::c_uchar =
-        ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    let mut child_pointer: *mut ::core::ffi::c_uchar =
-        ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    let mut parent: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    let mut detached_item: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    parent_pointer = cJSONUtils_strdup(path);
-    if !parent_pointer.is_null() {
-        child_pointer = strrchr(parent_pointer as *mut ::core::ffi::c_char, '/' as i32)
-            as *mut ::core::ffi::c_uchar;
-        if !child_pointer.is_null() {
-            *child_pointer.offset(0 as ::core::ffi::c_int as isize) =
-                '\0' as i32 as ::core::ffi::c_uchar;
-            child_pointer = child_pointer.offset(1);
-            parent = get_item_from_pointer(
-                object,
-                parent_pointer as *mut ::core::ffi::c_char,
-                case_sensitive,
-            );
-            decode_pointer_inplace(child_pointer);
-            if cJSON_IsArray(parent) != 0 {
-                let mut index: size_t = 0 as size_t;
-                if !(decode_array_index_from_pointer(child_pointer, &raw mut index) == 0) {
-                    detached_item = detach_item_from_array(parent, index);
-                }
-            } else if cJSON_IsObject(parent) != 0 {
-                detached_item =
-                    cJSON_DetachItemFromObject(parent, child_pointer as *mut ::core::ffi::c_char);
-            }
+
+/// `detach_item_from_array` (`cJSON_Utils.c:410-447`): the non-broken `cJSON_DetachItemFromArray`.
+fn detach_item_from_array(store: &mut Store, array: NodeId, which: usize) -> Option<NodeId> {
+    let first = store.child_of(Some(array));
+    let item = get_array_item(store, Some(array), which)?;
+    let (next, prev) = (store.next_of(Some(item)), store.prev_of(Some(item)));
+    if Some(item) != first {
+        if let Some(p) = prev {
+            store.set_next(p, next);
         }
     }
-    if !parent_pointer.is_null() {
-        cJSON_free(parent_pointer as *mut ::core::ffi::c_void);
+    if let Some(n) = next {
+        store.set_prev(n, prev);
     }
-    return detached_item;
+    if Some(item) == first {
+        store.set_child(array, next);
+    } else if next.is_none() {
+        if let Some(f) = first {
+            store.set_prev(f, prev);
+        }
+    }
+    store.set_prev(item, None);
+    store.set_next(item, None);
+    Some(item)
 }
-unsafe extern "C" fn sort_list(mut list: *mut cJSON, case_sensitive: cJSON_bool) -> *mut cJSON {
-    let mut first: *mut cJSON = list;
-    let mut second: *mut cJSON = list;
-    let mut current_item: *mut cJSON = list;
-    let mut result: *mut cJSON = list;
-    let mut result_tail: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if list.is_null() || (*list).next.is_null() {
-        return result;
+
+/// `detach_path` (`cJSON_Utils.c:449-505`): detach the item at `path`.
+fn detach_path(
+    store: &mut Store,
+    object: Option<NodeId>,
+    path: &[u8],
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    let path = c_str(path);
+    // parent_pointer = cJSONUtils_strdup(path)
+    let parent_pointer = strdup(Some(path))?;
+    let size = parent_pointer.len();
+    let detached = detach_path_in(store, object, path, case_sensitive);
+    free_event(size);
+    detached
+}
+
+fn detach_path_in(
+    store: &mut Store,
+    object: Option<NodeId>,
+    path: &[u8],
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    // the last '/', then split the copy in parent and child
+    let slash = path.iter().rposition(|&c| c == b'/')?;
+    let parent_pointer = &path[..slash];
+    let mut child_pointer = path[slash + 1..].to_vec();
+    child_pointer.push(0);
+    let parent = get_item_from_pointer(store, object, Some(parent_pointer), case_sensitive);
+    decode_pointer_inplace(&mut child_pointer);
+    if store.is_array(parent) {
+        let index = decode_array_index_from_pointer(&child_pointer)?;
+        detach_item_from_array(store, parent?, index)
+    } else if store.is_object(parent) {
+        let name = c_str(&child_pointer);
+        if case_sensitive {
+            store.detach_item_from_object_case_sensitive(parent, Some(name))
+        } else {
+            store.detach_item_from_object(parent, Some(name))
+        }
+    } else {
+        // Couldn't find object to remove child from.
+        None
     }
-    while !current_item.is_null()
-        && !(*current_item).next.is_null()
-        && compare_strings(
-            (*current_item).string as *mut ::core::ffi::c_uchar,
-            (*(*current_item).next).string as *mut ::core::ffi::c_uchar,
-            case_sensitive,
-        ) < 0 as ::core::ffi::c_int
-    {
-        current_item = (*current_item).next as *mut cJSON;
+}
+
+/// `sort_list` (`cJSON_Utils.c:507-602`): merge sort over the `next`/`prev` links, as C does, so the
+/// first element's `prev` is left as the merge produced it (Q18).
+// QUIRK(port): Q18
+fn sort_list(store: &mut Store, list: Option<NodeId>, case_sensitive: bool) -> Option<NodeId> {
+    let key_less = |store: &Store, a: Option<NodeId>, b: Option<NodeId>| -> bool {
+        compare_strings(store.key_bytes(a), store.key_bytes(b), case_sensitive) < 0
+    };
+    if list.is_none() || store.next_of(list).is_none() {
+        // One entry is sorted already.
+        return list;
     }
-    if current_item.is_null() || (*current_item).next.is_null() {
-        return result;
+    let mut current_item = list;
+    while current_item.is_some() {
+        let next = store.next_of(current_item);
+        if next.is_none() || !key_less(store, current_item, next) {
+            break;
+        }
+        current_item = next;
     }
+    if current_item.is_none() || store.next_of(current_item).is_none() {
+        // Leave sorted lists unmodified.
+        return list;
+    }
+    // Walk two pointers to find the middle.
+    let mut second = list;
     current_item = list;
-    while !current_item.is_null() {
-        second = (*second).next as *mut cJSON;
-        current_item = (*current_item).next as *mut cJSON;
-        if !current_item.is_null() {
-            current_item = (*current_item).next as *mut cJSON;
+    while current_item.is_some() {
+        second = store.next_of(second);
+        current_item = store.next_of(current_item);
+        if current_item.is_some() {
+            current_item = store.next_of(current_item);
         }
     }
-    if !second.is_null() && !(*second).prev.is_null() {
-        (*(*second).prev).next = ::core::ptr::null_mut::<cJSON>();
-        (*second).prev = ::core::ptr::null_mut::<cJSON>();
+    if let Some(s) = second {
+        if let Some(p) = store.prev_of(Some(s)) {
+            // Split the lists
+            store.set_next(p, None);
+            store.set_prev(s, None);
+        }
     }
-    first = sort_list(first, case_sensitive);
-    second = sort_list(second, case_sensitive);
-    result = ::core::ptr::null_mut::<cJSON>();
-    while !first.is_null() && !second.is_null() {
-        let mut smaller: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-        if compare_strings(
-            (*first).string as *mut ::core::ffi::c_uchar,
-            (*second).string as *mut ::core::ffi::c_uchar,
-            case_sensitive,
-        ) < 0 as ::core::ffi::c_int
-        {
-            smaller = first;
+    let mut first = sort_list(store, list, case_sensitive);
+    let mut second = sort_list(store, second, case_sensitive);
+    let mut result: Option<NodeId> = None;
+    let mut result_tail: Option<NodeId> = None;
+    while first.is_some() && second.is_some() {
+        let smaller = if key_less(store, first, second) {
+            first
         } else {
-            smaller = second;
+            second
+        };
+        match (result, result_tail, smaller) {
+            (Some(_), Some(tail), Some(sm)) => {
+                store.set_next(tail, Some(sm));
+                store.set_prev(sm, Some(tail));
+            }
+            _ => result = smaller,
         }
-        if result.is_null() {
-            result_tail = smaller;
-            result = smaller;
-        } else {
-            (*result_tail).next = smaller as *mut cJSON;
-            (*smaller).prev = result_tail as *mut cJSON;
-            result_tail = smaller;
-        }
+        result_tail = smaller;
         if first == smaller {
-            first = (*first).next as *mut cJSON;
+            first = store.next_of(first);
         } else {
-            second = (*second).next as *mut cJSON;
+            second = store.next_of(second);
         }
     }
-    if !first.is_null() {
-        if result.is_null() {
-            return first;
-        }
-        (*result_tail).next = first as *mut cJSON;
-        (*first).prev = result_tail as *mut cJSON;
+    for rest in [first, second].into_iter().flatten() {
+        let Some(tail) = result_tail.filter(|_| result.is_some()) else {
+            return Some(rest);
+        };
+        store.set_next(tail, Some(rest));
+        store.set_prev(rest, Some(tail));
     }
-    if !second.is_null() {
-        if result.is_null() {
-            return second;
-        }
-        (*result_tail).next = second as *mut cJSON;
-        (*second).prev = result_tail as *mut cJSON;
-    }
-    return result;
+    result
 }
-unsafe extern "C" fn sort_object(object: *mut cJSON, case_sensitive: cJSON_bool) {
-    if object.is_null() {
-        return;
-    }
-    (*object).child = sort_list((*object).child as *mut cJSON, case_sensitive) as *mut cJSON;
+
+/// `sort_object` (`cJSON_Utils.c:604-612`).
+fn sort_object_impl(store: &mut Store, object: Option<NodeId>, case_sensitive: bool) {
+    let Some(object) = object else { return };
+    let sorted = sort_list(store, store.child_of(Some(object)), case_sensitive);
+    store.set_child(object, sorted);
 }
-unsafe extern "C" fn compare_json(
-    mut a: *mut cJSON,
-    mut b: *mut cJSON,
-    case_sensitive: cJSON_bool,
-) -> cJSON_bool {
-    if a.is_null()
-        || b.is_null()
-        || (*a).type_0 & 0xff as ::core::ffi::c_int != (*b).type_0 & 0xff as ::core::ffi::c_int
-    {
-        return false_0;
-    }
-    match (*a).type_0 & 0xff as ::core::ffi::c_int {
-        cJSON_Number => {
-            if (*a).valueint != (*b).valueint
-                || compare_double((*a).valuedouble, (*b).valuedouble) == 0
-            {
-                return false_0;
-            } else {
-                return true_0;
-            }
-        }
-        cJSON_String => {
-            if strcmp((*a).valuestring, (*b).valuestring) != 0 as ::core::ffi::c_int {
-                return false_0;
-            } else {
-                return true_0;
-            }
-        }
-        cJSON_Array => {
-            a = (*a).child as *mut cJSON;
-            b = (*b).child as *mut cJSON;
-            while !a.is_null() && !b.is_null() {
-                let mut identical: cJSON_bool = compare_json(a, b, case_sensitive);
-                if identical == 0 {
-                    return false_0;
-                }
-                a = (*a).next as *mut cJSON;
-                b = (*b).next as *mut cJSON;
-            }
-            if !a.is_null() || !b.is_null() {
-                return false_0;
-            } else {
-                return true_0;
-            }
-        }
-        cJSON_Object => {
-            sort_object(a, case_sensitive);
-            sort_object(b, case_sensitive);
-            a = (*a).child as *mut cJSON;
-            b = (*b).child as *mut cJSON;
-            while !a.is_null() && !b.is_null() {
-                let mut identical_0: cJSON_bool = false_0;
-                if compare_strings(
-                    (*a).string as *mut ::core::ffi::c_uchar,
-                    (*b).string as *mut ::core::ffi::c_uchar,
-                    case_sensitive,
-                ) != 0
-                {
-                    return false_0;
-                }
-                identical_0 = compare_json(a, b, case_sensitive);
-                if identical_0 == 0 {
-                    return false_0;
-                }
-                a = (*a).next as *mut cJSON;
-                b = (*b).next as *mut cJSON;
-            }
-            if !a.is_null() || !b.is_null() {
-                return false_0;
-            } else {
-                return true_0;
-            }
-        }
-        _ => {}
-    }
-    return true_0;
+
+/// `cJSONUtils_SortObject`.
+pub fn sort_object(store: &mut Store, object: Option<NodeId>) {
+    sort_object_impl(store, object, false);
 }
-unsafe extern "C" fn insert_item_in_array(
-    mut array: *mut cJSON,
-    mut which: size_t,
-    mut newitem: *mut cJSON,
-) -> cJSON_bool {
-    let mut child: *mut cJSON = (*array).child as *mut cJSON;
-    while !child.is_null() && which > 0 as size_t {
-        child = (*child).next as *mut cJSON;
-        which = which.wrapping_sub(1);
+
+/// `cJSONUtils_SortObjectCaseSensitive`.
+pub fn sort_object_case_sensitive(store: &mut Store, object: Option<NodeId>) {
+    sort_object_impl(store, object, true);
+}
+
+/// `strcmp(a, b) != 0` with a NULL on either side counted as different (D20).
+// DEVIATION(port): D20
+fn different(a: Option<&[u8]>, b: Option<&[u8]>) -> bool {
+    match (a, b) {
+        (Some(x), Some(y)) => c_str(x) != c_str(y),
+        _ => true,
     }
-    if which > 0 as size_t {
-        return 0 as cJSON_bool;
+}
+
+/// `compare_json` (`cJSON_Utils.c:614-700`): sorts the objects it compares (Q18).
+// QUIRK(port): Q17
+// QUIRK(port): Q18
+fn compare_json(
+    store: &mut Store,
+    a: Option<NodeId>,
+    b: Option<NodeId>,
+    case_sensitive: bool,
+) -> bool {
+    let (Some(ta), Some(tb)) = (store.type_word(a), store.type_word(b)) else {
+        return false;
+    };
+    if ta & 0xFF != tb & 0xFF {
+        return false;
     }
-    if child.is_null() {
-        cJSON_AddItemToArray(array, newitem);
-        return 1 as cJSON_bool;
+    match ta & 0xFF {
+        flags::NUMBER => {
+            let (Some(na), Some(nb)) =
+                (a.and_then(|i| store.node(i)), b.and_then(|i| store.node(i)))
+            else {
+                return false;
+            };
+            na.valueint == nb.valueint && compare_double(na.valuedouble, nb.valuedouble)
+        }
+        flags::STRING => !different(store.value_bytes(a), store.value_bytes(b)),
+        flags::ARRAY => {
+            let (mut ea, mut eb) = (store.child_of(a), store.child_of(b));
+            while ea.is_some() && eb.is_some() {
+                if !compare_json(store, ea, eb, case_sensitive) {
+                    return false;
+                }
+                ea = store.next_of(ea);
+                eb = store.next_of(eb);
+            }
+            // array size mismatch?
+            ea.is_none() && eb.is_none()
+        }
+        flags::OBJECT => {
+            sort_object_impl(store, a, case_sensitive);
+            sort_object_impl(store, b, case_sensitive);
+            let (mut ea, mut eb) = (store.child_of(a), store.child_of(b));
+            while ea.is_some() && eb.is_some() {
+                // compare object keys
+                if compare_strings(store.key_bytes(ea), store.key_bytes(eb), case_sensitive) != 0 {
+                    return false;
+                }
+                if !compare_json(store, ea, eb, case_sensitive) {
+                    return false;
+                }
+                ea = store.next_of(ea);
+                eb = store.next_of(eb);
+            }
+            // object length mismatch?
+            ea.is_none() && eb.is_none()
+        }
+        // null, true or false
+        _ => true,
     }
-    (*newitem).next = child as *mut cJSON;
-    (*newitem).prev = (*child).prev;
-    (*child).prev = newitem as *mut cJSON;
-    if child == (*array).child {
-        (*array).child = newitem as *mut cJSON;
+}
+
+/// `insert_item_in_array` (`cJSON_Utils.c:702-742`): the non-broken `cJSON_InsertItemInArray`.
+fn insert_item_in_array(
+    store: &mut Store,
+    array: NodeId,
+    mut which: usize,
+    new_item: NodeId,
+) -> bool {
+    let mut child = store.child_of(Some(array));
+    while let Some(c) = child {
+        if which == 0 {
+            break;
+        }
+        child = store.next_of(Some(c));
+        which -= 1;
+    }
+    if which > 0 {
+        // item is after the end of the array
+        return false;
+    }
+    let Some(child) = child else {
+        store.add_item_to_array(Some(array), Some(new_item));
+        return true;
+    };
+    // insert into the linked list
+    let child_prev = store.prev_of(Some(child));
+    store.set_next(new_item, Some(child));
+    store.set_prev(new_item, child_prev);
+    store.set_prev(child, Some(new_item));
+    if store.child_of(Some(array)) == Some(child) {
+        store.set_child(array, Some(new_item));
+    } else if let Some(p) = child_prev {
+        store.set_next(p, Some(new_item));
+    }
+    true
+}
+
+fn get_object_item(
+    store: &Store,
+    object: Option<NodeId>,
+    name: &[u8],
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    if case_sensitive {
+        store.get_object_item_case_sensitive(object, Some(name))
     } else {
-        (*(*newitem).prev).next = newitem as *mut cJSON;
+        store.get_object_item(object, Some(name))
     }
-    return 1 as cJSON_bool;
 }
-unsafe extern "C" fn get_object_item(
-    object: *const cJSON,
-    mut name: *const ::core::ffi::c_char,
-    case_sensitive: cJSON_bool,
-) -> *mut cJSON {
-    if case_sensitive != 0 {
-        return cJSON_GetObjectItemCaseSensitive(object, name);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PatchOperation {
+    Invalid,
+    Add,
+    Remove,
+    Replace,
+    Move,
+    Copy,
+    Test,
+}
+
+/// `decode_patch_operation` (`cJSON_Utils.c:752-794`).
+fn decode_patch_operation(
+    store: &Store,
+    patch: Option<NodeId>,
+    case_sensitive: bool,
+) -> PatchOperation {
+    let operation = get_object_item(store, patch, b"op", case_sensitive);
+    if !store.is_string(operation) {
+        return PatchOperation::Invalid;
     }
-    return cJSON_GetObjectItem(object, name);
+    match store.value_bytes(operation) {
+        Some(b"add") => PatchOperation::Add,
+        Some(b"remove") => PatchOperation::Remove,
+        Some(b"replace") => PatchOperation::Replace,
+        Some(b"move") => PatchOperation::Move,
+        Some(b"copy") => PatchOperation::Copy,
+        Some(b"test") => PatchOperation::Test,
+        _ => PatchOperation::Invalid,
+    }
 }
-unsafe extern "C" fn decode_patch_operation(
-    patch: *const cJSON,
-    case_sensitive: cJSON_bool,
-) -> patch_operation {
-    let mut operation: *mut cJSON = get_object_item(
+
+/// `overwrite_item` (`cJSON_Utils.c:796-817`): frees key, value string and child list whatever the
+/// reference flags say, then copies the whole replacement struct over `root`.
+// DEVIATION(port): D12
+fn overwrite_item(store: &mut Store, root: Option<NodeId>, replacement: Node) {
+    let Some(root) = root else { return };
+    let Some(node) = store.node(root) else { return };
+    let (child, key_size, value_size) = (
+        node.child,
+        match &node.string {
+            Text::Owned(v) => Some(v.len()),
+            _ => None,
+        },
+        match &node.valuestring {
+            Text::Owned(v) => Some(v.len()),
+            _ => None,
+        },
+    );
+    if let Some(size) = key_size {
+        free_event(size);
+    }
+    if let Some(size) = value_size {
+        free_event(size);
+    }
+    if child.is_some() {
+        store.delete(child);
+    }
+    store.overwrite_fields(root, replacement);
+}
+
+/// `apply_patch` (`cJSON_Utils.c:819-1052`).
+// QUIRK(port): Q23
+fn apply_patch(
+    store: &mut Store,
+    object: Option<NodeId>,
+    patch: Option<NodeId>,
+    case_sensitive: bool,
+) -> Result<(), PatchError> {
+    let mut value: Option<NodeId> = None;
+    // The C `parent_pointer` copy: its allocation size, freed in the cleanup.
+    let mut parent_pointer_size: Option<usize> = None;
+    let result = apply_patch_in(
+        store,
+        object,
         patch,
-        b"op\0" as *const u8 as *const ::core::ffi::c_char,
         case_sensitive,
+        &mut value,
+        &mut parent_pointer_size,
     );
-    if cJSON_IsString(operation) == 0 {
-        return INVALID;
+    if value.is_some() {
+        store.delete(value);
     }
-    if strcmp(
-        (*operation).valuestring,
-        b"add\0" as *const u8 as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
-        return ADD;
+    if let Some(size) = parent_pointer_size {
+        free_event(size);
     }
-    if strcmp(
-        (*operation).valuestring,
-        b"remove\0" as *const u8 as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
-        return REMOVE;
-    }
-    if strcmp(
-        (*operation).valuestring,
-        b"replace\0" as *const u8 as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
-        return REPLACE;
-    }
-    if strcmp(
-        (*operation).valuestring,
-        b"move\0" as *const u8 as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
-        return MOVE;
-    }
-    if strcmp(
-        (*operation).valuestring,
-        b"copy\0" as *const u8 as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
-        return COPY;
-    }
-    if strcmp(
-        (*operation).valuestring,
-        b"test\0" as *const u8 as *const ::core::ffi::c_char,
-    ) == 0 as ::core::ffi::c_int
-    {
-        return TEST;
-    }
-    return INVALID;
+    result
 }
-unsafe extern "C" fn overwrite_item(root: *mut cJSON, replacement: cJSON) {
-    if root.is_null() {
-        return;
+
+fn apply_patch_in(
+    store: &mut Store,
+    object: Option<NodeId>,
+    patch: Option<NodeId>,
+    case_sensitive: bool,
+    value: &mut Option<NodeId>,
+    parent_pointer_size: &mut Option<usize>,
+) -> Result<(), PatchError> {
+    let path = get_object_item(store, patch, b"path", case_sensitive);
+    if !store.is_string(path) {
+        // malformed patch.
+        return Err(PatchError::MissingPath);
     }
-    if !(*root).string.is_null() {
-        cJSON_free((*root).string as *mut ::core::ffi::c_void);
+    let opcode = decode_patch_operation(store, patch, case_sensitive);
+    if opcode == PatchOperation::Invalid {
+        return Err(PatchError::BadOperation);
     }
-    if !(*root).valuestring.is_null() {
-        cJSON_free((*root).valuestring as *mut ::core::ffi::c_void);
-    }
-    if !(*root).child.is_null() {
-        cJSON_Delete((*root).child as *mut cJSON);
-    }
-    memcpy(
-        root as *mut ::core::ffi::c_void,
-        &raw const replacement as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<cJSON>() as size_t,
-    );
-}
-unsafe extern "C" fn apply_patch(
-    mut object: *mut cJSON,
-    mut patch: *const cJSON,
-    case_sensitive: cJSON_bool,
-) -> ::core::ffi::c_int {
-    let mut current_block: u64;
-    let mut path: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    let mut value: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    let mut parent: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    let mut opcode: patch_operation = INVALID;
-    let mut parent_pointer: *mut ::core::ffi::c_uchar =
-        ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    let mut child_pointer: *mut ::core::ffi::c_uchar =
-        ::core::ptr::null_mut::<::core::ffi::c_uchar>();
-    let mut status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    path = get_object_item(
-        patch,
-        b"path\0" as *const u8 as *const ::core::ffi::c_char,
-        case_sensitive,
-    );
-    if cJSON_IsString(path) == 0 {
-        status = 2 as ::core::ffi::c_int;
-    } else {
-        opcode = decode_patch_operation(patch, case_sensitive);
-        if opcode as ::core::ffi::c_uint == INVALID as ::core::ffi::c_int as ::core::ffi::c_uint {
-            status = 3 as ::core::ffi::c_int;
-        } else if opcode as ::core::ffi::c_uint == TEST as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            status = (compare_json(
-                get_item_from_pointer(object, (*path).valuestring, case_sensitive),
-                get_object_item(
-                    patch,
-                    b"value\0" as *const u8 as *const ::core::ffi::c_char,
-                    case_sensitive,
-                ),
-                case_sensitive,
-            ) == 0) as ::core::ffi::c_int;
+    // TODO(port): a String item without value (create_string_reference(NULL)) is dereferenced by C for
+    // `path`, `from` and `op`; here its value is the empty string.
+    let path_text: Vec<u8> = store.value_bytes(path).unwrap_or(&[]).to_vec();
+    if opcode == PatchOperation::Test {
+        // compare value: {...} with the given path
+        let found = get_item_from_pointer(store, object, Some(&path_text), case_sensitive);
+        let expected = get_object_item(store, patch, b"value", case_sensitive);
+        return if compare_json(store, found, expected, case_sensitive) {
+            Ok(())
         } else {
-            if *(*path).valuestring.offset(0 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                == '\0' as i32
-            {
-                if opcode as ::core::ffi::c_uint
-                    == REMOVE as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    static mut invalid: cJSON = cJSON {
-                        next: ::core::ptr::null::<cJSON>() as *mut cJSON,
-                        prev: ::core::ptr::null::<cJSON>() as *mut cJSON,
-                        child: ::core::ptr::null::<cJSON>() as *mut cJSON,
-                        type_0: cJSON_Invalid,
-                        valuestring: ::core::ptr::null::<::core::ffi::c_char>()
-                            as *mut ::core::ffi::c_char,
-                        valueint: 0 as ::core::ffi::c_int,
-                        valuedouble: 0 as ::core::ffi::c_int as ::core::ffi::c_double,
-                        string: ::core::ptr::null::<::core::ffi::c_char>()
-                            as *mut ::core::ffi::c_char,
-                    };
-                    overwrite_item(object, invalid);
-                    status = 0 as ::core::ffi::c_int;
-                    current_block = 3186350029337015785;
-                } else if opcode as ::core::ffi::c_uint
-                    == REPLACE as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || opcode as ::core::ffi::c_uint
-                        == ADD as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    value = get_object_item(
-                        patch,
-                        b"value\0" as *const u8 as *const ::core::ffi::c_char,
-                        case_sensitive,
-                    );
-                    if value.is_null() {
-                        status = 7 as ::core::ffi::c_int;
-                    } else {
-                        value = cJSON_Duplicate(value, 1 as cJSON_bool);
-                        if value.is_null() {
-                            status = 8 as ::core::ffi::c_int;
-                        } else {
-                            overwrite_item(object, *value);
-                            cJSON_free(value as *mut ::core::ffi::c_void);
-                            value = ::core::ptr::null_mut::<cJSON>();
-                            if !(*object).string.is_null() {
-                                cJSON_free((*object).string as *mut ::core::ffi::c_void);
-                                (*object).string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                            }
-                            status = 0 as ::core::ffi::c_int;
-                        }
-                    }
-                    current_block = 3186350029337015785;
-                } else {
-                    current_block = 4068382217303356765;
-                }
-            } else {
-                current_block = 4068382217303356765;
+            Err(PatchError::TestFailed)
+        };
+    }
+
+    // special case for replacing the root
+    if path_text.is_empty() {
+        if opcode == PatchOperation::Remove {
+            let invalid = Node::zeroed();
+            overwrite_item(store, object, invalid);
+            return Ok(());
+        }
+        if opcode == PatchOperation::Replace || opcode == PatchOperation::Add {
+            let source = get_object_item(store, patch, b"value", case_sensitive);
+            if source.is_none() {
+                // missing "value" for add/replace.
+                return Err(PatchError::MissingValue);
             }
-            match current_block {
-                3186350029337015785 => {}
-                _ => {
-                    if opcode as ::core::ffi::c_uint
-                        == REMOVE as ::core::ffi::c_int as ::core::ffi::c_uint
-                        || opcode as ::core::ffi::c_uint
-                            == REPLACE as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        let mut old_item: *mut cJSON = detach_path(
-                            object,
-                            (*path).valuestring as *mut ::core::ffi::c_uchar,
-                            case_sensitive,
-                        );
-                        if old_item.is_null() {
-                            status = 13 as ::core::ffi::c_int;
-                            current_block = 3186350029337015785;
-                        } else {
-                            cJSON_Delete(old_item);
-                            if opcode as ::core::ffi::c_uint
-                                == REMOVE as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                status = 0 as ::core::ffi::c_int;
-                                current_block = 3186350029337015785;
-                            } else {
-                                current_block = 1538046216550696469;
-                            }
-                        }
-                    } else {
-                        current_block = 1538046216550696469;
-                    }
-                    match current_block {
-                        3186350029337015785 => {}
-                        _ => {
-                            if opcode as ::core::ffi::c_uint
-                                == MOVE as ::core::ffi::c_int as ::core::ffi::c_uint
-                                || opcode as ::core::ffi::c_uint
-                                    == COPY as ::core::ffi::c_int as ::core::ffi::c_uint
-                            {
-                                let mut from: *mut cJSON = get_object_item(
-                                    patch,
-                                    b"from\0" as *const u8 as *const ::core::ffi::c_char,
-                                    case_sensitive,
-                                );
-                                if cJSON_IsString(from) == 0 {
-                                    status = 4 as ::core::ffi::c_int;
-                                    current_block = 3186350029337015785;
-                                } else {
-                                    if opcode as ::core::ffi::c_uint
-                                        == MOVE as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        value = detach_path(
-                                            object,
-                                            (*from).valuestring as *mut ::core::ffi::c_uchar,
-                                            case_sensitive,
-                                        );
-                                    }
-                                    if opcode as ::core::ffi::c_uint
-                                        == COPY as ::core::ffi::c_int as ::core::ffi::c_uint
-                                    {
-                                        value = get_item_from_pointer(
-                                            object,
-                                            (*from).valuestring,
-                                            case_sensitive,
-                                        );
-                                    }
-                                    if value.is_null() {
-                                        status = 5 as ::core::ffi::c_int;
-                                        current_block = 3186350029337015785;
-                                    } else {
-                                        if opcode as ::core::ffi::c_uint
-                                            == COPY as ::core::ffi::c_int as ::core::ffi::c_uint
-                                        {
-                                            value = cJSON_Duplicate(value, 1 as cJSON_bool);
-                                        }
-                                        if value.is_null() {
-                                            status = 6 as ::core::ffi::c_int;
-                                            current_block = 3186350029337015785;
-                                        } else {
-                                            current_block = 1724319918354933278;
-                                        }
-                                    }
-                                }
-                            } else {
-                                value = get_object_item(
-                                    patch,
-                                    b"value\0" as *const u8 as *const ::core::ffi::c_char,
-                                    case_sensitive,
-                                );
-                                if value.is_null() {
-                                    status = 7 as ::core::ffi::c_int;
-                                    current_block = 3186350029337015785;
-                                } else {
-                                    value = cJSON_Duplicate(value, 1 as cJSON_bool);
-                                    if value.is_null() {
-                                        status = 8 as ::core::ffi::c_int;
-                                        current_block = 3186350029337015785;
-                                    } else {
-                                        current_block = 1724319918354933278;
-                                    }
-                                }
-                            }
-                            match current_block {
-                                3186350029337015785 => {}
-                                _ => {
-                                    parent_pointer = cJSONUtils_strdup(
-                                        (*path).valuestring as *mut ::core::ffi::c_uchar,
-                                    );
-                                    if !parent_pointer.is_null() {
-                                        child_pointer = strrchr(
-                                            parent_pointer as *mut ::core::ffi::c_char,
-                                            '/' as i32,
-                                        )
-                                            as *mut ::core::ffi::c_uchar;
-                                    }
-                                    if !child_pointer.is_null() {
-                                        *child_pointer.offset(0 as ::core::ffi::c_int as isize) =
-                                            '\0' as i32 as ::core::ffi::c_uchar;
-                                        child_pointer = child_pointer.offset(1);
-                                    }
-                                    parent = get_item_from_pointer(
-                                        object,
-                                        parent_pointer as *mut ::core::ffi::c_char,
-                                        case_sensitive,
-                                    );
-                                    decode_pointer_inplace(child_pointer);
-                                    if parent.is_null() || child_pointer.is_null() {
-                                        status = 9 as ::core::ffi::c_int;
-                                    } else if cJSON_IsArray(parent) != 0 {
-                                        if strcmp(
-                                            child_pointer as *mut ::core::ffi::c_char,
-                                            b"-\0" as *const u8 as *const ::core::ffi::c_char,
-                                        ) == 0 as ::core::ffi::c_int
-                                        {
-                                            cJSON_AddItemToArray(parent, value);
-                                            value = ::core::ptr::null_mut::<cJSON>();
-                                        } else {
-                                            let mut index: size_t = 0 as size_t;
-                                            if decode_array_index_from_pointer(
-                                                child_pointer,
-                                                &raw mut index,
-                                            ) == 0
-                                            {
-                                                status = 11 as ::core::ffi::c_int;
-                                            } else if insert_item_in_array(parent, index, value)
-                                                == 0
-                                            {
-                                                status = 10 as ::core::ffi::c_int;
-                                            } else {
-                                                value = ::core::ptr::null_mut::<cJSON>();
-                                            }
-                                        }
-                                    } else if cJSON_IsObject(parent) != 0 {
-                                        if case_sensitive != 0 {
-                                            cJSON_DeleteItemFromObjectCaseSensitive(
-                                                parent,
-                                                child_pointer as *mut ::core::ffi::c_char,
-                                            );
-                                        } else {
-                                            cJSON_DeleteItemFromObject(
-                                                parent,
-                                                child_pointer as *mut ::core::ffi::c_char,
-                                            );
-                                        }
-                                        cJSON_AddItemToObject(
-                                            parent,
-                                            child_pointer as *mut ::core::ffi::c_char,
-                                            value,
-                                        );
-                                        value = ::core::ptr::null_mut::<cJSON>();
-                                    } else {
-                                        status = 9 as ::core::ffi::c_int;
-                                    }
-                                }
-                            }
-                        }
-                    }
+            let Some(duplicate) = store.duplicate(source, true) else {
+                // out of memory for add/replace.
+                return Err(PatchError::ValueDuplicateFailed);
+            };
+            if let Some(copy) = store.node_copy(duplicate) {
+                overwrite_item(store, object, copy);
+            }
+            // delete the duplicated value (only its node: the strings and children moved into the root)
+            store.free_node_only(duplicate);
+            // the string "value" isn't needed
+            if let Some(root) = object.and_then(|r| store.node_mut(r)) {
+                if let Text::Owned(old) = std::mem::replace(&mut root.string, Text::None) {
+                    free_event(old.len());
                 }
             }
+            return Ok(());
         }
     }
-    if !value.is_null() {
-        cJSON_Delete(value);
-    }
-    if !parent_pointer.is_null() {
-        cJSON_free(parent_pointer as *mut ::core::ffi::c_void);
-    }
-    return status;
-}
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_ApplyPatches(
-    object: *mut cJSON,
-    patches: *const cJSON,
-) -> ::core::ffi::c_int {
-    let mut current_patch: *const cJSON = ::core::ptr::null::<cJSON>();
-    let mut status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if cJSON_IsArray(patches) == 0 {
-        return 1 as ::core::ffi::c_int;
-    }
-    if !patches.is_null() {
-        current_patch = (*patches).child;
-    }
-    while !current_patch.is_null() {
-        status = apply_patch(object, current_patch, false_0);
-        if status != 0 as ::core::ffi::c_int {
-            return status;
+
+    if opcode == PatchOperation::Remove || opcode == PatchOperation::Replace {
+        // Get rid of old.
+        let Some(old_item) = detach_path(store, object, &path_text, case_sensitive) else {
+            return Err(PatchError::NothingToRemove);
+        };
+        store.delete(Some(old_item));
+        if opcode == PatchOperation::Remove {
+            // For Remove, this job is done.
+            return Ok(());
         }
-        current_patch = (*current_patch).next;
     }
-    return 0 as ::core::ffi::c_int;
-}
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_ApplyPatchesCaseSensitive(
-    object: *mut cJSON,
-    patches: *const cJSON,
-) -> ::core::ffi::c_int {
-    let mut current_patch: *const cJSON = ::core::ptr::null::<cJSON>();
-    let mut status: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    if cJSON_IsArray(patches) == 0 {
-        return 1 as ::core::ffi::c_int;
-    }
-    if !patches.is_null() {
-        current_patch = (*patches).child;
-    }
-    while !current_patch.is_null() {
-        status = apply_patch(object, current_patch, true_0);
-        if status != 0 as ::core::ffi::c_int {
-            return status;
+
+    // Copy/Move uses "from".
+    if opcode == PatchOperation::Move || opcode == PatchOperation::Copy {
+        let from = get_object_item(store, patch, b"from", case_sensitive);
+        if !store.is_string(from) {
+            // missing "from" for copy/move.
+            return Err(PatchError::MissingFrom);
         }
-        current_patch = (*current_patch).next;
-    }
-    return 0 as ::core::ffi::c_int;
-}
-unsafe extern "C" fn compose_patch(
-    patches: *mut cJSON,
-    operation: *const ::core::ffi::c_uchar,
-    path: *const ::core::ffi::c_uchar,
-    mut suffix: *const ::core::ffi::c_uchar,
-    value: *const cJSON,
-) {
-    let mut patch: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if patches.is_null() || operation.is_null() || path.is_null() {
-        return;
-    }
-    patch = cJSON_CreateObject();
-    if patch.is_null() {
-        return;
-    }
-    cJSON_AddItemToObject(
-        patch,
-        b"op\0" as *const u8 as *const ::core::ffi::c_char,
-        cJSON_CreateString(operation as *const ::core::ffi::c_char),
-    );
-    if suffix.is_null() {
-        cJSON_AddItemToObject(
-            patch,
-            b"path\0" as *const u8 as *const ::core::ffi::c_char,
-            cJSON_CreateString(path as *const ::core::ffi::c_char),
-        );
+        let from_text: Vec<u8> = store.value_bytes(from).unwrap_or(&[]).to_vec();
+        if opcode == PatchOperation::Move {
+            *value = detach_path(store, object, &from_text, case_sensitive);
+        }
+        if opcode == PatchOperation::Copy {
+            *value = get_item_from_pointer(store, object, Some(&from_text), case_sensitive);
+        }
+        if value.is_none() {
+            // missing "from" for copy/move.
+            return Err(PatchError::FromNotFound);
+        }
+        if opcode == PatchOperation::Copy {
+            *value = store.duplicate(*value, true);
+        }
+        if value.is_none() {
+            // out of memory for copy/move.
+            return Err(PatchError::DuplicateFailed);
+        }
     } else {
-        let mut suffix_length: size_t = pointer_encoded_length(suffix);
-        let mut path_length: size_t = strlen(path as *const ::core::ffi::c_char);
-        let mut full_path: *mut ::core::ffi::c_uchar = cJSON_malloc(
-            path_length
-                .wrapping_add(suffix_length)
-                .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 2]>() as size_t),
-        ) as *mut ::core::ffi::c_uchar;
-        sprintf(
-            full_path as *mut ::core::ffi::c_char,
-            b"%s/\0" as *const u8 as *const ::core::ffi::c_char,
-            path as *const ::core::ffi::c_char,
-        );
-        encode_string_as_pointer(
-            full_path
-                .offset(path_length as isize)
-                .offset(1 as ::core::ffi::c_int as isize),
-            suffix,
-        );
-        cJSON_AddItemToObject(
-            patch,
-            b"path\0" as *const u8 as *const ::core::ffi::c_char,
-            cJSON_CreateString(full_path as *const ::core::ffi::c_char),
-        );
-        cJSON_free(full_path as *mut ::core::ffi::c_void);
+        // Add/Replace uses "value".
+        *value = get_object_item(store, patch, b"value", case_sensitive);
+        if value.is_none() {
+            // missing "value" for add/replace.
+            return Err(PatchError::MissingValue);
+        }
+        *value = store.duplicate(*value, true);
+        if value.is_none() {
+            // out of memory for add/replace.
+            return Err(PatchError::ValueDuplicateFailed);
+        }
     }
-    if !value.is_null() {
-        cJSON_AddItemToObject(
-            patch,
-            b"value\0" as *const u8 as *const ::core::ffi::c_char,
-            cJSON_Duplicate(value, 1 as cJSON_bool),
-        );
+
+    // Now, just add "value" to "path".
+    // split pointer in parent and child
+    let parent_copy = strdup(Some(&path_text));
+    *parent_pointer_size = parent_copy.as_ref().map(Vec::len);
+    let slash = parent_copy
+        .as_ref()
+        .and_then(|_| path_text.iter().rposition(|&c| c == b'/'));
+    let mut child_pointer: Option<Vec<u8>> = slash.map(|s| {
+        let mut child = path_text[s + 1..].to_vec();
+        child.push(0);
+        child
+    });
+    let parent_pointer: Option<&[u8]> = match (&parent_copy, slash) {
+        (Some(_), Some(s)) => Some(&path_text[..s]),
+        (Some(_), None) => Some(&path_text),
+        (None, _) => None,
+    };
+    let parent = get_item_from_pointer(store, object, parent_pointer, case_sensitive);
+    if let Some(child) = child_pointer.as_mut() {
+        decode_pointer_inplace(child);
     }
-    cJSON_AddItemToArray(patches, patch);
+
+    // add, remove, replace, move, copy, test.
+    let (Some(parent_id), Some(child)) = (parent, child_pointer) else {
+        // Couldn't find object to add to.
+        return Err(PatchError::NoParent);
+    };
+    let child = c_str(&child);
+    if store.is_array(Some(parent_id)) {
+        if child == b"-" {
+            store.add_item_to_array(Some(parent_id), *value);
+            *value = None;
+        } else {
+            let Some(index) = decode_array_index_from_pointer(child) else {
+                return Err(PatchError::BadIndex);
+            };
+            let Some(new_item) = *value else {
+                return Err(PatchError::InsertPastEnd);
+            };
+            if !insert_item_in_array(store, parent_id, index, new_item) {
+                return Err(PatchError::InsertPastEnd);
+            }
+            *value = None;
+        }
+    } else if store.is_object(Some(parent_id)) {
+        if case_sensitive {
+            store.delete_item_from_object_case_sensitive(Some(parent_id), Some(child));
+        } else {
+            store.delete_item_from_object(Some(parent_id), Some(child));
+        }
+        store.add_item_to_object(Some(parent_id), Some(child), *value);
+        *value = None;
+    } else {
+        // parent is not an object
+        return Err(PatchError::NoParent);
+    }
+    Ok(())
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_AddPatchToArray(
-    array: *mut cJSON,
-    operation: *const ::core::ffi::c_char,
-    path: *const ::core::ffi::c_char,
-    value: *const cJSON,
-) {
-    compose_patch(
-        array,
-        operation as *const ::core::ffi::c_uchar,
-        path as *const ::core::ffi::c_uchar,
-        ::core::ptr::null::<::core::ffi::c_uchar>(),
-        value,
-    );
+
+fn apply_patches_impl(
+    store: &mut Store,
+    object: Option<NodeId>,
+    patches: Option<NodeId>,
+    case_sensitive: bool,
+) -> Result<(), PatchError> {
+    if !store.is_array(patches) {
+        // malformed patches.
+        return Err(PatchError::NotAnArray);
+    }
+    let mut current_patch = store.child_of(patches);
+    while let Some(patch) = current_patch {
+        apply_patch(store, object, Some(patch), case_sensitive)?;
+        current_patch = store.next_of(Some(patch));
+    }
+    Ok(())
 }
-unsafe extern "C" fn create_patches(
-    patches: *mut cJSON,
-    path: *const ::core::ffi::c_uchar,
-    from: *mut cJSON,
-    to: *mut cJSON,
-    case_sensitive: cJSON_bool,
+
+/// `cJSONUtils_ApplyPatches`: the patches applied before a failing one stay applied (E4).
+pub fn apply_patches(
+    store: &mut Store,
+    object: Option<NodeId>,
+    patches: Option<NodeId>,
+) -> Result<(), PatchError> {
+    apply_patches_impl(store, object, patches, false)
+}
+
+/// `cJSONUtils_ApplyPatchesCaseSensitive`.
+pub fn apply_patches_case_sensitive(
+    store: &mut Store,
+    object: Option<NodeId>,
+    patches: Option<NodeId>,
+) -> Result<(), PatchError> {
+    apply_patches_impl(store, object, patches, true)
+}
+
+/// `compose_patch` (`cJSON_Utils.c:1096-1140`).
+fn compose_patch(
+    store: &mut Store,
+    patches: Option<NodeId>,
+    operation: Option<&[u8]>,
+    path: Option<&[u8]>,
+    suffix: Option<&[u8]>,
+    value: Option<NodeId>,
 ) {
-    if from.is_null() || to.is_null() {
+    let (Some(operation), Some(path)) = (operation, path) else {
+        return;
+    };
+    if patches.is_none() {
         return;
     }
-    if (*from).type_0 & 0xff as ::core::ffi::c_int != (*to).type_0 & 0xff as ::core::ffi::c_int {
-        compose_patch(
-            patches,
-            b"replace\0" as *const u8 as *const ::core::ffi::c_char as *const ::core::ffi::c_uchar,
-            path,
-            ::core::ptr::null::<::core::ffi::c_uchar>(),
-            to,
-        );
+    let Some(patch) = store.create_object() else {
+        return;
+    };
+    let op = store.create_string(Some(operation));
+    store.add_item_to_object(Some(patch), Some(b"op"), op);
+    match suffix {
+        None => {
+            let path_item = store.create_string(Some(path));
+            store.add_item_to_object(Some(patch), Some(b"path"), path_item);
+        }
+        Some(suffix) => {
+            let path = c_str(path);
+            let encoded = encode_pointer(suffix);
+            let size = path.len() + encoded.len() + 2;
+            let mut buffer = malloc_unchecked(size);
+            // sprintf("%s/", path), then the encoded suffix
+            let mut text = path.to_vec();
+            text.push(b'/');
+            text.extend_from_slice(&encoded);
+            buffer[..text.len()].copy_from_slice(&text);
+            let path_item = store.create_string(Some(c_str(&buffer)));
+            store.add_item_to_object(Some(patch), Some(b"path"), path_item);
+            free_event(size);
+        }
+    }
+    if let Some(value) = value {
+        let copy = store.duplicate(Some(value), true);
+        store.add_item_to_object(Some(patch), Some(b"value"), copy);
+    }
+    store.add_item_to_array(patches, Some(patch));
+}
+
+/// `cJSONUtils_AddPatchToArray`.
+pub fn add_patch_to_array(
+    store: &mut Store,
+    array: Option<NodeId>,
+    operation: Option<&[u8]>,
+    path: Option<&[u8]>,
+    value: Option<NodeId>,
+) {
+    compose_patch(store, array, operation, path, None, value);
+}
+
+fn key_copy(store: &Store, id: Option<NodeId>) -> Option<Vec<u8>> {
+    store.key_bytes(id).map(<[u8]>::to_vec)
+}
+
+/// `create_patches` (`cJSON_Utils.c:1142-1271`).
+// QUIRK(port): Q22
+fn create_patches(
+    store: &mut Store,
+    patches: Option<NodeId>,
+    path: &[u8],
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+    case_sensitive: bool,
+) {
+    let (Some(from_type), Some(to_type)) = (store.type_word(from), store.type_word(to)) else {
+        return;
+    };
+    let path = c_str(path);
+    if from_type & 0xFF != to_type & 0xFF {
+        compose_patch(store, patches, Some(b"replace"), Some(path), None, to);
         return;
     }
-    match (*from).type_0 & 0xff as ::core::ffi::c_int {
-        cJSON_Number => {
-            if (*from).valueint != (*to).valueint
-                || compare_double((*from).valuedouble, (*to).valuedouble) == 0
-            {
-                compose_patch(
-                    patches,
-                    b"replace\0" as *const u8 as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_uchar,
-                    path,
-                    ::core::ptr::null::<::core::ffi::c_uchar>(),
-                    to,
-                );
+    match from_type & 0xFF {
+        flags::NUMBER => {
+            let (Some(f), Some(t)) = (
+                from.and_then(|i| store.node(i)),
+                to.and_then(|i| store.node(i)),
+            ) else {
+                return;
+            };
+            if f.valueint != t.valueint || !compare_double(f.valuedouble, t.valuedouble) {
+                compose_patch(store, patches, Some(b"replace"), Some(path), None, to);
             }
-            return;
         }
-        cJSON_String => {
-            if strcmp((*from).valuestring, (*to).valuestring) != 0 as ::core::ffi::c_int {
-                compose_patch(
-                    patches,
-                    b"replace\0" as *const u8 as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_uchar,
-                    path,
-                    ::core::ptr::null::<::core::ffi::c_uchar>(),
-                    to,
-                );
+        flags::STRING => {
+            if different(store.value_bytes(from), store.value_bytes(to)) {
+                compose_patch(store, patches, Some(b"replace"), Some(path), None, to);
             }
-            return;
         }
-        cJSON_Array => {
-            let mut index: size_t = 0 as size_t;
-            let mut from_child: *mut cJSON = (*from).child as *mut cJSON;
-            let mut to_child: *mut cJSON = (*to).child as *mut cJSON;
-            let mut new_path: *mut ::core::ffi::c_uchar = cJSON_malloc(
-                strlen(path as *const ::core::ffi::c_char)
-                    .wrapping_add(20 as size_t)
-                    .wrapping_add(::core::mem::size_of::<[::core::ffi::c_char; 2]>() as size_t),
-            )
-                as *mut ::core::ffi::c_uchar;
-            index = 0 as size_t;
-            while !from_child.is_null() && !to_child.is_null() {
-                if index > ULONG_MAX as size_t {
-                    cJSON_free(new_path as *mut ::core::ffi::c_void);
-                    return;
-                }
-                sprintf(
-                    new_path as *mut ::core::ffi::c_char,
-                    b"%s/%lu\0" as *const u8 as *const ::core::ffi::c_char,
-                    path,
-                    index as ::core::ffi::c_ulong,
-                );
-                create_patches(patches, new_path, from_child, to_child, case_sensitive);
-                from_child = (*from_child).next as *mut cJSON;
-                to_child = (*to_child).next as *mut cJSON;
-                index = index.wrapping_add(1);
-            }
-            while !from_child.is_null() {
-                if index > ULONG_MAX as size_t {
-                    cJSON_free(new_path as *mut ::core::ffi::c_void);
-                    return;
-                }
-                sprintf(
-                    new_path as *mut ::core::ffi::c_char,
-                    b"%lu\0" as *const u8 as *const ::core::ffi::c_char,
-                    index as ::core::ffi::c_ulong,
-                );
-                compose_patch(
+        flags::ARRAY => {
+            let mut index: usize = 0;
+            let mut from_child = store.child_of(from);
+            let mut to_child = store.child_of(to);
+            // room for a 64 bit integer: log10(2^64) = 20
+            let size = path.len() + 20 + 2;
+            let _new_path = malloc_unchecked(size);
+            // generate patches for all array elements that exist in both "from" and "to"
+            while from_child.is_some() && to_child.is_some() {
+                let mut element_path = path.to_vec();
+                element_path.extend_from_slice(format!("/{index}").as_bytes());
+                create_patches(
+                    store,
                     patches,
-                    b"remove\0" as *const u8 as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_uchar,
-                    path,
-                    new_path,
-                    ::core::ptr::null::<cJSON>(),
+                    &element_path,
+                    from_child,
+                    to_child,
+                    case_sensitive,
                 );
-                from_child = (*from_child).next as *mut cJSON;
+                from_child = store.next_of(from_child);
+                to_child = store.next_of(to_child);
+                index += 1;
             }
-            while !to_child.is_null() {
+            // remove leftover elements from 'from' that are not in 'to'
+            while from_child.is_some() {
+                let suffix = index.to_string();
                 compose_patch(
+                    store,
                     patches,
-                    b"add\0" as *const u8 as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_uchar,
-                    path,
-                    b"-\0" as *const u8 as *const ::core::ffi::c_char
-                        as *const ::core::ffi::c_uchar,
+                    Some(b"remove"),
+                    Some(path),
+                    Some(suffix.as_bytes()),
+                    None,
+                );
+                from_child = store.next_of(from_child);
+            }
+            // add new elements in 'to' that were not in 'from'
+            while to_child.is_some() {
+                compose_patch(
+                    store,
+                    patches,
+                    Some(b"add"),
+                    Some(path),
+                    Some(b"-"),
                     to_child,
                 );
-                to_child = (*to_child).next as *mut cJSON;
-                index = index.wrapping_add(1);
+                to_child = store.next_of(to_child);
             }
-            cJSON_free(new_path as *mut ::core::ffi::c_void);
-            return;
+            free_event(size);
         }
-        cJSON_Object => {
-            let mut from_child_0: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-            let mut to_child_0: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-            sort_object(from, case_sensitive);
-            sort_object(to, case_sensitive);
-            from_child_0 = (*from).child as *mut cJSON;
-            to_child_0 = (*to).child as *mut cJSON;
-            while !from_child_0.is_null() || !to_child_0.is_null() {
-                let mut diff: ::core::ffi::c_int = 0;
-                if from_child_0.is_null() {
-                    diff = 1 as ::core::ffi::c_int;
-                } else if to_child_0.is_null() {
-                    diff = -(1 as ::core::ffi::c_int);
+        flags::OBJECT => {
+            sort_object_impl(store, from, case_sensitive);
+            sort_object_impl(store, to, case_sensitive);
+            let mut from_child = store.child_of(from);
+            let mut to_child = store.child_of(to);
+            // for all object values in the object with more of them
+            while from_child.is_some() || to_child.is_some() {
+                let diff = if from_child.is_none() {
+                    1
+                } else if to_child.is_none() {
+                    -1
                 } else {
-                    diff = compare_strings(
-                        (*from_child_0).string as *mut ::core::ffi::c_uchar,
-                        (*to_child_0).string as *mut ::core::ffi::c_uchar,
+                    compare_strings(
+                        store.key_bytes(from_child),
+                        store.key_bytes(to_child),
                         case_sensitive,
-                    );
-                }
-                if diff == 0 as ::core::ffi::c_int {
-                    let mut path_length: size_t = strlen(path as *const ::core::ffi::c_char);
-                    let mut from_child_name_length: size_t =
-                        pointer_encoded_length((*from_child_0).string as *mut ::core::ffi::c_uchar);
-                    let mut new_path_0: *mut ::core::ffi::c_uchar = cJSON_malloc(
-                        path_length
-                            .wrapping_add(from_child_name_length)
-                            .wrapping_add(
-                                ::core::mem::size_of::<[::core::ffi::c_char; 2]>() as size_t
-                            ),
                     )
-                        as *mut ::core::ffi::c_uchar;
-                    sprintf(
-                        new_path_0 as *mut ::core::ffi::c_char,
-                        b"%s/\0" as *const u8 as *const ::core::ffi::c_char,
-                        path,
-                    );
-                    encode_string_as_pointer(
-                        new_path_0
-                            .offset(path_length as isize)
-                            .offset(1 as ::core::ffi::c_int as isize),
-                        (*from_child_0).string as *mut ::core::ffi::c_uchar,
-                    );
+                };
+                if diff == 0 {
+                    // both object keys are the same
+                    let name = encode_pointer(store.key_bytes(from_child).unwrap_or(&[]));
+                    let size = path.len() + name.len() + 2;
+                    let mut buffer = malloc_unchecked(size);
+                    let mut text = path.to_vec();
+                    text.push(b'/');
+                    text.extend_from_slice(&name);
+                    buffer[..text.len()].copy_from_slice(&text);
+                    // create a patch for the element
                     create_patches(
+                        store,
                         patches,
-                        new_path_0,
-                        from_child_0,
-                        to_child_0,
+                        c_str(&buffer),
+                        from_child,
+                        to_child,
                         case_sensitive,
                     );
-                    cJSON_free(new_path_0 as *mut ::core::ffi::c_void);
-                    from_child_0 = (*from_child_0).next as *mut cJSON;
-                    to_child_0 = (*to_child_0).next as *mut cJSON;
-                } else if diff < 0 as ::core::ffi::c_int {
+                    free_event(size);
+                    from_child = store.next_of(from_child);
+                    to_child = store.next_of(to_child);
+                } else if diff < 0 {
+                    // object element doesn't exist in 'to' --> remove it
+                    let key = key_copy(store, from_child);
                     compose_patch(
+                        store,
                         patches,
-                        b"remove\0" as *const u8 as *const ::core::ffi::c_char
-                            as *const ::core::ffi::c_uchar,
-                        path,
-                        (*from_child_0).string as *mut ::core::ffi::c_uchar,
-                        ::core::ptr::null::<cJSON>(),
+                        Some(b"remove"),
+                        Some(path),
+                        key.as_deref(),
+                        None,
                     );
-                    from_child_0 = (*from_child_0).next as *mut cJSON;
+                    from_child = store.next_of(from_child);
                 } else {
+                    // object element doesn't exist in 'from' --> add it
+                    let key = key_copy(store, to_child);
                     compose_patch(
+                        store,
                         patches,
-                        b"add\0" as *const u8 as *const ::core::ffi::c_char
-                            as *const ::core::ffi::c_uchar,
-                        path,
-                        (*to_child_0).string as *mut ::core::ffi::c_uchar,
-                        to_child_0,
+                        Some(b"add"),
+                        Some(path),
+                        key.as_deref(),
+                        to_child,
                     );
-                    to_child_0 = (*to_child_0).next as *mut cJSON;
+                    to_child = store.next_of(to_child);
                 }
             }
-            return;
         }
         _ => {}
-    };
-}
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_GeneratePatches(
-    from: *mut cJSON,
-    to: *mut cJSON,
-) -> *mut cJSON {
-    let mut patches: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if from.is_null() || to.is_null() {
-        return ::core::ptr::null_mut::<cJSON>();
     }
-    patches = cJSON_CreateArray();
-    create_patches(
-        patches,
-        b"\0" as *const u8 as *const ::core::ffi::c_char as *const ::core::ffi::c_uchar,
-        from,
-        to,
-        false_0,
-    );
-    return patches;
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_GeneratePatchesCaseSensitive(
-    from: *mut cJSON,
-    to: *mut cJSON,
-) -> *mut cJSON {
-    let mut patches: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if from.is_null() || to.is_null() {
-        return ::core::ptr::null_mut::<cJSON>();
-    }
-    patches = cJSON_CreateArray();
-    create_patches(
-        patches,
-        b"\0" as *const u8 as *const ::core::ffi::c_char as *const ::core::ffi::c_uchar,
-        from,
-        to,
-        true_0,
-    );
-    return patches;
+
+fn generate_patches_impl(
+    store: &mut Store,
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    from?;
+    to?;
+    let patches = store.create_array();
+    create_patches(store, patches, b"", from, to, case_sensitive);
+    patches
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_SortObject(object: *mut cJSON) {
-    sort_object(object, false_0);
+
+/// `cJSONUtils_GeneratePatches`.
+pub fn generate_patches(
+    store: &mut Store,
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+) -> Option<NodeId> {
+    generate_patches_impl(store, from, to, false)
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_SortObjectCaseSensitive(object: *mut cJSON) {
-    sort_object(object, true_0);
+
+/// `cJSONUtils_GeneratePatchesCaseSensitive`.
+pub fn generate_patches_case_sensitive(
+    store: &mut Store,
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+) -> Option<NodeId> {
+    generate_patches_impl(store, from, to, true)
 }
-unsafe extern "C" fn merge_patch(
-    mut target: *mut cJSON,
-    patch: *const cJSON,
-    case_sensitive: cJSON_bool,
-) -> *mut cJSON {
-    let mut patch_child: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if cJSON_IsObject(patch) == 0 {
-        let mut duplicate: *mut cJSON = cJSON_Duplicate(patch, 1 as cJSON_bool);
-        cJSON_Delete(target);
+
+/// `merge_patch` (`cJSON_Utils.c:1304-1382`).
+fn merge_patch_impl(
+    store: &mut Store,
+    target: Option<NodeId>,
+    patch: Option<NodeId>,
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    if !store.is_object(patch) {
+        // scalar value, array or NULL, just duplicate (before deleting the target: the patch may be inside it)
+        let duplicate = store.duplicate(patch, true);
+        store.delete(target);
         return duplicate;
     }
-    if cJSON_IsObject(target) == 0 {
-        cJSON_Delete(target);
-        target = cJSON_CreateObject();
+    let mut target = target;
+    if !store.is_object(target) {
+        store.delete(target);
+        target = store.create_object();
     }
-    patch_child = (*patch).child as *mut cJSON;
-    while !patch_child.is_null() {
-        if cJSON_IsNull(patch_child) != 0 {
-            if case_sensitive != 0 {
-                cJSON_DeleteItemFromObjectCaseSensitive(target, (*patch_child).string);
+    let mut patch_child = store.child_of(patch);
+    while let Some(child) = patch_child {
+        let key = key_copy(store, Some(child));
+        if store.is_null(Some(child)) {
+            // NULL is the indicator to remove a value, see RFC7396
+            if case_sensitive {
+                store.delete_item_from_object_case_sensitive(target, key.as_deref());
             } else {
-                cJSON_DeleteItemFromObject(target, (*patch_child).string);
+                store.delete_item_from_object(target, key.as_deref());
             }
         } else {
-            let mut replace_me: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-            let mut replacement: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-            if case_sensitive != 0 {
-                replace_me = cJSON_DetachItemFromObjectCaseSensitive(target, (*patch_child).string);
+            let replace_me = if case_sensitive {
+                store.detach_item_from_object_case_sensitive(target, key.as_deref())
             } else {
-                replace_me = cJSON_DetachItemFromObject(target, (*patch_child).string);
-            }
-            replacement = merge_patch(replace_me, patch_child, case_sensitive);
-            if replacement.is_null() {
-                cJSON_Delete(target);
-                return ::core::ptr::null_mut::<cJSON>();
-            }
-            cJSON_AddItemToObject(target, (*patch_child).string, replacement);
+                store.detach_item_from_object(target, key.as_deref())
+            };
+            let Some(replacement) =
+                merge_patch_impl(store, replace_me, Some(child), case_sensitive)
+            else {
+                store.delete(target);
+                return None;
+            };
+            store.add_item_to_object(target, key.as_deref(), Some(replacement));
         }
-        patch_child = (*patch_child).next as *mut cJSON;
+        patch_child = store.next_of(Some(child));
     }
-    return target;
+    target
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_MergePatch(
-    mut target: *mut cJSON,
-    patch: *const cJSON,
-) -> *mut cJSON {
-    return merge_patch(target, patch, false_0);
+
+/// `cJSONUtils_MergePatch`: consumes `target`, returns the new root.
+pub fn merge_patch(
+    store: &mut Store,
+    target: Option<NodeId>,
+    patch: Option<NodeId>,
+) -> Option<NodeId> {
+    merge_patch_impl(store, target, patch, false)
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_MergePatchCaseSensitive(
-    mut target: *mut cJSON,
-    patch: *const cJSON,
-) -> *mut cJSON {
-    return merge_patch(target, patch, true_0);
+
+/// `cJSONUtils_MergePatchCaseSensitive`.
+pub fn merge_patch_case_sensitive(
+    store: &mut Store,
+    target: Option<NodeId>,
+    patch: Option<NodeId>,
+) -> Option<NodeId> {
+    merge_patch_impl(store, target, patch, true)
 }
-unsafe extern "C" fn generate_merge_patch(
-    from: *mut cJSON,
-    to: *mut cJSON,
-    case_sensitive: cJSON_bool,
-) -> *mut cJSON {
-    let mut from_child: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    let mut to_child: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    let mut patch: *mut cJSON = ::core::ptr::null_mut::<cJSON>();
-    if to.is_null() {
-        return cJSON_CreateNull();
+
+/// `generate_merge_patch` (`cJSON_Utils.c:1384-1478`).
+// QUIRK(port): Q21
+fn generate_merge_patch_impl(
+    store: &mut Store,
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+    case_sensitive: bool,
+) -> Option<NodeId> {
+    if to.is_none() {
+        // patch to delete everything
+        return store.create_null();
     }
-    if cJSON_IsObject(to) == 0 || cJSON_IsObject(from) == 0 {
-        return cJSON_Duplicate(to, 1 as cJSON_bool);
+    if !store.is_object(to) || !store.is_object(from) {
+        return store.duplicate(to, true);
     }
-    sort_object(from, case_sensitive);
-    sort_object(to, case_sensitive);
-    from_child = (*from).child as *mut cJSON;
-    to_child = (*to).child as *mut cJSON;
-    patch = cJSON_CreateObject();
-    if patch.is_null() {
-        return ::core::ptr::null_mut::<cJSON>();
-    }
-    while !from_child.is_null() || !to_child.is_null() {
-        let mut diff: ::core::ffi::c_int = 0;
-        if !from_child.is_null() {
-            if !to_child.is_null() {
-                diff = strcmp((*from_child).string, (*to_child).string);
-            } else {
-                diff = -(1 as ::core::ffi::c_int);
+    sort_object_impl(store, from, case_sensitive);
+    sort_object_impl(store, to, case_sensitive);
+    let mut from_child = store.child_of(from);
+    let mut to_child = store.child_of(to);
+    let patch = store.create_object()?;
+    while from_child.is_some() || to_child.is_some() {
+        let diff = match (from_child, to_child) {
+            (Some(_), Some(_)) => {
+                // strcmp whatever the case flag (Q21); NULL keys are different (D20)
+                match (store.key_bytes(from_child), store.key_bytes(to_child)) {
+                    (Some(a), Some(b)) => match a.cmp(b) {
+                        Ordering::Less => -1,
+                        Ordering::Equal => 0,
+                        Ordering::Greater => 1,
+                    },
+                    // DEVIATION(port): D20
+                    _ => 1,
+                }
             }
+            (Some(_), None) => -1,
+            _ => 1,
+        };
+        if diff < 0 {
+            // from has a value that to doesn't have -> remove
+            let key = key_copy(store, from_child);
+            let null = store.create_null();
+            store.add_item_to_object(Some(patch), key.as_deref(), null);
+            from_child = store.next_of(from_child);
+        } else if diff > 0 {
+            // to has a value that from doesn't have -> add to patch
+            let key = key_copy(store, to_child);
+            let copy = store.duplicate(to_child, true);
+            store.add_item_to_object(Some(patch), key.as_deref(), copy);
+            to_child = store.next_of(to_child);
         } else {
-            diff = 1 as ::core::ffi::c_int;
-        }
-        if diff < 0 as ::core::ffi::c_int {
-            cJSON_AddItemToObject(patch, (*from_child).string, cJSON_CreateNull());
-            from_child = (*from_child).next as *mut cJSON;
-        } else if diff > 0 as ::core::ffi::c_int {
-            cJSON_AddItemToObject(
-                patch,
-                (*to_child).string,
-                cJSON_Duplicate(to_child, 1 as cJSON_bool),
-            );
-            to_child = (*to_child).next as *mut cJSON;
-        } else {
-            if compare_json(from_child, to_child, case_sensitive) == 0 {
-                cJSON_AddItemToObject(
-                    patch,
-                    (*to_child).string,
-                    cJSONUtils_GenerateMergePatch(from_child, to_child),
-                );
+            // object key exists in both objects
+            if !compare_json(store, from_child, to_child, case_sensitive) {
+                // not identical --> generate a patch (the recursion is always case-insensitive, Q21)
+                let key = key_copy(store, to_child);
+                let nested = generate_merge_patch_impl(store, from_child, to_child, false);
+                store.add_item_to_object(Some(patch), key.as_deref(), nested);
             }
-            from_child = (*from_child).next as *mut cJSON;
-            to_child = (*to_child).next as *mut cJSON;
+            // next key in the object
+            from_child = store.next_of(from_child);
+            to_child = store.next_of(to_child);
         }
     }
-    if (*patch).child.is_null() {
-        cJSON_Delete(patch);
-        return ::core::ptr::null_mut::<cJSON>();
+    if store.child_of(Some(patch)).is_none() {
+        // no patch generated
+        store.delete(Some(patch));
+        return None;
     }
-    return patch;
+    Some(patch)
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_GenerateMergePatch(
-    from: *mut cJSON,
-    to: *mut cJSON,
-) -> *mut cJSON {
-    return generate_merge_patch(from, to, false_0);
+
+/// `cJSONUtils_GenerateMergePatch`.
+pub fn generate_merge_patch(
+    store: &mut Store,
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+) -> Option<NodeId> {
+    generate_merge_patch_impl(store, from, to, false)
 }
-#[no_mangle]
-pub unsafe extern "C" fn cJSONUtils_GenerateMergePatchCaseSensitive(
-    from: *mut cJSON,
-    to: *mut cJSON,
-) -> *mut cJSON {
-    return generate_merge_patch(from, to, true_0);
+
+/// `cJSONUtils_GenerateMergePatchCaseSensitive`.
+pub fn generate_merge_patch_case_sensitive(
+    store: &mut Store,
+    from: Option<NodeId>,
+    to: Option<NodeId>,
+) -> Option<NodeId> {
+    generate_merge_patch_impl(store, from, to, true)
 }
-pub const __DBL_EPSILON__: ::core::ffi::c_double = 2.2204460492503131e-16f64;
-pub const NULL: *mut ::core::ffi::c_void = __DARWIN_NULL;
+
+// PORT STATUS: stage=2 confidence=medium todos=1 deviations=D2,D12,D19,D20

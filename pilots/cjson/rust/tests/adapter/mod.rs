@@ -1,9 +1,9 @@
 //! Judge adapter (judge.md section 5): the only test-side file that calls the `cjson` crate.
 //!
-//! STAGE 1 VERSION. It calls the C-ABI functions of `cJSON.h` / `cJSON_Utils.h` in `unsafe` blocks (allowed:
-//! `tests/` is outside the zero-`unsafe` scope of `src/`) and exposes a plain, safe, C-shaped interface to
-//! `tests/upstream.rs` and `examples/dump.rs`. Stage 2 replaces ONLY this file with an implementation of the
-//! same interface over the RULEBOOK section 6 API. Neither the driver nor the tests may change.
+//! STAGE 2 VERSION. It implements the interface below over the RULEBOOK section 6 API of the crate (a `Store`
+//! behind a `Mutex`, `NodeId` handles, the `AllocHooks` seam) in safe Rust, and exposes the same plain,
+//! C-shaped interface to `tests/upstream.rs` and `examples/dump.rs` as the Stage 1 adapter did (which called
+//! the C-ABI functions in `unsafe` blocks). Neither the driver nor the tests changed.
 //!
 //! # The interface contract (RULEBOOK section 6.0; both adapters implement all of it)
 //!
@@ -45,24 +45,24 @@
 //!
 //! Capability (a constant, so that a Stage 2 adapter can say "not available" without touching the tests):
 //! [`C_LAYOUT`]: the `raw_*` functions at the end of this file work (hand-corrupted lists, writes into the
-//! node's own key, a node with two kind bits; RULEBOOK D7, D14). Stage 2: `false`. Steps that need them print
-//! `SKIPPED` and are left out. There is no hooks capability: since the D1 revision (2026-10-10) every adapter
+//! node's own key, a node with two kind bits; RULEBOOK D7, D14). Stage 2: `false`, the `raw_*` functions
+//! panic. Steps that need them print `SKIPPED` and are left out. There is no hooks capability: since the D1 revision (2026-10-10) every adapter
 //! has the hooks, and `run.py --stage 2` always compares the allocator section.
 //!
 //! Locking. The library has process-global state (hooks, error position, RULEBOOK D1/D9). Tests run on
 //! threads, so every test holds `upstream.rs::lock()`; the adapter itself is not synchronised.
 #![allow(dead_code)]
 
-use std::ffi::{c_char, c_int, c_void, CStr};
-use std::ptr::{null, null_mut};
+use std::ffi::CStr;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use cjson::cJSON as lib;
-use cjson::cJSON::{cJSON, cJSON_Hooks};
+use cjson::cJSON::{AllocHooks, NodeId, ParseError, Store};
 use cjson::cJSON_Utils as utils;
 
-/// Stage 1: the `raw_*` functions work.
-pub const C_LAYOUT: bool = true;
+/// Stage 2: the `raw_*` functions do not work (RULEBOOK D7, D14).
+pub const C_LAYOUT: bool = false;
 
 // ---- type flags (cJSON.h) ------------------------------------------------------------------------------------
 
@@ -78,60 +78,37 @@ pub const RAW: i32 = 1 << 7;
 pub const IS_REFERENCE: i32 = 256;
 pub const STRING_IS_CONST: i32 = 512;
 
-pub const NESTING_LIMIT: usize = 1000;
-pub const CIRCULAR_LIMIT: usize = 10000;
-
-unsafe extern "C" {
-    fn malloc(n: usize) -> *mut c_void;
-    fn free(p: *mut c_void);
-}
+pub const NESTING_LIMIT: usize = lib::CJSON_NESTING_LIMIT;
+pub const CIRCULAR_LIMIT: usize = lib::CJSON_CIRCULAR_LIMIT;
 
 // ---- handles and argument plumbing ---------------------------------------------------------------------------
 
+/// The one store behind every handle (the tests share it, serialised by `upstream.rs::lock()`).
+static STORE: Mutex<Store> = Mutex::new(Store::new());
+
+/// Lock the store; a panicking test must not poison the following ones.
+fn store() -> MutexGuard<'static, Store> {
+    STORE.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Item(*mut cJSON);
+pub struct Item(Option<NodeId>);
 
 /// The C NULL.
-pub const NULL: Item = Item(null_mut());
+pub const NULL: Item = Item(None);
 
 impl Item {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 }
 
-/// A NUL-terminated copy of an optional byte string; `ptr()` is NULL for `None`.
-struct CArg(Option<Vec<u8>>);
-
-impl CArg {
-    fn new(s: Option<&[u8]>) -> CArg {
-        CArg(s.map(|s| {
-            let mut v = Vec::with_capacity(s.len() + 1);
-            v.extend_from_slice(s);
-            v.push(0);
-            v
-        }))
+/// The node of a non-NULL handle (the Stage 1 adapter asserted the same).
+fn id(item: Item) -> NodeId {
+    match item.0 {
+        Some(node) => node,
+        None => panic!("adapter: NULL item"),
     }
-    fn ptr(&self) -> *const c_char {
-        self.0.as_ref().map_or(null(), |v| v.as_ptr() as *const c_char)
-    }
-}
-
-fn opt_bytes(p: *const c_char) -> Option<Vec<u8>> {
-    if p.is_null() {
-        None
-    } else {
-        // SAFETY: the library hands out NUL-terminated strings that stay alive until the next mutation.
-        Some(unsafe { CStr::from_ptr(p) }.to_bytes().to_vec())
-    }
-}
-
-fn b(v: c_int) -> bool {
-    v != 0
-}
-
-fn cb(v: bool) -> c_int {
-    v as c_int
 }
 
 // ---- parse ---------------------------------------------------------------------------------------------------
@@ -158,43 +135,57 @@ pub struct Parsed {
 enum ParseCall {
     Plain,
     WithLength(usize),
-    Opts { require_nul: bool, want_end: bool },
-    LengthOpts { len: usize, require_nul: bool, want_end: bool },
+    Opts {
+        require_nul: bool,
+        want_end: bool,
+    },
+    LengthOpts {
+        len: usize,
+        require_nul: bool,
+        want_end: bool,
+    },
 }
 
 fn do_parse(text: Option<&[u8]>, call: ParseCall) -> Parsed {
-    let arg = CArg::new(text);
-    let base = arg.ptr();
-    let mut end: *const c_char = null();
-    // SAFETY: `base` is NULL or a NUL-terminated buffer of `text.len() + 1` bytes that outlives the call.
-    let item = unsafe {
+    // The C caller's buffer: the text and its terminating NUL.
+    let buffer: Option<Vec<u8>> = text.map(|t| {
+        let mut v = Vec::with_capacity(t.len() + 1);
+        v.extend_from_slice(t);
+        v.push(0);
+        v
+    });
+    let (result, want_end) = {
+        let mut s = store();
+        let b = buffer.as_deref();
         match call {
-            ParseCall::Plain => lib::cJSON_Parse(base),
-            ParseCall::WithLength(len) => lib::cJSON_ParseWithLength(base, len),
-            ParseCall::Opts { require_nul, want_end } => lib::cJSON_ParseWithOpts(
-                base,
-                if want_end { &raw mut end } else { null_mut() },
-                cb(require_nul),
-            ),
-            ParseCall::LengthOpts { len, require_nul, want_end } => lib::cJSON_ParseWithLengthOpts(
-                base,
+            ParseCall::Plain => (s.parse(b), false),
+            ParseCall::WithLength(len) => (s.parse_with_length(b, len), false),
+            ParseCall::Opts {
+                require_nul,
+                want_end,
+            } => (s.parse_with_opts(b, require_nul), want_end),
+            ParseCall::LengthOpts {
                 len,
-                if want_end { &raw mut end } else { null_mut() },
-                cb(require_nul),
-            ),
+                require_nul,
+                want_end,
+            } => (s.parse_with_length_opts(b, len, require_nul), want_end),
         }
     };
-    // SAFETY: plain read of the global error pointer.
-    let e = unsafe { lib::cJSON_GetErrorPtr() };
-    let err = if e.is_null() {
-        ErrPos::Unset
-    } else if !base.is_null() && e >= base {
-        ErrPos::At(e as usize - base as usize)
-    } else {
-        ErrPos::Outside
+    let (item, end) = match result {
+        Ok(p) => (Item(Some(p.root)), Some(p.end)),
+        Err(ParseError::At(offset)) => (NULL, Some(offset)),
+        Err(ParseError::NoInput) => (NULL, None),
     };
-    let end = if end.is_null() || base.is_null() { None } else { Some(end as usize - base as usize) };
-    Parsed { item: Item(item), end, err }
+    let err = match (text.is_some(), lib::get_error_offset()) {
+        (true, Some(offset)) => ErrPos::At(offset),
+        (false, Some(_)) => ErrPos::Outside,
+        (_, None) => ErrPos::Unset,
+    };
+    Parsed {
+        item,
+        end: if want_end { end } else { None },
+        err,
+    }
 }
 
 /// `cJSON_Parse`.
@@ -209,148 +200,125 @@ pub fn parse_with_length(text: Option<&[u8]>, len: usize) -> Parsed {
 
 /// `cJSON_ParseWithOpts`; `want_end` = pass a non-NULL `return_parse_end`.
 pub fn parse_with_opts(text: Option<&[u8]>, require_nul: bool, want_end: bool) -> Parsed {
-    do_parse(text, ParseCall::Opts { require_nul, want_end })
+    do_parse(
+        text,
+        ParseCall::Opts {
+            require_nul,
+            want_end,
+        },
+    )
 }
 
 /// `cJSON_ParseWithLengthOpts`.
-pub fn parse_with_length_opts(text: Option<&[u8]>, len: usize, require_nul: bool, want_end: bool) -> Parsed {
-    do_parse(text, ParseCall::LengthOpts { len, require_nul, want_end })
+pub fn parse_with_length_opts(
+    text: Option<&[u8]>,
+    len: usize,
+    require_nul: bool,
+    want_end: bool,
+) -> Parsed {
+    do_parse(
+        text,
+        ParseCall::LengthOpts {
+            len,
+            require_nul,
+            want_end,
+        },
+    )
 }
 
 // ---- print ---------------------------------------------------------------------------------------------------
 
-/// A string returned by a print function; freed with `cJSON_free` when dropped (so the driver controls
-/// when the allocator hooks see the free).
-pub struct Printed(*mut c_char);
+/// A string returned by a print function; dropping it is the `cJSON_free` event of the allocator hooks.
+pub struct Printed(lib::Printed);
 
 impl Printed {
     pub fn bytes(&self) -> &[u8] {
-        // SAFETY: non-NULL by construction, NUL-terminated, alive until drop.
-        unsafe { CStr::from_ptr(self.0) }.to_bytes()
+        self.0.bytes()
     }
 
     /// RULEBOOK D21: the returned buffer as writable bytes (those before the NUL); a NUL written inside
     /// shortens what [`Printed::bytes`] returns afterwards.
     pub fn bytes_mut(&mut self) -> &mut [u8] {
-        // SAFETY: non-NULL, NUL-terminated, exclusively borrowed through `self`; the slice ends before the NUL.
-        unsafe {
-            let n = CStr::from_ptr(self.0).to_bytes().len();
-            std::slice::from_raw_parts_mut(self.0 as *mut u8, n)
-        }
-    }
-}
-
-impl Drop for Printed {
-    fn drop(&mut self) {
-        // SAFETY: allocated by the library's print functions through the active hooks.
-        unsafe { lib::cJSON_free(self.0 as *mut c_void) }
-    }
-}
-
-fn printed(p: *mut c_char) -> Option<Printed> {
-    if p.is_null() {
-        None
-    } else {
-        Some(Printed(p))
+        self.0.bytes_mut()
     }
 }
 
 /// `cJSON_Print` (formatted).
 pub fn print(item: Item) -> Option<Printed> {
-    // SAFETY: `item` is NULL or a live node.
-    printed(unsafe { lib::cJSON_Print(item.0) })
+    let printed = store().print(item.0);
+    printed.map(Printed)
 }
 
 /// `cJSON_PrintUnformatted`.
 pub fn print_unformatted(item: Item) -> Option<Printed> {
-    // SAFETY: as above.
-    printed(unsafe { lib::cJSON_PrintUnformatted(item.0) })
+    let printed = store().print_unformatted(item.0);
+    printed.map(Printed)
 }
 
 /// `cJSON_PrintBuffered`.
 pub fn print_buffered(item: Item, prebuffer: i32, fmt: bool) -> Option<Printed> {
-    // SAFETY: as above.
-    printed(unsafe { lib::cJSON_PrintBuffered(item.0, prebuffer, cb(fmt)) })
+    let prebuffer = usize::try_from(prebuffer).ok()?;
+    let printed = store().print_buffered(item.0, prebuffer, fmt);
+    printed.map(Printed)
 }
 
 /// `cJSON_PrintPreallocated(item, buf, length, fmt)`; `length` must not exceed `buf.len()` when `buf` is
 /// `Some`. The C bytes written are visible in `buf` afterwards (also after a `false` result, Q6).
 pub fn print_preallocated(item: Item, buf: Option<&mut [u8]>, length: i32, fmt: bool) -> bool {
-    let p = match buf {
-        Some(s) => {
-            assert!(length < 0 || length as usize <= s.len(), "adapter: length exceeds the buffer");
-            s.as_mut_ptr() as *mut c_char
-        }
-        None => null_mut(),
+    let Some(s) = buf else { return false };
+    let Ok(length) = usize::try_from(length) else {
+        return false;
     };
-    // SAFETY: `p` is NULL or valid for `length` bytes (asserted above).
-    b(unsafe { lib::cJSON_PrintPreallocated(item.0, p, length, cb(fmt)) })
+    assert!(length <= s.len(), "adapter: length exceeds the buffer");
+    store().print_preallocated(item.0, &mut s[..length], fmt)
 }
 
 pub fn version() -> Vec<u8> {
-    // SAFETY: returns a static string.
-    opt_bytes(unsafe { lib::cJSON_Version() }).unwrap_or_default()
+    lib::version().to_vec()
 }
 
 // ---- node access ---------------------------------------------------------------------------------------------
 
 pub fn delete(item: Item) {
-    // SAFETY: `item` is NULL or a root the caller owns.
-    unsafe { lib::cJSON_Delete(item.0) }
+    store().delete(item.0);
 }
 
 /// The full `type` word (kind bits plus `IS_REFERENCE` / `STRING_IS_CONST`).
 pub fn type_flags(item: Item) -> i32 {
-    assert!(!item.is_null());
-    // SAFETY: non-NULL live node.
-    unsafe { (*item.0).type_0 }
+    store().node_type(id(item)).unwrap_or(0) as i32
 }
 
 pub fn value_int(item: Item) -> i32 {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    unsafe { (*item.0).valueint }
+    store().value_int(id(item)).unwrap_or(0)
 }
 
 pub fn value_double(item: Item) -> f64 {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    unsafe { (*item.0).valuedouble }
+    store().value_double(id(item)).unwrap_or(0.0)
 }
 
 /// The `string` member (the key), `None` when NULL.
 pub fn key(item: Item) -> Option<Vec<u8>> {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    opt_bytes(unsafe { (*item.0).string })
+    store().key(id(item)).map(<[u8]>::to_vec)
 }
 
 /// The `valuestring` member, `None` when NULL.
 pub fn value_string(item: Item) -> Option<Vec<u8>> {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    opt_bytes(unsafe { (*item.0).valuestring })
+    store().value_string(id(item)).map(<[u8]>::to_vec)
 }
 
 /// Address of the `valuestring` buffer (0 for NULL), for the "no copy" / "did not reallocate" assertions.
 pub fn value_string_addr(item: Item) -> usize {
-    assert!(!item.is_null());
-    // SAFETY: live node; only the pointer value is read.
-    unsafe { (*item.0).valuestring as usize }
+    store().value_string_addr(id(item))
 }
 
 /// Write the `valueint` field only (C: `item->valueint = v`; `valuedouble` is not touched, Q3).
 pub fn set_value_int(item: Item, v: i32) {
-    assert!(!item.is_null());
-    // SAFETY: live node.
-    unsafe { (*item.0).valueint = v }
+    store().set_value_int(id(item), v);
 }
 
 /// Write the `valuedouble` field only (C: `item->valuedouble = v`; `valueint` is not touched, Q3).
 pub fn set_value_double(item: Item, v: f64) {
-    assert!(!item.is_null());
-    // SAFETY: live node.
-    unsafe { (*item.0).valuedouble = v }
+    store().set_value_double(id(item), v);
 }
 
 /// RULEBOOK D21: `char *s = cJSON_GetStringValue(item)` used as a writable buffer. `f` gets the bytes before
@@ -358,175 +326,140 @@ pub fn set_value_double(item: Item, v: f64) {
 /// `f` when C returns NULL (not a string, NULL item, no value) or the string is a reference (`IsReference`:
 /// the buffer is the caller's, RULEBOOK D13).
 pub fn with_string_value_mut(item: Item, f: impl FnOnce(&mut [u8])) -> bool {
-    if !is_string(item) || type_flags(item) & IS_REFERENCE != 0 {
-        return false;
-    }
-    // SAFETY: live String node; the library returns its own NUL-terminated valuestring (or NULL).
-    unsafe {
-        let p = lib::cJSON_GetStringValue(item.0);
-        if p.is_null() {
-            return false;
+    let mut s = store();
+    match s.string_value_mut(item.0) {
+        Some(bytes) => {
+            f(bytes);
+            true
         }
-        let n = CStr::from_ptr(p).to_bytes().len();
-        f(std::slice::from_raw_parts_mut(p as *mut u8, n));
+        None => false,
     }
-    true
 }
 
 pub fn child(item: Item) -> Item {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    Item(unsafe { (*item.0).child })
+    Item(store().child(id(item)))
 }
 
 pub fn next(item: Item) -> Item {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    Item(unsafe { (*item.0).next })
+    Item(store().next(id(item)))
 }
 
 /// `prev` of the first sibling is the last sibling (cJSON invariant); NULL for a detached node.
 pub fn prev(item: Item) -> Item {
-    assert!(!item.is_null());
-    // SAFETY: as above.
-    Item(unsafe { (*item.0).prev })
+    Item(store().prev(id(item)))
 }
 
 /// `cJSON_ArrayForEach`: the children of `item` in order (empty for NULL).
 pub fn children(item: Item) -> Vec<Item> {
-    let mut v = Vec::new();
-    if item.is_null() {
-        return v;
-    }
-    let mut c = child(item);
-    while !c.is_null() {
-        v.push(c);
-        c = next(c);
-    }
-    v
+    let ids = store().children(item.0);
+    ids.into_iter().map(|c| Item(Some(c))).collect()
 }
 
 pub fn is_invalid(item: Item) -> bool {
-    // SAFETY: `item` is NULL or a live node (all the predicates below).
-    b(unsafe { lib::cJSON_IsInvalid(item.0) })
+    store().is_invalid(item.0)
 }
 pub fn is_false(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsFalse(item.0) })
+    store().is_false(item.0)
 }
 pub fn is_true(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsTrue(item.0) })
+    store().is_true(item.0)
 }
 pub fn is_bool(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsBool(item.0) })
+    store().is_bool(item.0)
 }
 pub fn is_null(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsNull(item.0) })
+    store().is_null(item.0)
 }
 pub fn is_number(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsNumber(item.0) })
+    store().is_number(item.0)
 }
 pub fn is_string(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsString(item.0) })
+    store().is_string(item.0)
 }
 pub fn is_array(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsArray(item.0) })
+    store().is_array(item.0)
 }
 pub fn is_object(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsObject(item.0) })
+    store().is_object(item.0)
 }
 pub fn is_raw(item: Item) -> bool {
-    b(unsafe { lib::cJSON_IsRaw(item.0) })
+    store().is_raw(item.0)
 }
 
 pub fn array_size(item: Item) -> i32 {
-    // SAFETY: NULL or live node.
-    unsafe { lib::cJSON_GetArraySize(item.0) }
+    store().get_array_size(item.0) as i32
 }
 
 pub fn array_item(item: Item, index: i32) -> Item {
-    // SAFETY: as above.
-    Item(unsafe { lib::cJSON_GetArrayItem(item.0, index) })
+    let Ok(index) = usize::try_from(index) else {
+        return NULL;
+    };
+    Item(store().get_array_item(item.0, index))
 }
 
 pub fn object_item(item: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    // SAFETY: as above; `n` outlives the call.
-    Item(unsafe { lib::cJSON_GetObjectItem(item.0, n.ptr()) })
+    Item(store().get_object_item(item.0, name))
 }
 
 pub fn object_item_cs(item: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    // SAFETY: as above.
-    Item(unsafe { lib::cJSON_GetObjectItemCaseSensitive(item.0, n.ptr()) })
+    Item(store().get_object_item_case_sensitive(item.0, name))
 }
 
 pub fn has_object_item(item: Item, name: Option<&[u8]>) -> bool {
-    let n = CArg::new(name);
-    // SAFETY: as above.
-    b(unsafe { lib::cJSON_HasObjectItem(item.0, n.ptr()) })
+    store().has_object_item(item.0, name)
 }
 
 /// `cJSON_GetStringValue`.
 pub fn get_string_value(item: Item) -> Option<Vec<u8>> {
-    // SAFETY: NULL or live node.
-    opt_bytes(unsafe { lib::cJSON_GetStringValue(item.0) })
+    store().get_string_value(item.0).map(<[u8]>::to_vec)
 }
 
 /// `cJSON_GetNumberValue` (NaN for a non-number or NULL, Q24).
 pub fn get_number_value(item: Item) -> f64 {
-    // SAFETY: as above.
-    unsafe { lib::cJSON_GetNumberValue(item.0) }
+    store().get_number_value(item.0)
 }
 
 // ---- constructors --------------------------------------------------------------------------------------------
 
 pub fn create_null() -> Item {
-    // SAFETY: no preconditions.
-    Item(unsafe { lib::cJSON_CreateNull() })
+    Item(store().create_null())
 }
 pub fn create_true() -> Item {
-    Item(unsafe { lib::cJSON_CreateTrue() })
+    Item(store().create_true())
 }
 pub fn create_false() -> Item {
-    Item(unsafe { lib::cJSON_CreateFalse() })
+    Item(store().create_false())
 }
 pub fn create_bool(v: bool) -> Item {
-    Item(unsafe { lib::cJSON_CreateBool(cb(v)) })
+    Item(store().create_bool(v))
 }
 pub fn create_number(v: f64) -> Item {
-    Item(unsafe { lib::cJSON_CreateNumber(v) })
+    Item(store().create_number(v))
 }
 pub fn create_string(s: Option<&[u8]>) -> Item {
-    let a = CArg::new(s);
-    // SAFETY: `a` outlives the call; the library copies the string.
-    Item(unsafe { lib::cJSON_CreateString(a.ptr()) })
+    Item(store().create_string(s))
 }
 pub fn create_raw(s: Option<&[u8]>) -> Item {
-    let a = CArg::new(s);
-    // SAFETY: as above.
-    Item(unsafe { lib::cJSON_CreateRaw(a.ptr()) })
+    Item(store().create_raw(s))
 }
 pub fn create_array() -> Item {
-    Item(unsafe { lib::cJSON_CreateArray() })
+    Item(store().create_array())
 }
 pub fn create_object() -> Item {
-    Item(unsafe { lib::cJSON_CreateObject() })
+    Item(store().create_object())
 }
 
 /// `cJSON_CreateStringReference`: the item points at `s` itself (no copy).
 pub fn create_string_reference(s: Option<&'static CStr>) -> Item {
-    // SAFETY: `s` is 'static, so the reference never dangles.
-    Item(unsafe { lib::cJSON_CreateStringReference(s.map_or(null(), |s| s.as_ptr())) })
+    Item(store().create_string_reference(s.map(CStr::to_bytes)))
 }
 
 /// `cJSON_CreateObjectReference`: the new item's `child` is `child` (no copy, RULEBOOK D12).
 pub fn create_object_reference(child: Item) -> Item {
-    // SAFETY: caller keeps `child` alive for the reference's lifetime (as in C).
-    Item(unsafe { lib::cJSON_CreateObjectReference(child.0) })
+    Item(store().create_object_reference(child.0))
 }
 pub fn create_array_reference(child: Item) -> Item {
-    // SAFETY: as above.
-    Item(unsafe { lib::cJSON_CreateArrayReference(child.0) })
+    Item(store().create_array_reference(child.0))
 }
 
 /// `cJSON_CreateIntArray(numbers, count)`; `numbers = None` is NULL (then `count` is only passed on).
@@ -534,215 +467,178 @@ pub fn create_int_array(numbers: Option<&[i32]>, count: i32) -> Item {
     if let Some(n) = numbers {
         assert!(count < 0 || count as usize <= n.len());
     }
-    // SAFETY: NULL or valid for `count` elements (asserted).
-    Item(unsafe { lib::cJSON_CreateIntArray(numbers.map_or(null(), |n| n.as_ptr()), count) })
+    match (numbers, usize::try_from(count)) {
+        (Some(n), Ok(count)) => Item(store().create_int_array(&n[..count])),
+        _ => NULL,
+    }
 }
 pub fn create_float_array(numbers: Option<&[f32]>, count: i32) -> Item {
     if let Some(n) = numbers {
         assert!(count < 0 || count as usize <= n.len());
     }
-    // SAFETY: as above.
-    Item(unsafe { lib::cJSON_CreateFloatArray(numbers.map_or(null(), |n| n.as_ptr()), count) })
+    match (numbers, usize::try_from(count)) {
+        (Some(n), Ok(count)) => Item(store().create_float_array(&n[..count])),
+        _ => NULL,
+    }
 }
 pub fn create_double_array(numbers: Option<&[f64]>, count: i32) -> Item {
     if let Some(n) = numbers {
         assert!(count < 0 || count as usize <= n.len());
     }
-    // SAFETY: as above.
-    Item(unsafe { lib::cJSON_CreateDoubleArray(numbers.map_or(null(), |n| n.as_ptr()), count) })
+    match (numbers, usize::try_from(count)) {
+        (Some(n), Ok(count)) => Item(store().create_double_array(&n[..count])),
+        _ => NULL,
+    }
 }
 pub fn create_string_array(strings: Option<&[&[u8]]>, count: i32) -> Item {
     if let Some(s) = strings {
         assert!(count < 0 || count as usize <= s.len());
     }
-    let owned: Vec<CArg> = strings.map_or(Vec::new(), |s| s.iter().map(|x| CArg::new(Some(x))).collect());
-    let ptrs: Vec<*const c_char> = owned.iter().map(CArg::ptr).collect();
-    let p = if strings.is_some() { ptrs.as_ptr() } else { null() };
-    // SAFETY: `ptrs` holds `strings.len()` valid NUL-terminated pointers (asserted `count` bound).
-    Item(unsafe { lib::cJSON_CreateStringArray(p, count) })
+    match (strings, usize::try_from(count)) {
+        (Some(s), Ok(count)) => Item(store().create_string_array(&s[..count])),
+        _ => NULL,
+    }
 }
 
 // ---- add / detach / delete / insert / replace ----------------------------------------------------------------
 
 pub fn add_item_to_array(array: Item, item: Item) -> bool {
-    // SAFETY: handles are NULL or live nodes owned by the caller (ownership rules in the header).
-    b(unsafe { lib::cJSON_AddItemToArray(array.0, item.0) })
+    store().add_item_to_array(array.0, item.0)
 }
 
 pub fn add_item_to_object(object: Item, name: Option<&[u8]>, item: Item) -> bool {
-    let n = CArg::new(name);
-    // SAFETY: the library copies the key.
-    b(unsafe { lib::cJSON_AddItemToObject(object.0, n.ptr(), item.0) })
+    store().add_item_to_object(object.0, name, item.0)
 }
 
 /// `cJSON_AddItemToObjectCS`: the key is stored by pointer, so it must be `'static`.
 pub fn add_item_to_object_cs(object: Item, name: Option<&'static CStr>, item: Item) -> bool {
-    // SAFETY: `name` is 'static.
-    b(unsafe { lib::cJSON_AddItemToObjectCS(object.0, name.map_or(null(), |s| s.as_ptr()), item.0) })
+    store().add_item_to_object_cs(object.0, name.map(CStr::to_bytes), item.0)
 }
 
 pub fn add_item_reference_to_array(array: Item, item: Item) -> bool {
-    // SAFETY: as add_item_to_array.
-    b(unsafe { lib::cJSON_AddItemReferenceToArray(array.0, item.0) })
+    store().add_item_reference_to_array(array.0, item.0)
 }
 
 pub fn add_item_reference_to_object(object: Item, name: Option<&[u8]>, item: Item) -> bool {
-    let n = CArg::new(name);
-    // SAFETY: as add_item_to_object.
-    b(unsafe { lib::cJSON_AddItemReferenceToObject(object.0, n.ptr(), item.0) })
+    store().add_item_reference_to_object(object.0, name, item.0)
 }
 
 pub fn detach_item_via_pointer(parent: Item, item: Item) -> Item {
-    // SAFETY: handles are NULL or live nodes.
-    Item(unsafe { lib::cJSON_DetachItemViaPointer(parent.0, item.0) })
+    Item(store().detach_item_via_pointer(parent.0, item.0))
 }
 pub fn detach_item_from_array(array: Item, which: i32) -> Item {
-    Item(unsafe { lib::cJSON_DetachItemFromArray(array.0, which) })
+    let Ok(which) = usize::try_from(which) else {
+        return NULL;
+    };
+    Item(store().detach_item_from_array(array.0, which))
 }
 pub fn delete_item_from_array(array: Item, which: i32) {
-    unsafe { lib::cJSON_DeleteItemFromArray(array.0, which) }
+    if let Ok(which) = usize::try_from(which) {
+        store().delete_item_from_array(array.0, which);
+    }
 }
 pub fn detach_item_from_object(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_DetachItemFromObject(object.0, n.ptr()) })
+    Item(store().detach_item_from_object(object.0, name))
 }
 pub fn detach_item_from_object_cs(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_DetachItemFromObjectCaseSensitive(object.0, n.ptr()) })
+    Item(store().detach_item_from_object_case_sensitive(object.0, name))
 }
 pub fn delete_item_from_object(object: Item, name: Option<&[u8]>) {
-    let n = CArg::new(name);
-    unsafe { lib::cJSON_DeleteItemFromObject(object.0, n.ptr()) }
+    store().delete_item_from_object(object.0, name);
 }
 pub fn delete_item_from_object_cs(object: Item, name: Option<&[u8]>) {
-    let n = CArg::new(name);
-    unsafe { lib::cJSON_DeleteItemFromObjectCaseSensitive(object.0, n.ptr()) }
+    store().delete_item_from_object_case_sensitive(object.0, name);
 }
 
 pub fn insert_item_in_array(array: Item, which: i32, item: Item) -> bool {
-    b(unsafe { lib::cJSON_InsertItemInArray(array.0, which, item.0) })
+    let Ok(which) = usize::try_from(which) else {
+        return false;
+    };
+    store().insert_item_in_array(array.0, which, item.0)
 }
 pub fn replace_item_via_pointer(parent: Item, item: Item, replacement: Item) -> bool {
-    b(unsafe { lib::cJSON_ReplaceItemViaPointer(parent.0, item.0, replacement.0) })
+    store().replace_item_via_pointer(parent.0, item.0, replacement.0)
 }
 pub fn replace_item_in_array(array: Item, which: i32, item: Item) -> bool {
-    b(unsafe { lib::cJSON_ReplaceItemInArray(array.0, which, item.0) })
+    let Ok(which) = usize::try_from(which) else {
+        return false;
+    };
+    store().replace_item_in_array(array.0, which, item.0)
 }
 pub fn replace_item_in_object(object: Item, name: Option<&[u8]>, item: Item) -> bool {
-    let n = CArg::new(name);
-    b(unsafe { lib::cJSON_ReplaceItemInObject(object.0, n.ptr(), item.0) })
+    store().replace_item_in_object(object.0, name, item.0)
 }
 pub fn replace_item_in_object_cs(object: Item, name: Option<&[u8]>, item: Item) -> bool {
-    let n = CArg::new(name);
-    b(unsafe { lib::cJSON_ReplaceItemInObjectCaseSensitive(object.0, n.ptr(), item.0) })
+    store().replace_item_in_object_case_sensitive(object.0, name, item.0)
 }
 
 pub fn add_null_to_object(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddNullToObject(object.0, n.ptr()) })
+    Item(store().add_null_to_object(object.0, name))
 }
 pub fn add_true_to_object(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddTrueToObject(object.0, n.ptr()) })
+    Item(store().add_true_to_object(object.0, name))
 }
 pub fn add_false_to_object(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddFalseToObject(object.0, n.ptr()) })
+    Item(store().add_false_to_object(object.0, name))
 }
 pub fn add_bool_to_object(object: Item, name: Option<&[u8]>, v: bool) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddBoolToObject(object.0, n.ptr(), cb(v)) })
+    Item(store().add_bool_to_object(object.0, name, v))
 }
 pub fn add_number_to_object(object: Item, name: Option<&[u8]>, v: f64) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddNumberToObject(object.0, n.ptr(), v) })
+    Item(store().add_number_to_object(object.0, name, v))
 }
 pub fn add_string_to_object(object: Item, name: Option<&[u8]>, s: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    let v = CArg::new(s);
-    Item(unsafe { lib::cJSON_AddStringToObject(object.0, n.ptr(), v.ptr()) })
+    Item(store().add_string_to_object(object.0, name, s))
 }
 pub fn add_raw_to_object(object: Item, name: Option<&[u8]>, raw: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    let v = CArg::new(raw);
-    Item(unsafe { lib::cJSON_AddRawToObject(object.0, n.ptr(), v.ptr()) })
+    Item(store().add_raw_to_object(object.0, name, raw))
 }
 pub fn add_object_to_object(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddObjectToObject(object.0, n.ptr()) })
+    Item(store().add_object_to_object(object.0, name))
 }
 pub fn add_array_to_object(object: Item, name: Option<&[u8]>) -> Item {
-    let n = CArg::new(name);
-    Item(unsafe { lib::cJSON_AddArrayToObject(object.0, n.ptr()) })
+    Item(store().add_array_to_object(object.0, name))
 }
 
 // ---- whole-tree operations -----------------------------------------------------------------------------------
 
 pub fn duplicate(item: Item, recurse: bool) -> Item {
-    // SAFETY: NULL or live node.
-    Item(unsafe { lib::cJSON_Duplicate(item.0, cb(recurse)) })
+    Item(store().duplicate(item.0, recurse))
 }
 
 pub fn compare(a: Item, bb: Item, case_sensitive: bool) -> bool {
-    // SAFETY: as above.
-    b(unsafe { lib::cJSON_Compare(a.0, bb.0, cb(case_sensitive)) })
+    store().compare(a.0, bb.0, case_sensitive)
 }
 
 /// `cJSON_Minify` on a private NUL-terminated copy of `json`; returns the bytes up to the first NUL
 /// (`None` for the NULL call).
 pub fn minify(json: Option<&[u8]>) -> Option<Vec<u8>> {
-    let mut buf: Option<Vec<u8>> = json.map(|j| {
-        let mut v = j.to_vec();
-        v.push(0);
-        v
-    });
-    let p = buf.as_mut().map_or(null_mut(), |v| v.as_mut_ptr() as *mut c_char);
-    // SAFETY: NULL or a NUL-terminated buffer of exactly the input size plus one.
-    unsafe { lib::cJSON_Minify(p) };
-    buf.map(|v| {
-        let n = v.iter().position(|&c| c == 0).unwrap_or(v.len());
-        v[..n].to_vec()
-    })
+    let mut buf = json?.to_vec();
+    buf.push(0);
+    lib::minify(&mut buf);
+    let n = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    buf.truncate(n);
+    Some(buf)
 }
 
 /// `cJSON_SetNumberValue(item, v)` (the macro: NULL item returns `v`, else `cJSON_SetNumberHelper`).
 pub fn set_number_value(item: Item, v: f64) -> f64 {
-    if item.is_null() {
-        v
-    } else {
-        // SAFETY: live node.
-        unsafe { lib::cJSON_SetNumberHelper(item.0, v) }
-    }
+    store().set_number_value(item.0, v)
 }
 
 /// `cJSON_SetNumberHelper` directly (also for NULL, Q24).
 pub fn set_number_helper(item: Item, v: f64) -> f64 {
-    // SAFETY: NULL or live node.
-    unsafe { lib::cJSON_SetNumberHelper(item.0, v) }
+    store().set_number_helper(item.0, v)
 }
 
 /// `cJSON_SetValuestring`: the new valuestring, `None` when the call fails.
 pub fn set_valuestring(item: Item, s: Option<&[u8]>) -> Option<Vec<u8>> {
-    let a = CArg::new(s);
-    // SAFETY: NULL or live node; `a` outlives the call.
-    opt_bytes(unsafe { lib::cJSON_SetValuestring(item.0, a.ptr()) })
+    store().set_valuestring(item.0, s).map(<[u8]>::to_vec)
 }
 
 /// The `cJSON_SetBoolValue` macro of `cJSON.h`: returns the new type word (`INVALID` when not a bool).
 pub fn set_bool_value(item: Item, v: bool) -> i32 {
-    if item.is_null() {
-        return INVALID;
-    }
-    // SAFETY: live node; the macro writes `type` the same way.
-    unsafe {
-        let t = (*item.0).type_0;
-        if t & (FALSE | TRUE) != 0 {
-            (*item.0).type_0 = (t & !(FALSE | TRUE)) | if v { TRUE } else { FALSE };
-            (*item.0).type_0
-        } else {
-            INVALID
-        }
-    }
+    store().set_bool_value(item.0, v) as i32
 }
 
 // ---- allocator hooks (RULEBOOK D1) ---------------------------------------------------------------------------
@@ -752,29 +648,34 @@ static N_FREE: AtomicI64 = AtomicI64::new(0);
 static N_BYTES: AtomicI64 = AtomicI64::new(0);
 static FAIL_AT: AtomicI64 = AtomicI64::new(0);
 
-unsafe extern "C" fn h_malloc(n: usize) -> *mut c_void {
-    let a = N_ALLOC.fetch_add(1, Ordering::SeqCst) + 1;
-    let f = FAIL_AT.load(Ordering::SeqCst);
-    if f != 0 && a == f {
-        return null_mut();
-    }
-    N_BYTES.fetch_add(n as i64, Ordering::SeqCst);
-    unsafe { malloc(n) }
-}
+/// Counting hooks: allocation number `FAIL_AT` fails (upstream `h_malloc` / `h_free`).
+struct CountingHooks;
 
-unsafe extern "C" fn h_free(p: *mut c_void) {
-    if !p.is_null() {
+impl AllocHooks for CountingHooks {
+    fn allocate(&self, size: usize) -> bool {
+        let a = N_ALLOC.fetch_add(1, Ordering::SeqCst) + 1;
+        let f = FAIL_AT.load(Ordering::SeqCst);
+        if f != 0 && a == f {
+            return false;
+        }
+        N_BYTES.fetch_add(size as i64, Ordering::SeqCst);
+        true
+    }
+
+    fn deallocate(&self, _size: usize) {
         N_FREE.fetch_add(1, Ordering::SeqCst);
     }
-    unsafe { free(p) }
 }
 
-unsafe extern "C" fn failing_malloc(_n: usize) -> *mut c_void {
-    null_mut()
-}
+/// Upstream `failing_hooks`: every allocation fails.
+struct FailingHooks;
 
-unsafe extern "C" fn normal_free(p: *mut c_void) {
-    unsafe { free(p) }
+impl AllocHooks for FailingHooks {
+    fn allocate(&self, _size: usize) -> bool {
+        false
+    }
+
+    fn deallocate(&self, _size: usize) {}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -791,23 +692,18 @@ pub fn hooks_on(fail_at: i64) {
     N_FREE.store(0, Ordering::SeqCst);
     N_BYTES.store(0, Ordering::SeqCst);
     FAIL_AT.store(fail_at, Ordering::SeqCst);
-    let mut h = cJSON_Hooks { malloc_fn: Some(h_malloc), free_fn: Some(h_free) };
-    // SAFETY: the library copies the hook struct.
-    unsafe { lib::cJSON_InitHooks(&raw mut h) }
+    lib::init_hooks(Some(Arc::new(CountingHooks)));
 }
 
 /// `cJSON_InitHooks(NULL)`: back to the default allocator; the counters keep their values.
 pub fn hooks_off() {
-    // SAFETY: NULL restores the defaults.
-    unsafe { lib::cJSON_InitHooks(null_mut()) };
+    lib::init_hooks(None);
     FAIL_AT.store(0, Ordering::SeqCst);
 }
 
 /// Install hooks whose malloc always fails (upstream `failing_hooks`).
 pub fn hooks_failing_malloc() {
-    let mut h = cJSON_Hooks { malloc_fn: Some(failing_malloc), free_fn: Some(normal_free) };
-    // SAFETY: the library copies the hook struct.
-    unsafe { lib::cJSON_InitHooks(&raw mut h) }
+    lib::init_hooks(Some(Arc::new(FailingHooks)));
 }
 
 pub fn hook_stats() -> HookStats {
@@ -822,141 +718,113 @@ pub fn hook_stats() -> HookStats {
 // ---- cJSON_Utils ---------------------------------------------------------------------------------------------
 
 pub fn get_pointer(object: Item, pointer: Option<&[u8]>) -> Item {
-    let p = CArg::new(pointer);
-    // SAFETY: NULL or live node; `p` outlives the call.
-    Item(unsafe { utils::cJSONUtils_GetPointer(object.0.cast(), p.ptr()) }.cast())
+    Item(utils::get_pointer(&store(), object.0, pointer))
 }
 
 pub fn get_pointer_cs(object: Item, pointer: Option<&[u8]>) -> Item {
-    let p = CArg::new(pointer);
-    // SAFETY: as above.
-    Item(unsafe { utils::cJSONUtils_GetPointerCaseSensitive(object.0.cast(), p.ptr()) }.cast())
+    Item(utils::get_pointer_case_sensitive(
+        &store(),
+        object.0,
+        pointer,
+    ))
 }
 
 pub fn generate_patches(from: Item, to: Item) -> Item {
-    // SAFETY: NULL or live nodes.
-    Item(unsafe { utils::cJSONUtils_GeneratePatches(from.0.cast(), to.0.cast()) }.cast())
+    Item(utils::generate_patches(&mut store(), from.0, to.0))
 }
 
 pub fn generate_patches_cs(from: Item, to: Item) -> Item {
-    // SAFETY: as above.
-    Item(unsafe { utils::cJSONUtils_GeneratePatchesCaseSensitive(from.0.cast(), to.0.cast()) }.cast())
+    Item(utils::generate_patches_case_sensitive(
+        &mut store(),
+        from.0,
+        to.0,
+    ))
 }
 
 pub fn add_patch_to_array(array: Item, operation: Option<&[u8]>, path: Option<&[u8]>, value: Item) {
-    let o = CArg::new(operation);
-    let p = CArg::new(path);
-    // SAFETY: as above; the library copies the strings.
-    unsafe { utils::cJSONUtils_AddPatchToArray(array.0.cast(), o.ptr(), p.ptr(), value.0.cast()) }
+    utils::add_patch_to_array(&mut store(), array.0, operation, path, value.0);
+}
+
+fn status(result: Result<(), utils::PatchError>) -> i32 {
+    result.map_or_else(utils::PatchError::code, |()| 0)
 }
 
 /// Status code `0..=13` (Q23).
 pub fn apply_patches(object: Item, patches: Item) -> i32 {
-    // SAFETY: NULL or live nodes.
-    unsafe { utils::cJSONUtils_ApplyPatches(object.0.cast(), patches.0.cast()) }
+    status(utils::apply_patches(&mut store(), object.0, patches.0))
 }
 
 pub fn apply_patches_cs(object: Item, patches: Item) -> i32 {
-    // SAFETY: as above.
-    unsafe { utils::cJSONUtils_ApplyPatchesCaseSensitive(object.0.cast(), patches.0.cast()) }
+    status(utils::apply_patches_case_sensitive(
+        &mut store(),
+        object.0,
+        patches.0,
+    ))
 }
 
 /// Consumes `target`; returns the new root.
 pub fn merge_patch(target: Item, patch: Item) -> Item {
-    // SAFETY: `target` is NULL or a root the caller owns; `patch` is NULL or live.
-    Item(unsafe { utils::cJSONUtils_MergePatch(target.0.cast(), patch.0.cast()) }.cast())
+    Item(utils::merge_patch(&mut store(), target.0, patch.0))
 }
 
 pub fn merge_patch_cs(target: Item, patch: Item) -> Item {
-    // SAFETY: as above.
-    Item(unsafe { utils::cJSONUtils_MergePatchCaseSensitive(target.0.cast(), patch.0.cast()) }.cast())
+    Item(utils::merge_patch_case_sensitive(
+        &mut store(),
+        target.0,
+        patch.0,
+    ))
 }
 
 pub fn generate_merge_patch(from: Item, to: Item) -> Item {
-    // SAFETY: NULL or live nodes.
-    Item(unsafe { utils::cJSONUtils_GenerateMergePatch(from.0.cast(), to.0.cast()) }.cast())
+    Item(utils::generate_merge_patch(&mut store(), from.0, to.0))
 }
 
 pub fn generate_merge_patch_cs(from: Item, to: Item) -> Item {
-    // SAFETY: as above.
-    Item(unsafe { utils::cJSONUtils_GenerateMergePatchCaseSensitive(from.0.cast(), to.0.cast()) }.cast())
+    Item(utils::generate_merge_patch_case_sensitive(
+        &mut store(),
+        from.0,
+        to.0,
+    ))
 }
 
 pub fn find_pointer_from_object_to(object: Item, target: Item) -> Option<Vec<u8>> {
-    // SAFETY: NULL or live nodes; the result is freed with `cJSON_free`.
-    let p = unsafe { utils::cJSONUtils_FindPointerFromObjectTo(object.0.cast(), target.0.cast()) };
-    let out = opt_bytes(p);
-    if !p.is_null() {
-        // SAFETY: allocated by the library through the active hooks.
-        unsafe { lib::cJSON_free(p as *mut c_void) };
-    }
-    out
+    let found = utils::find_pointer_from_object_to(&store(), object.0, target.0);
+    // The caller's `cJSON_free`: dropping the string is the free event.
+    found.map(|p| p.bytes().to_vec())
 }
 
 pub fn sort_object(object: Item) {
-    // SAFETY: NULL or live node.
-    unsafe { utils::cJSONUtils_SortObject(object.0.cast()) }
+    utils::sort_object(&mut store(), object.0);
 }
 
 pub fn sort_object_cs(object: Item) {
-    // SAFETY: as above.
-    unsafe { utils::cJSONUtils_SortObjectCaseSensitive(object.0.cast()) }
+    utils::sort_object_case_sensitive(&mut store(), object.0);
 }
 
 // ---- raw access (C_LAYOUT only; no Stage 2 equivalent) -------------------------------------------------------
 
-/// A fresh zeroed node with `type` = `t` (the upstream tests' stack `cJSON invalid[1]`). Delete with
-/// [`delete`].
-pub fn raw_new_with_type(t: i32) -> Item {
-    // SAFETY: CreateNull returns a zeroed node whose `type` we overwrite.
-    unsafe {
-        let n = lib::cJSON_CreateNull();
-        if !n.is_null() {
-            (*n).type_0 = t;
-        }
-        Item(n)
-    }
+const NO_RAW: &str = "adapter: raw_* needs the C node layout (C_LAYOUT is false, RULEBOOK D7, D14)";
+
+/// A fresh zeroed node with `type` = `t` (the upstream tests' stack `cJSON invalid[1]`).
+pub fn raw_new_with_type(_t: i32) -> Item {
+    panic!("{NO_RAW}")
 }
 
-pub fn raw_set_prev(item: Item, prev: Item) {
-    assert!(!item.is_null());
-    // SAFETY: live node.
-    unsafe { (*item.0).prev = prev.0 }
+pub fn raw_set_prev(_item: Item, _prev: Item) {
+    panic!("{NO_RAW}")
 }
 
 /// Free `valuestring` through the hooks and set it to NULL (upstream `corruptedString`).
-pub fn raw_free_valuestring(item: Item) {
-    assert!(!item.is_null());
-    // SAFETY: live node owning its valuestring.
-    unsafe {
-        lib::cJSON_free((*item.0).valuestring as *mut c_void);
-        (*item.0).valuestring = null_mut();
-    }
+pub fn raw_free_valuestring(_item: Item) {
+    panic!("{NO_RAW}")
 }
 
-/// Give `item` a fresh heap copy of `name` as its `string`, then `cJSON_AddItemToObject(object, item->string,
-/// item)`: the key argument aliases the item's own `string` (upstream use-after-free regression test).
-pub fn raw_add_item_with_aliased_key(object: Item, item: Item, name: &[u8]) -> bool {
-    assert!(!item.is_null());
-    let a = CArg::new(Some(name));
-    // SAFETY: the copy is allocated with `cJSON_malloc`, as `cJSON_strdup` does.
-    unsafe {
-        let n = a.0.as_ref().unwrap().len();
-        let p = lib::cJSON_malloc(n) as *mut u8;
-        assert!(!p.is_null());
-        std::ptr::copy_nonoverlapping(a.ptr() as *const u8, p, n);
-        (*item.0).string = p as *mut c_char;
-        b(lib::cJSON_AddItemToObject(object.0, (*item.0).string, item.0))
-    }
+/// `cJSON_AddItemToObject(object, item->string, item)` with the key aliasing the item's own `string` (D7).
+pub fn raw_add_item_with_aliased_key(_object: Item, _item: Item, _name: &[u8]) -> bool {
+    panic!("{NO_RAW}")
 }
 
 /// `cJSON_SetValuestring(item, item->valuestring + offset)`: the new value overlaps the old buffer (D7).
-/// Returns the bytes of the result (`None` = NULL).
-pub fn raw_set_valuestring_from_own(item: Item, offset: usize) -> Option<Vec<u8>> {
-    assert!(!item.is_null());
-    // SAFETY: live node whose valuestring is at least `offset + 1` bytes long (caller's duty).
-    unsafe {
-        let p = (*item.0).valuestring.add(offset);
-        opt_bytes(lib::cJSON_SetValuestring(item.0, p))
-    }
+pub fn raw_set_valuestring_from_own(_item: Item, _offset: usize) -> Option<Vec<u8>> {
+    panic!("{NO_RAW}")
 }
