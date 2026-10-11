@@ -631,3 +631,18 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Not done:** the existing cJSON tickets were not rewritten (they keep working); `mark 06 done` there now needs
   `--brief`.
 - **Next:** SKILL.md step 0 names `--brief` and `show` (done in the same commit).
+
+## 39. Opus review of the cJSON Stage 2 review patch
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor, Skill-editing session; Opus 5.5 subagent (read-only), on the user's request
+- **Done:** Opus checked `pilots/cjson/experiments/stage2_review_patch.md` item by item against the pinned C source,
+  the crate, `gate.py` and the Judge files: verdict "apply with changes". C line citations held (one off: status 5 is
+  set at `cJSON_Utils.c:927`, not 922). Changed: 1.1 (wording), 1.2 (D2 Judge column "partly", `1203`), 1.4 (NULL-path
+  `move`/`copy`, Judge column), 1.7 (PORT STATUS trailers), 1.8 (section 12 row), 2.1 (`judge` list of `bytes`
+  cases), 2.2/2.3 (new `utils_hooks_pass`, subset of 114 inputs, trace switch), 2.4 (BLOCK 4 needs unterminated
+  adapter helpers), Part 3 order. The governor applied them to the patch file (revision 2); RULEBOOK and the Judge
+  files were not touched (Translation session, ticket 06 flow).
+- **Not verified:** Judge timings and the review's scratch measurements (Opus did not rerun them).
+- **Spend:** SPEND.md row `E5-patch-review`.
+- **Next:** the Translation session applies revision 2: settle the ledger, `mark 06 todo`, RULEBOOK commit, Judge
+  commit, `mark 06 in_progress`, red run (expect SIGABRT on BLOCK 1/2 tests).
