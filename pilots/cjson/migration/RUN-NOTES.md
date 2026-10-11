@@ -380,6 +380,28 @@ a run and both values are listed there.
 - Windows, MSVC, Sun: untested (RULEBOOK D18).
 - Nothing was committed (instructions of this ticket step).
 
+## Stage 2 review GAPs: Judge additions (ticket 06, 2026-10-11)
+
+Added after the Opus review (`experiments/stage2_port_review.md`, commit d14ed4a and its fix-up):
+
+- Corpus 3881 -> 3886: `judge-q18-sort-add2`, `judge-q18-sort-add3` (sort leaves the first `prev` stale, Q18),
+  `judge-q19-wrap` (array index wrap-around), `judge-q27-detach` (case-sensitive detach is case-insensitive, Q27),
+  `judge-utils-oom` (fixed allocator probes); two more `GetPointer` paths in `fixed[]`.
+- New dump section `== utils-hooks` for the 117 `patch-*` and `judge-*` inputs: counting trace (`a<size>` per
+  allocation, `f` per free) and fail-the-Nth sweep (cap 48) for ApplyPatches (both cases), MergePatch,
+  GenerateMergePatch; trace only for GeneratePatches and FindPointerFromObjectTo; `dump_tree` after each in-place sort.
+  `judge-utils-oom` also runs two probes: `FindPointerFromObjectTo` with allocation 1 failing (BLOCK 1) and
+  `GeneratePatches([], [1])` with allocation 2 failing (BLOCK 2).
+- Translated tests: 6 more in `upstream.rs` (BLOCK 1, 2, 4 and the two D22 neighbours), adapter helpers
+  `parse_unterminated`, `parse_with_opts_unterminated`, `trace_start`, `trace_stop`.
+- Allocator classes (judge.md 5a): allocation failure covered by the section above and the 13 translated
+  `*_should_fail_on_allocation_failure` tests; absent members by the D22 tests (NULL-path `test`, NULL-from `copy`, both
+  layouts); input without a trailing NUL by the two `*_unterminated` tests.
+- Red state on the attempt-1 crate (34f7efe), `run.py --stage 2 --skip-tests ""`: 3885/3886 inputs match, the one DIFF
+  is `judge-utils-oom` (Rust aborts, exit -6 = BLOCK 1/2). Of the new translated tests, BLOCK 1 and 2 abort the test
+  binary (SIGABRT), BLOCK 4 (two tests) and `apply_patches_copy_with_null_from_is_status_5` (D22) fail. The corpus step
+  of this run took 32 s wall with the harness `--jobs` default; the corpus step alone is about that.
+
 ## Rule proposals
 
 Gaps found while building the Stage 2 Judge. Reviewed in `experiments/stage2_proposals_review.md`; resolved on
