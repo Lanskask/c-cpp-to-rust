@@ -72,10 +72,13 @@ fn malloc_unchecked(size: usize) -> Vec<u8> {
     vec![0; size]
 }
 
-/// A `cJSON_malloc` of `size` bytes holding the C string `text`.
+/// A `cJSON_malloc` of exactly C's `size` bytes holding the C string `text`. Invariant: `text.len() + 1 <=
+/// size` at both callers (array: `1 + at most 20 digits + target < target + 22`; object: `1 + key + target <
+/// target + key + 2`), so the copy stays inside the buffer.
 fn malloc_string(text: &[u8], size: usize) -> Vec<u8> {
-    let mut buffer = malloc_unchecked(size.max(text.len() + 1));
-    buffer[..text.len()].copy_from_slice(text);
+    let mut buffer = malloc_unchecked(size);
+    let length = text.len().min(size);
+    buffer[..length].copy_from_slice(&text[..length]);
     buffer
 }
 
@@ -102,6 +105,7 @@ fn compare_strings(string1: Option<&[u8]>, string2: Option<&[u8]>, case_sensitiv
 
 /// `compare_pointers` (`cJSON_Utils.c:112-146`): the next path element of a JSON pointer against a key.
 // QUIRK(port): Q2
+// DEVIATION(port): D19
 fn compare_pointers(name: Option<&[u8]>, pointer: &[u8], case_sensitive: bool) -> bool {
     let Some(name) = name else { return false };
     let name = c_str(name);
@@ -148,8 +152,8 @@ pub fn find_pointer_from_object_to(
 ) -> Option<Printed> {
     let (object_id, target_id) = (object?, target?);
     if object_id == target_id {
-        // cJSONUtils_strdup("") through cJSON_malloc(1)
-        return Some(Printed::from_vec(malloc_unchecked(1)));
+        // cJSONUtils_strdup("") is checked in C (cJSON_Utils.c:211): a failed allocation returns NULL, not a D2 site
+        return Some(Printed::from_vec(strdup(Some(b""))?));
     }
     let mut child_index: usize = 0;
     let mut current = store.child_of(object);
@@ -165,6 +169,7 @@ pub fn find_pointer_from_object_to(
                 return Some(Printed::from_vec(buffer));
             }
             if store.is_object(object) {
+                // DEVIATION(port): D20 (a missing key encodes as the empty string; C dereferences NULL)
                 let key = encode_pointer(store.key_bytes(Some(child)).unwrap_or(&[]));
                 let size = target_pointer.bytes().len() + key.len() + 2;
                 let mut text = vec![b'/'];
@@ -327,10 +332,11 @@ fn detach_item_from_array(store: &mut Store, array: NodeId, which: usize) -> Opt
 fn detach_path(
     store: &mut Store,
     object: Option<NodeId>,
-    path: &[u8],
+    path: Option<&[u8]>,
     case_sensitive: bool,
 ) -> Option<NodeId> {
-    let path = c_str(path);
+    // DEVIATION(port): D22 (a NULL `path` is dereferenced by C's strdup; here nothing is detached)
+    let path = c_str(path?);
     // parent_pointer = cJSONUtils_strdup(path)
     let parent_pointer = strdup(Some(path))?;
     let size = parent_pointer.len();
@@ -359,6 +365,7 @@ fn detach_path_in(
         let name = c_str(&child_pointer);
         // C calls the case-insensitive `cJSON_DetachItemFromObject` here whatever `case_sensitive` says
         // (`cJSON_Utils.c:466`): a case-sensitive `replace`/`move` of `/FOO` detaches `foo`.
+        // QUIRK(port): Q27
         store.detach_item_from_object(parent, Some(name))
     } else {
         // Couldn't find object to remove child from.
@@ -681,12 +688,12 @@ fn apply_patch_in(
     if opcode == PatchOperation::Invalid {
         return Err(PatchError::BadOperation);
     }
-    // TODO(port): a String item without value (create_string_reference(NULL)) is dereferenced by C for
-    // `path`, `from` and `op`; here its value is the empty string.
-    let path_text: Vec<u8> = store.value_bytes(path).unwrap_or(&[]).to_vec();
+    // DEVIATION(port): D22 (a String item without `valuestring`: `test` gets a NULL pointer as C does, every
+    // other operation gets the NULL-pointer result of `get_item_from_pointer` instead of C's dereference)
+    let path_text: Option<Vec<u8>> = store.value_bytes(path).map(<[u8]>::to_vec);
     if opcode == PatchOperation::Test {
         // compare value: {...} with the given path
-        let found = get_item_from_pointer(store, object, Some(&path_text), case_sensitive);
+        let found = get_item_from_pointer(store, object, path_text.as_deref(), case_sensitive);
         let expected = get_object_item(store, patch, b"value", case_sensitive);
         return if compare_json(store, found, expected, case_sensitive) {
             Ok(())
@@ -696,7 +703,7 @@ fn apply_patch_in(
     }
 
     // special case for replacing the root
-    if path_text.is_empty() {
+    if path_text.as_deref().is_some_and(|p| at(p, 0) == 0) {
         if opcode == PatchOperation::Remove {
             let invalid = Node::zeroed();
             overwrite_item(store, object, invalid);
@@ -729,7 +736,8 @@ fn apply_patch_in(
 
     if opcode == PatchOperation::Remove || opcode == PatchOperation::Replace {
         // Get rid of old.
-        let Some(old_item) = detach_path(store, object, &path_text, case_sensitive) else {
+        let Some(old_item) = detach_path(store, object, path_text.as_deref(), case_sensitive)
+        else {
             return Err(PatchError::NothingToRemove);
         };
         store.delete(Some(old_item));
@@ -746,12 +754,13 @@ fn apply_patch_in(
             // missing "from" for copy/move.
             return Err(PatchError::MissingFrom);
         }
-        let from_text: Vec<u8> = store.value_bytes(from).unwrap_or(&[]).to_vec();
+        // DEVIATION(port): D22 (a NULL `from`: `copy` is status 5 in C; `move` gets the same status here)
+        let from_text: Option<Vec<u8>> = store.value_bytes(from).map(<[u8]>::to_vec);
         if opcode == PatchOperation::Move {
-            *value = detach_path(store, object, &from_text, case_sensitive);
+            *value = detach_path(store, object, from_text.as_deref(), case_sensitive);
         }
         if opcode == PatchOperation::Copy {
-            *value = get_item_from_pointer(store, object, Some(&from_text), case_sensitive);
+            *value = get_item_from_pointer(store, object, from_text.as_deref(), case_sensitive);
         }
         if value.is_none() {
             // missing "from" for copy/move.
@@ -780,20 +789,26 @@ fn apply_patch_in(
 
     // Now, just add "value" to "path".
     // split pointer in parent and child
-    let parent_copy = strdup(Some(&path_text));
+    // DEVIATION(port): D22 (a NULL `path` reaches here only for add/move/copy: no copy, no parent, status 9)
+    let path_bytes: Option<&[u8]> = path_text.as_deref().map(c_str);
+    let parent_copy = strdup(path_bytes);
     *parent_pointer_size = parent_copy.as_ref().map(Vec::len);
-    let slash = parent_copy
-        .as_ref()
-        .and_then(|_| path_text.iter().rposition(|&c| c == b'/'));
-    let mut child_pointer: Option<Vec<u8>> = slash.map(|s| {
-        let mut child = path_text[s + 1..].to_vec();
-        child.push(0);
-        child
-    });
-    let parent_pointer: Option<&[u8]> = match (&parent_copy, slash) {
-        (Some(_), Some(s)) => Some(&path_text[..s]),
-        (Some(_), None) => Some(&path_text),
-        (None, _) => None,
+    let slash = match (&parent_copy, path_bytes) {
+        (Some(_), Some(p)) => p.iter().rposition(|&c| c == b'/'),
+        _ => None,
+    };
+    let mut child_pointer: Option<Vec<u8>> = match (slash, path_bytes) {
+        (Some(s), Some(p)) => {
+            let mut child = p[s + 1..].to_vec();
+            child.push(0);
+            Some(child)
+        }
+        _ => None,
+    };
+    let parent_pointer: Option<&[u8]> = match (&parent_copy, slash, path_bytes) {
+        (Some(_), Some(s), Some(p)) => Some(&p[..s]),
+        (Some(_), None, Some(p)) => Some(p),
+        _ => None,
     };
     let parent = get_item_from_pointer(store, object, parent_pointer, case_sensitive);
     if let Some(child) = child_pointer.as_mut() {
@@ -814,10 +829,10 @@ fn apply_patch_in(
             let Some(index) = decode_array_index_from_pointer(child) else {
                 return Err(PatchError::BadIndex);
             };
-            let Some(new_item) = *value else {
-                return Err(PatchError::InsertPastEnd);
-            };
-            if !insert_item_in_array(store, parent_id, index, new_item) {
+            // `value` is always Some here (checked in both arms above); C passes it on unchecked
+            if !value
+                .is_some_and(|new_item| insert_item_in_array(store, parent_id, index, new_item))
+            {
                 return Err(PatchError::InsertPastEnd);
             }
             *value = None;
@@ -976,9 +991,20 @@ fn create_patches(
             let mut to_child = store.child_of(to);
             // room for a 64 bit integer: log10(2^64) = 20
             let size = path.len() + 20 + 2;
-            let _new_path = malloc_unchecked(size);
+            // C writes through `new_path` unchecked only at cJSON_Utils.c:1188 and :1203 (D2: the sprintf of an
+            // element path and of a leftover index): a failed
+            // allocation aborts at the first of those writes, not here.
+            let new_path_ok = alloc_event(size);
+            // the `sprintf` of the first write: abort if the allocation failed (D2)
+            let abort_if_unallocated = || {
+                if !new_path_ok {
+                    // DEVIATION(port): D2
+                    std::process::abort();
+                }
+            };
             // generate patches for all array elements that exist in both "from" and "to"
             while from_child.is_some() && to_child.is_some() {
+                abort_if_unallocated();
                 let mut element_path = path.to_vec();
                 element_path.extend_from_slice(format!("/{index}").as_bytes());
                 create_patches(
@@ -995,6 +1021,7 @@ fn create_patches(
             }
             // remove leftover elements from 'from' that are not in 'to'
             while from_child.is_some() {
+                abort_if_unallocated();
                 let suffix = index.to_string();
                 compose_patch(
                     store,
@@ -1018,7 +1045,10 @@ fn create_patches(
                 );
                 to_child = store.next_of(to_child);
             }
-            free_event(size);
+            if new_path_ok {
+                // cJSON_free(NULL) is not a counted free
+                free_event(size);
+            }
         }
         flags::OBJECT => {
             sort_object_impl(store, from, case_sensitive);
@@ -1274,4 +1304,4 @@ pub fn generate_merge_patch_case_sensitive(
     generate_merge_patch_impl(store, from, to, true)
 }
 
-// PORT STATUS: stage=2 confidence=medium todos=1 deviations=D2,D12,D19,D20
+// PORT STATUS: stage=2 confidence=medium todos=0 deviations=D2,D12,D19,D20,D22

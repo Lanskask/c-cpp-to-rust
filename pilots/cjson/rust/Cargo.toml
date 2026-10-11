@@ -3,7 +3,7 @@ name = "cjson"
 version = "0.0.0"
 edition = "2021"
 publish = false
-description = "cJSON 1.7.19 (6d9f244), Stage 1 faithful port: c2rust output, C ABI, one cargo feature per C macro"
+description = "cJSON 1.7.19 (6d9f244), Stage 2 idiomatic port: safe Rust, AllocHooks seam, one cargo feature per C macro (`locales`)"
 
 [lib]
 name = "cjson"

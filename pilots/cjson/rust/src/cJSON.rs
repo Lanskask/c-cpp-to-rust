@@ -294,8 +294,12 @@ impl Store {
             return None;
         }
         let node = slot.node.take()?;
-        slot.generation = slot.generation.wrapping_add(1);
-        self.free.push(id.index);
+        // A slot whose generation would wrap is retired (never put back on the free list): a stale handle can
+        // never resolve to a later node of the same slot (RULEBOOK 6.1).
+        if let Some(next) = slot.generation.checked_add(1) {
+            slot.generation = next;
+            self.free.push(id.index);
+        }
         Some(node)
     }
 
@@ -1604,8 +1608,12 @@ impl Store {
         let Some(buffer) = value else {
             return Err(ParseError::NoInput);
         };
+        // cJSON_ParseWithOpts(NULL) returns before cJSON_ParseWithLengthOpts resets the error position (Q26)
+        ERROR_OFFSET.with(|e| e.set(None));
+        // RULEBOOK 6.0 item 6 / 6.3: `strlen + 1` stays uncut; a slice without its NUL is read as if one followed
+        // it (`Parser::byte` yields 0 past the end), so the terminator is still inside the counted buffer.
         let length = c_len(buffer) + 1;
-        self.parse_with_length_opts(value, length, require_null_terminated)
+        self.parse_counted(buffer, length, require_null_terminated)
     }
 
     /// `cJSON_ParseWithLength`.
@@ -1630,7 +1638,21 @@ impl Store {
         let Some(content) = value else {
             return Err(ParseError::NoInput);
         };
-        let length = buffer_length.min(content.len());
+        self.parse_counted(
+            content,
+            buffer_length.min(content.len()),
+            require_null_terminated,
+        )
+    }
+
+    /// The body of `cJSON_ParseWithLengthOpts` after the NULL check: `length` bytes of `content` are counted,
+    /// bytes past the end of the slice read as NUL.
+    fn parse_counted(
+        &mut self,
+        content: &[u8],
+        length: usize,
+        require_null_terminated: bool,
+    ) -> Result<Parsed, ParseError> {
         let mut parser = Parser {
             store: self,
             content,
@@ -1730,6 +1752,7 @@ impl Store {
         prebuffer: usize,
         format: bool,
     ) -> Option<Printed> {
+        // DEVIATION(port): D15 (prebuffer 0 proceeds, cJSON.c:1326-1330)
         if !alloc_event(prebuffer) {
             return None;
         }
@@ -2218,6 +2241,9 @@ impl Parser<'_> {
         if !alloc_event(number_string_length + 1) {
             return false;
         }
+        // Index invariant: the scan above stopped at the first byte that is not a number character, and `byte`
+        // yields 0 past the end of `content`, so every scanned byte is a real byte: `offset + length <=
+        // content.len()`.
         let mut copy: Vec<u8> =
             self.content[self.offset..self.offset + number_string_length].to_vec();
         if has_decimal_point {
@@ -2692,4 +2718,4 @@ pub fn minify(json: &mut [u8]) {
     put(json, into, 0);
 }
 
-// PORT STATUS: stage=2 confidence=high todos=0 deviations=D1,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D17,D19,D21
+// PORT STATUS: stage=2 confidence=high todos=0 deviations=D1,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D17,D19,D21
