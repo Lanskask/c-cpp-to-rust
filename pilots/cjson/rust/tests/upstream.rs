@@ -2908,3 +2908,102 @@ fn locale_ctype_latin1_keys_are_not_case_equal_d19() {
     a::delete(x);
     a::delete(y);
 }
+
+// ---- Stage 2 review additions (stage2_port_review.md, BLOCK 1-4, D22) -----------------------------------------
+
+/// BLOCK 1: `cJSONUtils_FindPointerFromObjectTo` copies the empty pointer with the checked
+/// `cJSONUtils_strdup` (`cJSON_Utils.c:211`); a failing size-1 allocation returns NULL, no abort (not a D2 site).
+#[test]
+fn find_pointer_from_object_to_returns_null_when_the_root_copy_fails() {
+    let _g = lock();
+    let o = pb(b"{\"a\":{\"b\":1}}");
+    let target = a::child(a::child(o));
+    assert!(!target.is_null());
+    a::hooks_on(1);
+    let p = a::find_pointer_from_object_to(o, target);
+    a::hooks_off();
+    assert!(p.is_none(), "the size-1 strdup failed: NULL expected");
+    a::delete(o);
+}
+
+/// BLOCK 2: `GeneratePatches([], [1])` allocates the path buffer (22 bytes, `cJSON_Utils.c:1175`) and writes
+/// through it only inside the loops; with the buffer failing and no element to write, C returns the patch array.
+#[test]
+fn generate_patches_with_a_failing_path_buffer_and_nothing_to_write() {
+    let _g = lock();
+    let from = pb(b"[]");
+    let to = pb(b"[1]");
+    a::hooks_on(2);
+    let p = a::generate_patches(from, to);
+    a::hooks_off();
+    assert!(!p.is_null(), "the array exists (allocation 1); the failed path buffer is never written");
+    assert_eq!(a::print_unformatted(p).unwrap().bytes(), b"[{\"op\":\"add\",\"path\":\"/-\",\"value\":1}]");
+    a::delete(p);
+    a::delete(from);
+    a::delete(to);
+}
+
+fn patch_with(members: &[(&[u8], Option<&'static std::ffi::CStr>, Option<&[u8]>)]) -> Item {
+    let patch = a::create_object();
+    for (key, reference, text) in members {
+        let v = match (reference, text) {
+            (_, Some(t)) => a::create_string(Some(t)),
+            _ => a::create_string_reference(None),
+        };
+        a::add_item_to_object(patch, Some(key), v);
+    }
+    let arr = a::create_array();
+    a::add_item_to_array(arr, patch);
+    arr
+}
+
+/// D22 (defined in C): `test` with a NULL `path` resolves `get_item_from_pointer(NULL)` = NULL: status 1.
+#[test]
+fn apply_patches_test_with_null_path_is_status_1() {
+    let _g = lock();
+    let doc = pb(b"{\"a\":1}");
+    let patches = patch_with(&[(b"op", None, Some(b"test")), (b"path", None, None)]);
+    assert_eq!(a::apply_patches(doc, patches), 1);
+    a::delete(patches);
+    a::delete(doc);
+}
+
+/// D22 (defined in C): `copy` with a NULL `from` is status 5.
+#[test]
+fn apply_patches_copy_with_null_from_is_status_5() {
+    let _g = lock();
+    let doc = pb(b"{\"a\":1}");
+    let patches = patch_with(&[(b"op", None, Some(b"copy")), (b"path", None, Some(b"/b")), (b"from", None, None)]);
+    assert_eq!(a::apply_patches(doc, patches), 5);
+    a::delete(patches);
+    a::delete(doc);
+}
+
+/// BLOCK 4: a buffer without a NUL after the slice: the parser's length is `strlen`-bounded (C: `strlen + 1`
+/// stays inside the slice only when a NUL is there), so errors and the parse end are the same as with a NUL.
+#[test]
+fn parse_of_a_slice_without_nul_reports_the_same_errors() {
+    let _g = lock();
+    let r = a::parse_unterminated(b"[1");
+    assert!(r.item.is_null());
+    assert_eq!(r.err, ErrPos::At(2));
+    let r = a::parse_unterminated(b"{\"a\"");
+    assert!(r.item.is_null());
+    assert_eq!(r.err, ErrPos::At(4));
+    let r = a::parse_unterminated(b"[");
+    assert!(r.item.is_null());
+    assert_eq!(r.err, ErrPos::At(1));
+}
+
+#[test]
+fn parse_with_opts_of_a_slice_without_nul_succeeds_with_the_end() {
+    let _g = lock();
+    let r = a::parse_with_opts_unterminated(b"1", true, true);
+    assert!(!r.item.is_null());
+    assert_eq!(r.end, Some(1));
+    a::delete(r.item);
+    let r = a::parse_with_opts_unterminated(b"[1] ", true, true);
+    assert!(!r.item.is_null());
+    assert_eq!(r.end, Some(4));
+    a::delete(r.item);
+}

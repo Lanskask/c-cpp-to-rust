@@ -147,11 +147,19 @@ enum ParseCall {
 }
 
 fn do_parse(text: Option<&[u8]>, call: ParseCall) -> Parsed {
+    do_parse_nul(text, call, true)
+}
+
+/// `append_nul = false`: the C caller's buffer is exactly the slice, with no terminating NUL after it (the parser's
+/// length is then `strlen`-bounded by the slice end: RULEBOOK 6.0 item 6).
+fn do_parse_nul(text: Option<&[u8]>, call: ParseCall, append_nul: bool) -> Parsed {
     // The C caller's buffer: the text and its terminating NUL.
     let buffer: Option<Vec<u8>> = text.map(|t| {
         let mut v = Vec::with_capacity(t.len() + 1);
         v.extend_from_slice(t);
-        v.push(0);
+        if append_nul {
+            v.push(0);
+        }
         v
     });
     let (result, want_end) = {
@@ -191,6 +199,23 @@ fn do_parse(text: Option<&[u8]>, call: ParseCall) -> Parsed {
 /// `cJSON_Parse`.
 pub fn parse(text: Option<&[u8]>) -> Parsed {
     do_parse(text, ParseCall::Plain)
+}
+
+/// `cJSON_Parse` of a buffer without a terminating NUL after the slice.
+pub fn parse_unterminated(text: &[u8]) -> Parsed {
+    do_parse_nul(Some(text), ParseCall::Plain, false)
+}
+
+/// `cJSON_ParseWithOpts` of a buffer without a terminating NUL after the slice.
+pub fn parse_with_opts_unterminated(text: &[u8], require_nul: bool, want_end: bool) -> Parsed {
+    do_parse_nul(
+        Some(text),
+        ParseCall::Opts {
+            require_nul,
+            want_end,
+        },
+        false,
+    )
 }
 
 /// `cJSON_ParseWithLength`: `len` is passed as is (it may include the terminator).
@@ -647,6 +672,30 @@ static N_ALLOC: AtomicI64 = AtomicI64::new(0);
 static N_FREE: AtomicI64 = AtomicI64::new(0);
 static N_BYTES: AtomicI64 = AtomicI64::new(0);
 static FAIL_AT: AtomicI64 = AtomicI64::new(0);
+/// Allocation trace (`" a<size>"` per allocation, `" f"` per free), capped at 4000 bytes like `dump.c`.
+static TRACE_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static TRACE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+fn trace_add(s: &str) {
+    if TRACE_ON.load(Ordering::SeqCst) {
+        let mut t = TRACE.lock().unwrap();
+        if t.len() + s.len() <= 4000 {
+            t.push_str(s);
+        }
+    }
+}
+
+/// Start recording the allocation trace (cleared).
+pub fn trace_start() {
+    TRACE.lock().unwrap().clear();
+    TRACE_ON.store(true, Ordering::SeqCst);
+}
+
+/// Stop recording and return the trace.
+pub fn trace_stop() -> String {
+    TRACE_ON.store(false, Ordering::SeqCst);
+    std::mem::take(&mut *TRACE.lock().unwrap())
+}
 
 /// Counting hooks: allocation number `FAIL_AT` fails (upstream `h_malloc` / `h_free`).
 struct CountingHooks;
@@ -654,6 +703,7 @@ struct CountingHooks;
 impl AllocHooks for CountingHooks {
     fn allocate(&self, size: usize) -> bool {
         let a = N_ALLOC.fetch_add(1, Ordering::SeqCst) + 1;
+        trace_add(&format!(" a{size}"));
         let f = FAIL_AT.load(Ordering::SeqCst);
         if f != 0 && a == f {
             return false;
@@ -663,6 +713,7 @@ impl AllocHooks for CountingHooks {
     }
 
     fn deallocate(&self, _size: usize) {
+        trace_add(" f");
         N_FREE.fetch_add(1, Ordering::SeqCst);
     }
 }

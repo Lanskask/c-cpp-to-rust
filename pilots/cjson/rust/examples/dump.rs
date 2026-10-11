@@ -593,9 +593,10 @@ fn pointers(root: Item) {
         c = adapter::next(c);
         n += 1;
     }
-    let fixed: [&[u8]; 24] = [
+    let fixed: [&[u8]; 26] = [
         b"", b"/", b"/0", b"/1", b"/-", b"/00", b"/a", b"/A", b"/a/b", b"/a~1b", b"/a~0b", b"/~0", b"/~1", b"/~01",
         b"/x~1", b"/ab~1cd", b"/\xC3\xA9", b"/\xC9", b"/\xE9", b"a", b"/key", b"/0/0", b"/1/a", b"//",
+        b"/18446744073709551616", b"/0/18446744073709551617",
     ];
     for f in fixed {
         let g = adapter::get_pointer(root, Some(f));
@@ -696,10 +697,16 @@ fn pair_ops(ta: &[u8], tb: &[u8]) {
             let s = adapter::duplicate(a, true);
             adapter::sort_object(s);
             show("sorted-ci", s);
+            if UTILS_SUBSET.load(std::sync::atomic::Ordering::SeqCst) {
+                dump_tree(s, 0);
+            }
             adapter::delete(s);
             let s = adapter::duplicate(a, true);
             adapter::sort_object_cs(s);
             show("sorted-cs", s);
+            if UTILS_SUBSET.load(std::sync::atomic::Ordering::SeqCst) {
+                dump_tree(s, 0);
+            }
             adapter::delete(s);
         }
         {
@@ -1005,6 +1012,111 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
 }
 
+// ---- Utils allocator section (patch-* and judge-* inputs) ----------------------------------------------------
+
+static UTILS_SUBSET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static UTILS_PROBE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn grandchild_or_child(x: Item) -> Item {
+    let c = adapter::child(x);
+    if c.is_null() {
+        return x;
+    }
+    let g = adapter::child(c);
+    if g.is_null() {
+        c
+    } else {
+        g
+    }
+}
+
+fn utils_once(op: usize, a: Item, b: Item, fail: i64, label: &str) -> i64 {
+    let mut x = adapter::duplicate(a, true);
+    let y = adapter::duplicate(b, true);
+    let mut r = NULL;
+    let mut ptr: Option<Vec<u8>> = None;
+    let mut st = 0;
+    adapter::hooks_on(fail);
+    adapter::trace_start();
+    match op {
+        0 => st = adapter::apply_patches(x, y),
+        1 => st = adapter::apply_patches_cs(x, y),
+        2 => x = adapter::merge_patch(x, y),
+        3 => r = adapter::generate_merge_patch(x, y),
+        4 => r = adapter::generate_patches(x, y),
+        _ => ptr = adapter::find_pointer_from_object_to(x, grandchild_or_child(x)),
+    }
+    let trace = adapter::trace_stop();
+    let live = live_now();
+    let total = adapter::hook_stats().allocs;
+    p!("utils-{label}[{fail}] st={st} live={live} allocs={total} trace={trace}\n");
+    adapter::hooks_off();
+    if op == 5 {
+        put_line("  pointer", ptr.as_deref());
+    } else {
+        show("  target", x);
+        if op >= 3 {
+            if r.is_null() {
+                p!("  result=NULL\n");
+            } else {
+                show("  result", r);
+            }
+        }
+    }
+    adapter::delete(x);
+    adapter::delete(y);
+    adapter::delete(r);
+    total
+}
+
+fn utils_hooks_pass(ta: &[u8], tb: &[u8]) {
+    const NAMES: [&str; 6] = ["apply-ci", "apply-cs", "merge", "genmerge", "genpatches", "findptr"];
+    let a = adapter::parse(Some(ta)).item;
+    let b = adapter::parse(Some(tb)).item;
+    p!("== utils-hooks\n");
+    if !a.is_null() && !b.is_null() {
+        for (op, name) in NAMES.iter().enumerate() {
+            let total = utils_once(op, a, b, 0, name);
+            if op >= 4 {
+                continue;
+            }
+            for i in 1..=total.min(48) {
+                utils_once(op, a, b, i, name);
+            }
+        }
+        if UTILS_PROBE.load(std::sync::atomic::Ordering::SeqCst) {
+            let e = adapter::parse(Some(b"[]")).item;
+            let one = adapter::parse(Some(b"[1]")).item;
+            let tgt = adapter::child(adapter::child(a));
+            adapter::hooks_on(1);
+            let pp = adapter::find_pointer_from_object_to(a, tgt);
+            p!("probe findptr[fail 1] {} live={}\n", yes_no(pp.is_some(), "ok", "NULL"), live_now());
+            adapter::hooks_off();
+            adapter::hooks_on(0);
+            adapter::trace_start();
+            let g = adapter::generate_patches(e, one);
+            let trace = adapter::trace_stop();
+            p!("probe genpatches trace={trace}\n");
+            adapter::hooks_off();
+            adapter::delete(g);
+            adapter::hooks_on(2);
+            let g = adapter::generate_patches(e, one);
+            p!("probe genpatches[fail 2] {} live={}\n", yes_no(!g.is_null(), "ok", "NULL"), live_now());
+            adapter::hooks_off();
+            if g.is_null() {
+                p!("  result=NULL\n");
+            } else {
+                show("  result", g);
+            }
+            adapter::delete(g);
+            adapter::delete(e);
+            adapter::delete(one);
+        }
+    }
+    adapter::delete(a);
+    adapter::delete(b);
+}
+
 fn main() {
     // A Stage 1 debug build uses a few KiB of stack per nesting level; the C driver gets 8 MiB at -O0.
     std::thread::Builder::new().stack_size(512 << 20).spawn(real_main).unwrap().join().unwrap();
@@ -1014,7 +1126,7 @@ fn real_main() {
     let Some(path) = std::env::args_os().next_back().filter(|_| std::env::args_os().count() >= 2) else {
         std::process::exit(2);
     };
-    let Ok(mut buf) = std::fs::read(path) else {
+    let Ok(mut buf) = std::fs::read(&path) else {
         std::process::exit(2);
     };
     buf.truncate(1 << 20);
@@ -1033,6 +1145,18 @@ fn real_main() {
         run_document("B", &b, lb);
     }
     hooks_pass(&a, la);
+    {
+        let base: Vec<u8> = std::path::Path::new(&path)
+            .file_name()
+            .map(|n| n.as_encoded_bytes().to_vec())
+            .unwrap_or_default();
+        let subset = base.starts_with(b"patch-") || base.starts_with(b"judge-");
+        UTILS_SUBSET.store(subset, std::sync::atomic::Ordering::SeqCst);
+        UTILS_PROBE.store(base.starts_with(b"judge-utils-oom"), std::sync::atomic::Ordering::SeqCst);
+        if subset {
+            utils_hooks_pass(&a[..la], &b[..lb]);
+        }
+    }
     pair_ops(&a, &b);
     locale_pass(&a);
     constructors();

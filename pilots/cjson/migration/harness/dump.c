@@ -118,9 +118,35 @@ static void show_fmt(const char *label, cJSON *item)
 
 static long n_alloc, n_free, n_bytes, fail_at;
 
+/* allocation trace ("a<size>" per allocation, "f" per free), switched on for the Utils allocator section only;
+ * capped at TRACE_MAX bytes, the same cap and format as dump.rs */
+#define TRACE_MAX 4000
+static char trace_buf[TRACE_MAX + 16];
+static size_t trace_len;
+static int trace_on;
+static int utils_probe;  /* input is judge-utils-oom: the fixed allocator probes run */
+static int utils_subset; /* input is patch-* or judge-*: Utils allocator section and link dumps after sorts */
+
+static void trace_add(const char *s)
+{
+    size_t n = strlen(s);
+    if (trace_len + n <= TRACE_MAX)
+    {
+        memcpy(trace_buf + trace_len, s, n);
+        trace_len += n;
+        trace_buf[trace_len] = 0;
+    }
+}
+
 static void *h_malloc(size_t n)
 {
     n_alloc++;
+    if (trace_on)
+    {
+        char t[40];
+        sprintf(t, " a%lu", (unsigned long)n);
+        trace_add(t);
+    }
     if (fail_at != 0 && n_alloc == fail_at)
         return NULL;
     n_bytes += (long)n;
@@ -130,7 +156,11 @@ static void *h_malloc(size_t n)
 static void h_free(void *p)
 {
     if (p != NULL)
+    {
         n_free++;
+        if (trace_on)
+            trace_add(" f");
+    }
     free(p);
 }
 
@@ -542,7 +572,8 @@ static void pointers(cJSON *root)
     {
         static const char *fixed[] = {"",        "/",       "/0",    "/1",     "/-",      "/00",    "/a",   "/A",
                                       "/a/b",    "/a~1b",   "/a~0b", "/~0",    "/~1",     "/~01",   "/x~1", "/ab~1cd",
-                                      "/é",      "/\xC9",   "/\xE9", "a",      "/key",    "/0/0",   "/1/a", "//"};
+                                      "/é",      "/\xC9",   "/\xE9", "a",      "/key",    "/0/0",   "/1/a", "//",
+                                      "/18446744073709551616", "/0/18446744073709551617"};
         for (size_t i = 0; i < sizeof fixed / sizeof fixed[0]; i++)
         {
             cJSON *g = cJSONUtils_GetPointer(root, fixed[i]);
@@ -652,10 +683,14 @@ static void pair_ops(const char *ta, const char *tb)
             cJSON *s = cJSON_Duplicate(a, 1);
             cJSONUtils_SortObject(s);
             show("sorted-ci", s);
+            if (utils_subset)
+                dump_tree(s, 0);
             cJSON_Delete(s);
             s = cJSON_Duplicate(a, 1);
             cJSONUtils_SortObjectCaseSensitive(s);
             show("sorted-cs", s);
+            if (utils_subset)
+                dump_tree(s, 0);
             cJSON_Delete(s);
         }
         {
@@ -932,6 +967,126 @@ static void run_document(const char *label, const char *text, size_t len)
     minify_pass(text, len);
 }
 
+/* ---- Utils allocator section (patch-* and judge-* inputs): trace and fail-the-Nth for the Utils calls ------- */
+
+static void utils_once(int op, const cJSON *A, const cJSON *B, long fail, const char *label, long *total)
+{
+    cJSON *x = cJSON_Duplicate(A, 1);
+    cJSON *y = cJSON_Duplicate(B, 1);
+    cJSON *r = NULL;
+    char *ptr = NULL;
+    int st = 0;
+    long live;
+    trace_len = 0;
+    trace_buf[0] = 0;
+    hooks_on(fail);
+    trace_on = 1;
+    switch (op)
+    {
+    case 0:
+        st = cJSONUtils_ApplyPatches(x, y);
+        break;
+    case 1:
+        st = cJSONUtils_ApplyPatchesCaseSensitive(x, y);
+        break;
+    case 2:
+        x = cJSONUtils_MergePatch(x, y);
+        break;
+    case 3:
+        r = cJSONUtils_GenerateMergePatch(x, y);
+        break;
+    case 4:
+        r = cJSONUtils_GeneratePatches(x, y);
+        break;
+    default:
+        ptr = cJSONUtils_FindPointerFromObjectTo(x, x->child != NULL ? (x->child->child != NULL ? x->child->child : x->child) : x);
+        break;
+    }
+    trace_on = 0;
+    live = live_now();
+    if (total != NULL)
+        *total = n_alloc;
+    printf("utils-%s[%ld] st=%d live=%ld allocs=%ld trace=%s\n", label, fail, st, live, n_alloc, trace_buf);
+    hooks_off();
+    if (op == 5)
+    {
+        put_line("  pointer", ptr);
+        cJSON_free(ptr);
+    }
+    else
+    {
+        show("  target", x);
+        if (op >= 3)
+        {
+            if (r != NULL)
+                show("  result", r);
+            else
+                printf("  result=NULL\n");
+        }
+    }
+    cJSON_Delete(x);
+    cJSON_Delete(y);
+    cJSON_Delete(r);
+}
+
+static void utils_hooks_pass(const char *ta, size_t la, const char *tb, size_t lb)
+{
+    static const char *const names[] = {"apply-ci", "apply-cs", "merge", "genmerge", "genpatches", "findptr"};
+    cJSON *A = cJSON_ParseWithLength(ta, la);
+    cJSON *B = cJSON_ParseWithLength(tb, lb);
+    int op;
+    printf("== utils-hooks\n");
+    if (A != NULL && B != NULL)
+    {
+        for (op = 0; op < 6; op++)
+        {
+            long total = 0, i, limit;
+            utils_once(op, A, B, 0, names[op], &total);
+            if (op >= 4)
+                continue;
+            limit = total < MAXFAIL ? total : MAXFAIL;
+            for (i = 1; i <= limit; i++)
+                utils_once(op, A, B, i, names[op], NULL);
+        }
+        if (utils_probe)
+        {
+            /* BLOCK 1: the size-1 strdup at cJSON_Utils.c:211; BLOCK 2: the path buffer of GeneratePatches([], [1]) */
+            cJSON *e = cJSON_Parse("[]");
+            cJSON *one = cJSON_Parse("[1]");
+            cJSON *g;
+            char *pp;
+            cJSON *tgt = A->child->child;
+            hooks_on(1);
+            pp = cJSONUtils_FindPointerFromObjectTo(A, tgt);
+            printf("probe findptr[fail 1] %s live=%ld\n", pp ? "ok" : "NULL", live_now());
+            hooks_off();
+            cJSON_free(pp);
+            trace_len = 0;
+            trace_buf[0] = 0;
+            hooks_on(0);
+            trace_on = 1;
+            g = cJSONUtils_GeneratePatches(e, one);
+            trace_on = 0;
+            printf("probe genpatches trace=%s\n", trace_buf);
+            hooks_off();
+            cJSON_Delete(g);
+            hooks_on(2);
+            g = cJSONUtils_GeneratePatches(e, one);
+            printf("probe genpatches[fail 2] %s live=%ld\n", g ? "ok" : "NULL", live_now());
+            hooks_off();
+            if (g != NULL)
+                show("  result", g);
+            else
+                printf("  result=NULL\n");
+            cJSON_Delete(g);
+            cJSON_Delete(e);
+            cJSON_Delete(one);
+        }
+    }
+    cJSON_Delete(A);
+    cJSON_Delete(B);
+}
+
 int main(int argc, char **argv)
 {
     FILE *f;
@@ -975,6 +1130,14 @@ int main(int argc, char **argv)
     if (sep != NULL)
         run_document("B", b, lb);
     hooks_pass(a, la);
+    {
+        const char *base = strrchr(argv[argc - 1], '/');
+        base = base != NULL ? base + 1 : argv[argc - 1];
+        utils_subset = strncmp(base, "patch-", 6) == 0 || strncmp(base, "judge-", 6) == 0;
+        utils_probe = strncmp(base, "judge-utils-oom", 15) == 0;
+    }
+    if (utils_subset)
+        utils_hooks_pass(a, la, b, lb);
     pair_ops(a, b);
     locale_pass(a);
     constructors();

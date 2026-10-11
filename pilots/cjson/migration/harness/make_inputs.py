@@ -245,6 +245,18 @@ def main() -> int:
         ("judge-q20-pointer", b'{"a/b":1,"a~b":2}' + SEP + b'[{"op":"test","path":"/a~1b","value":1}]'),
         ("judge-q20-replace", b'{"a/b":1}' + SEP + b'[{"op":"replace","path":"/a~1b","value":9}]'),
         ("judge-q20-last", b'{"a~":1}' + SEP + b'[{"op":"remove","path":"/a~0"}]'),
+        # Q18: sort_list leaves the first child's prev stale; a later add shows it
+        ("judge-q18-sort-add2", b'{"b":1,"a":2}' + SEP + b'[{"op":"test","path":"","value":{"a":2,"b":1}},'
+                                                         b'{"op":"add","path":"/c","value":3}]'),
+        ("judge-q18-sort-add3", b'{"a":1,"c":3,"b":2}' + SEP + b'[{"op":"test","path":"","value":{"a":1,"b":2,"c":3}},'
+                                                                b'{"op":"add","path":"/x","value":9}]'),
+        # Q19: array index wrap-around in decode_array_index_from_pointer (2^64 + 1 -> 1, 2^64 -> 0)
+        ("judge-q19-wrap", b'{"foo":[1,2,3]}' + SEP + b'[{"op":"add","path":"/foo/18446744073709551617","value":9},'
+                                                      b'{"op":"remove","path":"/foo/18446744073709551616"}]'),
+        # Q27: cs detach is case-insensitive
+        ("judge-q27-detach", b'{"foo":1}' + SEP + b'[{"op":"replace","path":"/FOO","value":9}]'),
+        # allocator probes for Utils (utils_hooks_pass runs the fixed probes on this one input)
+        ("judge-utils-oom", b'{"a":{"b":1}}' + SEP + b'[]'),
     ]
     cases += judge
 
