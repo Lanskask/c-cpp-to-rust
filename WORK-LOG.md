@@ -690,3 +690,18 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   - A passing translated-test suite did not catch a Q26 regression; the corpus did. Keep the corpus step in the
     implementer's inner loop (`run.py --stage 2 --skip-tests`, about 30 s).
 - **Not done:** mutants (e5 script) not re-run; second Opus review pending (a722bdca0d9aa4356).
+
+## 43. cJSON Stage 2: second review, attempt 3, both Parts done
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor; Opus 5.5 reviewer (a722bdca0d9aa4356); Sonnet 5.5 implementer (ab62a060c589a9a34)
+- **Done:** second Opus review verdict fix (2 BLOCK markers only, 2 GAP, 2 RULE, 3 NIT; report
+  `pilots/cjson/experiments/stage2_port_review2.md`, extra differentials all equal to C). User chose D8 "two rules as
+  coded" and the private-helper marker sentence (RULEBOOK 9a727e5). GAP 5 added (`d22_null_valuestring_results_are_pinned`),
+  GAP 6 declined (C cannot read a NUL-less buffer). Implementer added the section 8/9 markers, comments only (checked
+  by diff). Gate PASS both Parts, both sets (3e23a08); `workqueue verify` ok; parts-stage2.tsv both `done`.
+- **Not done:** the e5 mutants: `--set default --quick` found no site (10 "function not found": the script's function
+  names are the Faithful port's, the Stage 2 methods are named differently); `rust/src` unchanged after the run.
+  The script needs a site map update before it can be re-run. Cargo.toml `test-internals` feature still declared.
+  Spend row and ticket 06 closing pending.
+- **Skill gaps:** guard.py blocks `cargo` Bash lines that name the crate's Cargo.toml together with `>` or `2>&1` (the
+  implementer could not run its tests); `workqueue mark` / `git add` of parts-stage2.tsv in one line with a write marker.
