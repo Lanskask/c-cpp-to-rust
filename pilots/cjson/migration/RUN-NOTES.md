@@ -402,6 +402,12 @@ Added after the Opus review (`experiments/stage2_port_review.md`, commit d14ed4a
   binary (SIGABRT), BLOCK 4 (two tests) and `apply_patches_copy_with_null_from_is_status_5` (D22) fail. The corpus step
   of this run took 32 s wall with the harness `--jobs` default; the corpus step alone is about that.
 
+Second Opus review (`experiments/stage2_port_review2.md`): GAP 5 added as `d22_null_valuestring_results_are_pinned`
+(Rust-only, skipped under `C_LAYOUT=true`; pins the 48-case D22 results listed there that C cannot run). GAP 6 (a
+`parse_with_opts` pass over a slice without NUL in the corpus) is not added: the C driver cannot read a buffer without
+its NUL (out-of-bounds read), so a corpus pass could not be compared; the two `*_unterminated` translated tests cover
+it.
+
 ## Rule proposals
 
 Gaps found while building the Stage 2 Judge. Reviewed in `experiments/stage2_proposals_review.md`; resolved on

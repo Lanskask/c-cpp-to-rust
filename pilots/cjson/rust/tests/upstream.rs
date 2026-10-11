@@ -3401,3 +3401,92 @@ fn parse_with_opts_of_a_slice_without_nul_succeeds_with_the_end() {
     assert_eq!(r.end, Some(4));
     a::delete(r.item);
 }
+
+/// Patch array of one operation; `None` makes that member a String item without `valuestring` (D22).
+/// `from`: `None` = no member, `Some(None)` = NULL `valuestring`, `Some(Some(t))` = text.
+fn patch_member(
+    op: Option<&[u8]>,
+    path: Option<&[u8]>,
+    from: Option<Option<&[u8]>>,
+    with_value: bool,
+) -> Item {
+    let text = |t: Option<&[u8]>| match t {
+        Some(t) => a::create_string(Some(t)),
+        None => a::create_string_reference(None),
+    };
+    let patch = a::create_object();
+    a::add_item_to_object(patch, Some(b"op"), text(op));
+    a::add_item_to_object(patch, Some(b"path"), text(path));
+    if let Some(f) = from {
+        a::add_item_to_object(patch, Some(b"from"), text(f));
+    }
+    if with_value {
+        a::add_item_to_object(patch, Some(b"value"), a::create_number(1.0));
+    }
+    let arr = a::create_array();
+    a::add_item_to_array(arr, patch);
+    arr
+}
+
+/// D22, the Rust-only results for the cases C dereferences NULL (the review pins them so a refactor cannot move
+/// them): NULL `op` 3; NULL `path` 13 for remove/replace and 9 for add/move/copy; `move` with NULL `from` 5;
+/// a `move` with a NULL `path` loses its member as for any unresolvable `path`.
+#[test]
+fn d22_null_valuestring_results_are_pinned() {
+    let _g = lock();
+    if a::C_LAYOUT {
+        skipped("D22 UB cases: C crashes");
+        return;
+    }
+    let doc = b"{\"a\":1,\"b\":[1,2]}";
+    let run = |patches: Item| -> (i32, Vec<u8>) {
+        let d = pb(doc);
+        let st = a::apply_patches(d, patches);
+        let out = a::print_unformatted(d).unwrap().bytes().to_vec();
+        a::delete(d);
+        a::delete(patches);
+        (st, out)
+    };
+    for path in [&b"/c"[..], b""] {
+        assert_eq!(
+            run(patch_member(None, Some(path), None, true)).0,
+            3,
+            "NULL op, path {path:?}"
+        );
+    }
+    for op in [&b"remove"[..], b"replace"] {
+        assert_eq!(
+            run(patch_member(Some(op), None, None, true)).0,
+            13,
+            "NULL path, {op:?}"
+        );
+    }
+    assert_eq!(
+        run(patch_member(Some(b"add"), None, None, true)).0,
+        9,
+        "NULL path, add"
+    );
+    for op in [&b"move"[..], b"copy"] {
+        assert_eq!(
+            run(patch_member(Some(op), None, Some(Some(b"/a")), false)).0,
+            9,
+            "NULL path, {op:?}"
+        );
+    }
+    assert_eq!(
+        run(patch_member(Some(b"move"), Some(b"/c"), Some(None), false)).0,
+        5,
+        "NULL from, move"
+    );
+    assert_eq!(
+        run(patch_member(Some(b"copy"), Some(b"/c"), Some(None), false)).0,
+        5,
+        "NULL from, copy"
+    );
+    let (st, out) = run(patch_member(Some(b"move"), None, Some(Some(b"/a")), false));
+    assert_eq!(st, 9);
+    assert_eq!(
+        out, b"{\"b\":[1,2]}",
+        "the moved member is lost (cleanup deletes the value)"
+    );
+}
