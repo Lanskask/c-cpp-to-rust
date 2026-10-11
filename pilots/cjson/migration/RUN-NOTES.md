@@ -80,11 +80,17 @@ User-approved Judge cases and where they are exercised by `dump.c`:
 
 - D3: this OS has comma locales (`locale -a`). The driver picked `de_DE.UTF-8` (decimal point `,`). With
   `ENABLE_LOCALES` the parse of `1.5` works and prints `1.5`; without it `1.5` parses as `1` and
-  `cJSON_CreateNumber(1.5)` prints `1,5`. Both programs agree in both feature sets (0 DIFF).
+  `cJSON_CreateNumber(1.5)` prints `1,5`. Both programs agree in both feature sets (0 DIFF) for the Stage 1
+  Faithful port. Stage 2 (`C_LAYOUT=false`) always uses the C locale (approved Deviation), so `run.py --stage 2`
+  sets `DUMP_PROBE_IN_C_LOCALE=1` for both drivers: the locale is still chosen and printed, then reset to `C`
+  before the probes, so both programs run the same probes in the C locale. The approved behaviour itself is
+  asserted in `rust/tests/upstream.rs` (`locale_numeric_comma_locale_still_parses_and_prints_a_dot_d3`).
 - D6: on this machine (aarch64, clang -O0) the C original also prints `vi=0` for `(int)NaN`; the dump line is
   `NaN vi=0`. The comparison with C is therefore a real equality here, but C leaves it undefined (RULEBOOK D6), so
   treat a future difference on another platform as informational.
-- D19: the driver picked `de_DE.ISO8859-1` (`tolower(0xC9) = 233`). The C original and the crate agree.
+- D19: the driver picked `de_DE.ISO8859-1` (`tolower(0xC9) = 233`). The C original and the Stage 1 crate
+  agree. Stage 2 uses the same `DUMP_PROBE_IN_C_LOCALE` comparison as D3;
+  `locale_ctype_latin1_keys_are_not_case_equal_d19` asserts that `\xC9` and `\xE9` are not case-equal under it.
 - `cJSON_Compare` on objects is exponential in nesting depth (it recurses a to b and b to a at every level): a
   999-deep object did not finish in 100 s with the C original. The driver therefore calls `cJSON_Compare` only when
   the tree is at most 14 deep and prints `compare skipped`. This is upstream behaviour, not a port defect; it is

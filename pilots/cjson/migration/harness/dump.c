@@ -696,6 +696,8 @@ static void locale_pass(const char *ta)
         cJSON *n;
         const char *texts[] = {"1.5", "[1.5,2.25,-0.5e2]", "{\"a\":1.5}", "1,5", ta};
         printf("numeric-locale %s decimal_point=%s\n", used, localeconv()->decimal_point);
+        if (getenv("DUMP_PROBE_IN_C_LOCALE") != NULL) /* Stage 2 crate always uses the C locale (D3) */
+            setlocale(LC_NUMERIC, "C");
         for (int i = 0; i < 5; i++)
         {
             g_base = texts[i];
@@ -739,6 +741,8 @@ static void locale_pass(const char *ta)
         const char *objs[] = {"{\"\xC9t\xE9\":1,\"b\":2,\"\xE9t\xC9\":3,\"B\":4}", "{\"\xC9\":1}", "{\"\xE9\":1}"};
         printf("ctype-locale %s tolower(0xC9)=%d tolower(0xDF)=%d tolower(0xE9)=%d\n", used, tolower(0xC9),
                tolower(0xDF), tolower(0xE9));
+        if (getenv("DUMP_PROBE_IN_C_LOCALE") != NULL) /* Stage 2 crate always uses the C locale (D19) */
+            setlocale(LC_CTYPE, "C");
         o = cJSON_Parse(objs[0]);
         {
             const char *keys[] = {"\xC9t\xE9", "\xE9t\xE9", "\xE9t\xC9", "\xC9T\xC9", "b", "B", "\xE9", NULL};

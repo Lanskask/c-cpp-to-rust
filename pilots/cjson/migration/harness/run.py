@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -273,6 +274,14 @@ def stage2(crate: Path, feats: list[str], defines: list[str], build: Path, input
         return 1
     rust = tdir / "debug" / "examples" / "dump"
     orig = build / "dump_orig"
+    # D3/D19: the real Stage 2 crate (C_LAYOUT=false) ignores the process locale, so both drivers run the
+    # `== locale` probes in the C locale (the locale lines are still printed from the real locale; the env var
+    # makes dump.c and dump.rs reset LC_NUMERIC/LC_CTYPE to "C" right after). The Faithful port (C_LAYOUT=true)
+    # follows libc and is compared unchanged.
+    if layout and layout.group(1) == "true":
+        os.environ.pop("DUMP_PROBE_IN_C_LOCALE", None)
+    else:
+        os.environ["DUMP_PROBE_IN_C_LOCALE"] = "1"
     cmd = ["cc", *CFLAGS, f"-I{SRC}", *defines, str(HERE / "dump.c"), str(SRC / "cJSON.c"),
            str(SRC / "cJSON_Utils.c"), "-lm", "-o", str(orig)]
     r = sh(cmd)

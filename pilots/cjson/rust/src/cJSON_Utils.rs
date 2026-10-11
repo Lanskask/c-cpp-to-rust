@@ -357,11 +357,9 @@ fn detach_path_in(
         detach_item_from_array(store, parent?, index)
     } else if store.is_object(parent) {
         let name = c_str(&child_pointer);
-        if case_sensitive {
-            store.detach_item_from_object_case_sensitive(parent, Some(name))
-        } else {
-            store.detach_item_from_object(parent, Some(name))
-        }
+        // C calls the case-insensitive `cJSON_DetachItemFromObject` here whatever `case_sensitive` says
+        // (`cJSON_Utils.c:466`): a case-sensitive `replace`/`move` of `/FOO` detaches `foo`.
+        store.detach_item_from_object(parent, Some(name))
     } else {
         // Couldn't find object to remove child from.
         None

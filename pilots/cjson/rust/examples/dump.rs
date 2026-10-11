@@ -64,6 +64,12 @@ fn set_locale(category: c_int, name: &CStr) -> bool {
     !unsafe { setlocale(category, name.as_ptr()) }.is_null()
 }
 
+/// Set by the Stage 2 Judge (`run.py`, adapter `C_LAYOUT=false`, RULEBOOK D3/D19): the crate always uses the C
+/// locale, so the locale probes run in it; the locale lines are still printed from the real locale first.
+fn probe_in_c_locale() -> bool {
+    std::env::var_os("DUMP_PROBE_IN_C_LOCALE").is_some()
+}
+
 fn decimal_point() -> String {
     // SAFETY: localeconv returns a pointer to static storage whose first member is a C string.
     unsafe { CStr::from_ptr((*localeconv()).decimal_point) }.to_string_lossy().into_owned()
@@ -732,6 +738,9 @@ fn locale_pass(ta: &[u8]) {
         Some(u) => {
             let texts: [&[u8]; 5] = [b"1.5", b"[1.5,2.25,-0.5e2]", b"{\"a\":1.5}", b"1,5", ta];
             p!("numeric-locale {} decimal_point={}\n", u.to_string_lossy(), decimal_point());
+            if probe_in_c_locale() {
+                set_locale(LC_NUMERIC, c"C");
+            }
             for (i, t) in texts.iter().enumerate() {
                 let r: Parsed = adapter::parse(Some(t));
                 p!("parse[{i}] root={} ", yes_no(!r.item.is_null(), "ok", "NULL"));
@@ -774,6 +783,9 @@ fn locale_pass(ta: &[u8]) {
                 c_tolower(0xDF),
                 c_tolower(0xE9)
             );
+            if probe_in_c_locale() {
+                set_locale(LC_CTYPE, c"C");
+            }
             let o = adapter::parse(Some(objs[0])).item;
             let keys: [&[u8]; 7] = [b"\xC9t\xE9", b"\xE9t\xE9", b"\xE9t\xC9", b"\xC9T\xC9", b"b", b"B", b"\xE9"];
             for k in keys {

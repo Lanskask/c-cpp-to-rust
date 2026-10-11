@@ -2815,3 +2815,96 @@ fn cjson_utils_functions_shouldnt_crash_with_null_pointers() {
     a::sort_object_cs(NULL);
     a::delete(item);
 }
+
+// ---- RULEBOOK D3 / D19: the process locale (Stage 2 Judge addition, user 2026-10-11) -----------------------------
+
+mod locale_probe {
+    use std::ffi::{c_char, c_int, CStr};
+
+    extern "C" {
+        fn setlocale(category: c_int, locale: *const c_char) -> *const c_char;
+    }
+    #[cfg(target_os = "macos")]
+    pub const LC_CTYPE: c_int = 2;
+    #[cfg(target_os = "macos")]
+    pub const LC_NUMERIC: c_int = 4;
+    #[cfg(not(target_os = "macos"))]
+    pub const LC_CTYPE: c_int = 0;
+    #[cfg(not(target_os = "macos"))]
+    pub const LC_NUMERIC: c_int = 1;
+
+    /// Sets the first of `names` the OS accepts; returns its name.
+    pub fn set_first(category: c_int, names: &[&'static CStr]) -> Option<&'static CStr> {
+        names.iter().copied().find(|n| !unsafe { setlocale(category, n.as_ptr()) }.is_null())
+    }
+
+    pub fn reset(category: c_int) {
+        unsafe { setlocale(category, c"C".as_ptr()) };
+    }
+}
+
+/// D3: `1.5` parses to 1.5 and prints `1.5` after `setlocale(LC_NUMERIC, <comma locale>)`. The Stage 2 crate
+/// always uses the C locale; the C original and the Faithful port follow libc (and `ENABLE_LOCALES`), so the
+/// assertions run only for the real Stage 2 crate.
+#[test]
+fn locale_numeric_comma_locale_still_parses_and_prints_a_dot_d3() {
+    use locale_probe as lp;
+    let _g = lock();
+    if a::C_LAYOUT {
+        skipped("D3 comma-locale check: the Faithful port follows libc (feature `locales`)");
+        return;
+    }
+    let names = [c"de_DE.UTF-8", c"fr_FR.UTF-8", c"ru_RU.UTF-8", c"nl_NL.UTF-8", c"de_DE.ISO8859-1"];
+    let Some(used) = lp::set_first(lp::LC_NUMERIC, &names) else {
+        skipped("D3 comma-locale check: the OS has no comma locale");
+        return;
+    };
+    let item = pj("1.5");
+    let printed = a::print_unformatted(a::create_number(1.5)).map(|p| p.bytes().to_vec());
+    let arr = pj("[1.5,-0.5e2]");
+    let arr_printed = a::print_unformatted(arr).map(|p| p.bytes().to_vec());
+    let comma = pj("1,5");
+    let comma_is_null = comma.is_null();
+    let (kind_ok, v) = (!item.is_null(), a::value_double(item));
+    lp::reset(lp::LC_NUMERIC);
+    assert!(kind_ok, "parse of 1.5 failed under {used:?}");
+    assert_eq!(v, 1.5, "D3: 1.5 must parse to 1.5 under {used:?}");
+    assert_eq!(printed.as_deref(), Some(&b"1.5"[..]), "D3: 1.5 must print as 1.5 under {used:?}");
+    assert_eq!(arr_printed.as_deref(), Some(&b"[1.5,-50]"[..]), "D3: array print under {used:?}");
+    assert!(comma_is_null || a::value_double(comma) == 1.0, "D3: `1,5` is not a number under {used:?}");
+    a::delete(item);
+    a::delete(arr);
+    a::delete(comma);
+}
+
+/// D19: under a Latin-1 `LC_CTYPE`, the keys `\xC9` and `\xE9` are NOT case-equal in Stage 2 (ASCII-only
+/// `tolower`); `E` and `e` still are.
+#[test]
+fn locale_ctype_latin1_keys_are_not_case_equal_d19() {
+    use locale_probe as lp;
+    let _g = lock();
+    if a::C_LAYOUT {
+        skipped("D19 Latin-1 check: the Faithful port follows libc `tolower`");
+        return;
+    }
+    let names = [c"de_DE.ISO8859-1", c"fr_FR.ISO8859-1", c"en_US.ISO8859-15"];
+    let Some(used) = lp::set_first(lp::LC_CTYPE, &names) else {
+        skipped("D19 Latin-1 check: the OS has no Latin-1 locale");
+        return;
+    };
+    let o = pb(b"{\"\xC9\":1,\"E\":2}");
+    let hit_e9 = a::object_item(o, Some(b"\xE9"));
+    let hit_c9 = a::object_item(o, Some(b"\xC9"));
+    let hit_e = a::object_item(o, Some(b"e"));
+    let x = pb(b"{\"\xC9\":1}");
+    let y = pb(b"{\"\xE9\":1}");
+    let eq = a::compare(x, y, false);
+    lp::reset(lp::LC_CTYPE);
+    assert!(hit_e9.is_null(), "D19: key \\xE9 must not match \\xC9 under {used:?}");
+    assert!(!hit_c9.is_null(), "exact key must match under {used:?}");
+    assert!(!hit_e.is_null(), "ASCII case-insensitive match must still work under {used:?}");
+    assert!(!eq, "D19: {{\"\\xC9\":1}} and {{\"\\xE9\":1}} must not compare equal under {used:?}");
+    a::delete(o);
+    a::delete(x);
+    a::delete(y);
+}
