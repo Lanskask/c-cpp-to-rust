@@ -13,9 +13,16 @@ reports which Judge piece went red: the translated tests ("tests") or the Differ
 This is the Stage 2 counterpart of e4_cjson_judge_sensitivity.py (Stage 1: upstream C tests + harness).
 The mutants are the same kind and, where possible, the same sites, so the two tables can be compared.
 
-Usage: python3 -I e5_cjson_stage2_judge_sensitivity.py [--only NAME] [--probe FUNCTION FILE]
+Usage: python3 -I e5_cjson_stage2_judge_sensitivity.py [--only NAME] [--set default|locales] [--quick]
+       python3 -I e5_cjson_stage2_judge_sensitivity.py --probe FUNCTION FILE
        `--probe` prints the integer literals (value: count) that occur in one function of the crate, used to
        choose mutants; it prints no source text. One mutant costs 2 feature sets x 2 runs of about a minute.
+       `--set` runs one feature set only and `--quick` skips the second, harness-alone run (judge.md section 6,
+       "Keeping Judge runs cheap": one feature set per mutant, all sets once at the end).
+
+Mutants of kind "int" change one integer literal (whole token); kind "text" replace the nth occurrence of a
+short source fragment inside the function (a one-token change of an operator or a call), for behaviours that
+have no integer literal: the circular-limit comparison, a type test, a free on a failure path.
 
 Answer: see the table printed by a run and recorded in pilots/cjson/migration/RUN-NOTES.md ("Stage 2 Judge").
 Rule when a mutant survives: extend the corpus (make_inputs.py) or the translated tests, do not change the
@@ -48,6 +55,7 @@ class Mutant:
     new: str
     nth: int  # which occurrence inside the function, 0-based
     why: str  # the C site and what the change breaks
+    kind: str = "int"  # "int": `old` is an integer literal token; "text": `old` is a plain source fragment
 
 
 MUTANTS = [
@@ -59,6 +67,23 @@ MUTANTS = [
            "cJSON.c:1040 bytes < 32 are escaped as \\u00xx -> < 31: byte 0x1f printed raw"),
     Mutant("array-index-digit", "cJSON_Utils.rs", "decode_array_index_from_pointer", "9", "8", 0,
            "cJSON_Utils.c:285 index digits '0'..'9' -> '0'..'8': a '9' in an array index is rejected"),
+    # added 2026-10-10 with the D1/D11/D21 revision: one per behaviour the Stage 2 Judge newly observes
+    Mutant("strdup-size", "cJSON.rs", "cJSON_strdup", "1", "2", 0,
+           "cJSON.c:198 strdup allocates strlen + 1 -> strlen + 2: only the C-byte counts of the hooks see it"),
+    Mutant("duplicate-fail-leak", "cJSON.rs", "cJSON_Duplicate_rec", "cJSON_Delete(newitem);", "drop(newitem);", 0,
+           "cJSON.c:2869 a failed Duplicate frees the partial copy -> leaks it (allocation-failure path)",
+           kind="text"),
+    Mutant("patch-status-13", "cJSON_Utils.rs", "apply_patch", "13", "12", 0,
+           "cJSON_Utils.c:893 status 13 (nothing to remove) -> 12 (Q23 status codes)"),
+    Mutant("circular-boundary", "cJSON.rs", "cJSON_Duplicate_rec", "depth >= CJSON_CIRCULAR_LIMIT",
+           "depth > CJSON_CIRCULAR_LIMIT", 0,
+           "cJSON.c:2836 depth >= CJSON_CIRCULAR_LIMIT -> >: one level more is duplicated (D11)", kind="text"),
+    Mutant("invalid-type", "cJSON.rs", "cJSON_IsInvalid", "cJSON_Invalid", "cJSON_NULL", 0,
+           "cJSON.c:2979 IsInvalid tests type 0 -> type NULL: a root after a `remove` at \"\" (Q23)", kind="text"),
+    Mutant("print-valueint", "cJSON.rs", "print_number", "d == (*item).valueint as",
+           "d == (d as ::core::ffi::c_int) as", 0,
+           "cJSON.c:616 %d only when valuedouble == (double)valueint -> derived from valuedouble (Q3 field writes)",
+           kind="text"),
 ]
 
 
@@ -70,7 +95,9 @@ def body_span(text: str, function: str) -> tuple[int, int] | None:
     return m.start(), m.end() + (end.start() if end else len(text) - m.end())
 
 
-def literal_positions(body: str, token: str) -> list[int]:
+def literal_positions(body: str, token: str, kind: str = "int") -> list[int]:
+    if kind == "text":
+        return [m.start() for m in re.finditer(re.escape(token), body)]
     return [m.start() for m in re.finditer(rf"(?<![\w.]){re.escape(token)}(?![\w.])", body)]
 
 
@@ -121,12 +148,17 @@ def main() -> int:
     argv = sys.argv[1:]
     if argv[:1] == ["--probe"] and len(argv) == 3:
         return probe(argv[1], argv[2])
-    only = None
-    if argv[:1] == ["--only"] and len(argv) == 2:
-        only = argv[1]
-    elif argv:
-        print(__doc__.split("Usage:")[1].split("Answer:")[0].strip(), file=sys.stderr)
-        return 2
+    only, sets, quick = None, FEATURE_SETS, False
+    while argv:
+        if argv[0] == "--only" and len(argv) >= 2:
+            only, argv = argv[1], argv[2:]
+        elif argv[0] == "--set" and len(argv) >= 2 and argv[1] in ("default", "locales"):
+            sets, argv = ["" if argv[1] == "default" else argv[1]], argv[2:]
+        elif argv[0] == "--quick":
+            quick, argv = True, argv[1:]
+        else:
+            print(__doc__.split("Usage:")[1].split("Answer:")[0].strip(), file=sys.stderr)
+            return 2
     # a SIGTERM must run the `finally` that restores the mutated file
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     if not src_diff_is_empty():
@@ -145,7 +177,7 @@ def main() -> int:
             print(f"e5: {mu.name}: function {mu.function} not found in {mu.file}")
             survived += 1
             continue
-        pos = literal_positions(text[span[0]:span[1]], mu.old)
+        pos = literal_positions(text[span[0]:span[1]], mu.old, mu.kind)
         if len(pos) <= mu.nth:
             print(f"e5: {mu.name}: literal {mu.old} occurrence {mu.nth} not found ({len(pos)} occurrences)")
             survived += 1
@@ -156,17 +188,20 @@ def main() -> int:
         print(f"e5: {mu.name}: {mu.file}:{line_no} `{line}`  {mu.old} -> {mu.new}  ({mu.why})", flush=True)
         try:
             path.write_bytes((text[:p] + mu.new + text[p + len(mu.old):]).encode())
-            for fs in FEATURE_SETS:
+            for fs in sets:
                 label = f"{mu.name} [{fs or 'default'}]"
                 code, out = run_judge(fs)
                 verdict = classify(out)
-                # second run: the Differential harness alone, to see whether it would also have caught it
-                code2, out2 = run_judge(fs, skip_tests=True)
                 detected = code != 0 and verdict != "NOT DETECTED" and not verdict.startswith("BUILD BROKEN")
                 survived += not detected
                 print(f"e5: {label}: {'DETECTED' if detected else 'NOT DETECTED'} (exit {code}): {verdict}", flush=True)
-                print(f"e5: {label}: harness alone: exit {code2}: {classify(out2)}", flush=True)
-                rows.append(f"{mu.name}\t{fs or 'default'}\t{mu.file}:{line_no}\t{verdict}\t{classify(out2)}")
+                alone = "not run (--quick)"
+                if not quick:
+                    # second run: the Differential harness alone, to see whether it would also have caught it
+                    code2, out2 = run_judge(fs, skip_tests=True)
+                    alone = classify(out2)
+                    print(f"e5: {label}: harness alone: exit {code2}: {alone}", flush=True)
+                rows.append(f"{mu.name}\t{fs or 'default'}\t{mu.file}:{line_no}\t{verdict}\t{alone}")
         finally:
             path.write_bytes(original)
     clean = src_diff_is_empty()

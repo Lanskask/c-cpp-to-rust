@@ -15,11 +15,13 @@
  *      PrintPreallocated at three buffer sizes, Duplicate, Compare
  *   M3 lookups and mutations: array/object accessors, detach/replace/insert/delete, Minify
  *   M4 allocator hooks: counting hooks (allocations, frees, bytes) and a fail-the-Nth-allocation sweep
- *      over Parse, Print and Duplicate (D1: every allocation guard)
+ *      over Parse, Print, PrintBuffered and Duplicate, with the allocations left alive after each (D1: every
+ *      allocation guard frees what it built)
  *   M5 cJSON_Utils: pointers, GeneratePatches/ApplyPatches, MergePatch, GenerateMergePatch, SortObject
  *   M6 locale: LC_NUMERIC set to a comma locale if the OS has one (D3); LC_CTYPE set to a Latin-1 locale and
  *      keys with bytes >= 0x80 looked up case-insensitively (D19)
- *   M7 fixed constructors: numbers incl. NaN (D6), strings, references, Add*ToObject
+ *   M7 fixed constructors: numbers incl. NaN (D6), strings, references, Add*ToObject; writes through the
+ *      char * the library returns (D21) and into valueint/valuedouble (Q3)
  */
 #include <ctype.h>
 #include <limits.h>
@@ -140,6 +142,12 @@ static void hooks_on(long failing)
     n_alloc = n_free = n_bytes = 0;
     fail_at = failing;
     cJSON_InitHooks(&h);
+}
+
+/* allocations still alive after a fail-the-Nth run (the failed allocation is not one); 0 = nothing leaked (D1) */
+static long live_now(void)
+{
+    return (n_alloc - (fail_at != 0 && fail_at <= n_alloc ? 1 : 0)) - n_free;
 }
 
 static void hooks_off(void)
@@ -477,15 +485,18 @@ static void hooks_pass(const char *text, size_t len)
     limit = total < MAXFAIL ? total : MAXFAIL;
     for (i = 1; i <= limit; i++)
     {
+        int ok;
         hooks_on(i);
         s = cJSON_Print(root);
-        printf("fail-print[%ld] out=%s\n", i, s ? "ok" : "NULL");
+        ok = s != NULL;
         cJSON_free(s);
+        printf("fail-print[%ld] out=%s live=%ld\n", i, ok ? "ok" : "NULL", live_now());
         hooks_off();
         hooks_on(i);
         s = cJSON_PrintBuffered(root, 8, 0);
-        printf("fail-buffered[%ld] out=%s\n", i, s ? "ok" : "NULL");
+        ok = s != NULL;
         cJSON_free(s);
+        printf("fail-buffered[%ld] out=%s live=%ld\n", i, ok ? "ok" : "NULL", live_now());
         hooks_off();
     }
     hooks_on(0);
@@ -499,10 +510,12 @@ static void hooks_pass(const char *text, size_t len)
     for (i = 1; i <= limit; i++)
     {
         cJSON *d;
+        int ok;
         hooks_on(i);
         d = cJSON_Duplicate(root, 1);
-        printf("fail-duplicate[%ld] out=%s\n", i, d ? "ok" : "NULL");
+        ok = d != NULL;
         cJSON_Delete(d);
+        printf("fail-duplicate[%ld] out=%s live=%ld\n", i, ok ? "ok" : "NULL", live_now());
         hooks_off();
     }
     cJSON_Delete(root);
@@ -845,6 +858,42 @@ static void constructors(void)
     printf("AddItemToArray(NULL,NULL)=%d\n", (int)cJSON_AddItemToArray(NULL, NULL));
     printf("InsertItemInArray(self)=%d\n", (int)cJSON_InsertItemInArray(n, 0, n));
     cJSON_Delete(n);
+
+    /* D21: writes through the char * that GetStringValue, SetValuestring and the print functions return */
+    n = cJSON_CreateString("abcdef");
+    {
+        char *v = cJSON_GetStringValue(n);
+        const unsigned long first = (unsigned long)v; /* an address value, compared only */
+        char *out;
+        v[0] = 'X';
+        v[3] = '\0';
+        put_line("view GetStringValue", cJSON_GetStringValue(n));
+        show("view print", n);
+        v = cJSON_SetValuestring(n, "xyz"); /* 3 <= strlen 3: copied in place */
+        printf("view SetValuestring(xyz) same-buffer=%d\n", (unsigned long)v == first);
+        v[1] = 'Y';
+        put_line("view after write", cJSON_GetStringValue(n));
+        v = cJSON_SetValuestring(n, "long1"); /* longer: new buffer, allocated before the old one is freed */
+        printf("view SetValuestring(long1) same-buffer=%d\n", (unsigned long)v == first);
+        out = cJSON_PrintUnformatted(n);
+        out[1] = 'Q';
+        out[4] = '\0';
+        put_line("view printed", out);
+        cJSON_free(out);
+    }
+    cJSON_Delete(n);
+    /* Q3: valueint and valuedouble are separate fields; print uses %d only when they agree */
+    n = cJSON_CreateNumber(7);
+    n->valuedouble = 7.5;
+    show("field vd=7.5", n);
+    n->valueint = 3;
+    show("field vi=3", n);
+    n->valuedouble = 3.0;
+    show("field vd=3", n);
+    n->valueint = 100;
+    show("field vi=100", n);
+    printf("field getnumber=%.17g vi=%d\n", cJSON_GetNumberValue(n), n->valueint);
+    cJSON_Delete(n);
 }
 
 /* ---- main ----------------------------------------------------------------------------------------------- */
@@ -921,9 +970,7 @@ int main(int argc, char **argv)
     run_document("A", a, la);
     if (sep != NULL)
         run_document("B", b, lb);
-#ifndef DUMP_NO_HOOKS /* run.py --stage 2 defines it when the Stage 2 adapter has no allocator hooks (D1) */
     hooks_pass(a, la);
-#endif
     pair_ops(a, b);
     locale_pass(a);
     constructors();

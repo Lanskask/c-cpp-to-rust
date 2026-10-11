@@ -5,29 +5,49 @@
 //! `tests/upstream.rs` and `examples/dump.rs`. Stage 2 replaces ONLY this file with an implementation of the
 //! same interface over the RULEBOOK section 6 API. Neither the driver nor the tests may change.
 //!
-//! # The interface contract
+//! # The interface contract (RULEBOOK section 6.0; both adapters implement all of it)
 //!
-//! Handles. [`Item`] is an opaque, `Copy`, comparable handle for "a `cJSON *`" (possibly NULL: [`NULL`]).
-//! Equality means "the same node" (the C pointer comparisons of the upstream tests). Ownership is manual, as
-//! in C: `create_*`, `parse*`, `duplicate`, `detach_*` return a root the caller must `delete`; `add_*`,
-//! `insert_*`, `replace_*` take ownership of the item on success (and leave it with the caller on failure);
-//! `get_*`, `child`, `next`, `prev` return borrowed handles. A Stage 2 adapter implements `Item` over its
-//! own arena or tree path and keeps these ownership rules.
+//! 1. Identity. [`Item`] is an opaque, `Copy + Eq + Hash` handle for "a `cJSON *`" (possibly NULL: [`NULL`]).
+//!    Equality means "the same node" (the C pointer comparisons of the upstream tests); a handle stays valid
+//!    and equal to itself while the node lives, across detach, add, replace and a root `remove` patch.
+//!    Ownership is manual, as in C: `create_*`, `parse*`, `duplicate`, `detach_*` return a root the caller
+//!    must `delete`; `add_*`, `insert_*`, `replace_*` take ownership of the item on success (and leave it with
+//!    the caller on failure); `get_*`, `child`, `next`, `prev` return borrowed handles. Cycles are
+//!    representable (`add_item_to_array(b, o)` with `o` an ancestor of `b`, RULEBOOK D11).
+//! 2. Fields of every node of every kind. [`type_flags`] is the C type word: the kind bit (`INVALID` = 0, a
+//!    root after a `remove` patch at path `""`), plus `IS_REFERENCE` 256 and `STRING_IS_CONST` 512.
+//!    [`value_int`] / [`value_double`] are the stored fields (a parsed `true` has `valueint` 1, Q5), writable
+//!    with [`set_value_int`] / [`set_value_double`] (no coupling between them, Q3). [`value_string`] (also
+//!    for `Raw`) and [`key`] are `Option<Vec<u8>>`.
+//! 3. Links. [`child`], [`next`], [`prev`] with the C invariant: the first child's `prev` is the last child,
+//!    the last child's `next` is NULL, a node in no list has `prev` NULL (cJSON.c:2027-2058, 2256-2292).
+//! 4. Parse. [`Parsed`]: `end` is the parse end on success and the error offset on failure (cJSON.c:1209-1212);
+//!    `err` is the error position after the call with the reset rules of RULEBOOK Q26: [`ErrPos::Unset`] (NULL),
+//!    [`ErrPos::At`] (offset into this call's input), [`ErrPos::Outside`] (set, but not inside this call's
+//!    input: the stale value that `parse(None)` / `parse_with_opts(None, ..)` keep from the previous parse).
+//! 5. Status codes. `apply_patches*` return the C status (0-11 and 13, 1 for a non-array patch list, Q23).
+//! 6. Strings. Byte strings are `&[u8]` WITHOUT the terminating NUL (the adapter adds it); the library reads
+//!    them up to the first NUL. `None` is the C NULL pointer. A string the library keeps by pointer
+//!    (`create_string_reference`, `add_item_to_object_cs`) is `&'static CStr`. Returned strings are
+//!    `Vec<u8>`/[`Printed`] holding the bytes up to the first NUL. [`value_string_addr`] is the address of the
+//!    stored value buffer (a reference keeps the caller's buffer; a shorter `set_valuestring` keeps the
+//!    buffer, a longer one gets a new one, cJSON.c:455-473).
+//! 7. Writable views (RULEBOOK D21). [`with_string_value_mut`] and [`Printed::bytes_mut`] give the bytes before
+//!    the NUL of the buffer that `cJSON_GetStringValue` / `cJSON_SetValuestring` / the print functions return;
+//!    a write is seen by every later read, a NUL written inside truncates the value there.
+//! 8. Allocation hooks (RULEBOOK D1, revised). [`hooks_on`] / [`hooks_off`] / [`hooks_failing_malloc`] /
+//!    [`hook_stats`]: one allocation event per C allocation site with the C size (node 64 bytes, strings
+//!    `strlen + 1`, print buffers as Q6), one free event per C free of a live allocation (a C `free(NULL)` is
+//!    no event), growth of a print buffer under hooks = allocation of the new size, then free of the old.
+//!    `allocs` counts every allocation event (also the failing one), `bytes` the sizes of successful ones,
+//!    `frees` the free events. Dropping a [`Printed`] or the result of [`find_pointer_from_object_to`] is a
+//!    free event, as the driver's `cJSON_free`.
 //!
-//! Strings. Byte strings are `&[u8]` WITHOUT the terminating NUL (the adapter adds it). `None` is the C
-//! NULL pointer. A string that the library keeps by pointer (`create_string_reference`,
-//! `add_item_to_object_cs`) is `&'static CStr`. Returned strings are `Vec<u8>`/[`Printed`] holding the bytes up
-//! to the first NUL.
-//!
-//! Sentinels. Booleans are `bool`; `cJSON_bool` results are converted. Error position and parse end are
-//! offsets into the input slice ([`Parsed`]); `ErrPos::Unset` is the NULL error pointer.
-//!
-//! Capabilities (constants, so that a Stage 2 adapter can say "not available" without touching the tests):
-//! - [`HOOKS`]: `cJSON_InitHooks` allocator hooks exist (RULEBOOK D1). Stage 2: `false`. Tests that need
-//!   them print `SKIPPED` and return; the driver skips its allocator section (and `run.py --stage 2` builds
-//!   the original C driver with `-DDUMP_NO_HOOKS` when it reads `HOOKS = false` from this file).
-//! - [`C_LAYOUT`]: the `raw_*` functions at the end of this file work (writes into node fields, corrupted
-//!   lists, pointer identity of buffers; RULEBOOK D7, D11, D14). Stage 2: `false`.
+//! Capability (a constant, so that a Stage 2 adapter can say "not available" without touching the tests):
+//! [`C_LAYOUT`]: the `raw_*` functions at the end of this file work (hand-corrupted lists, writes into the
+//! node's own key, a node with two kind bits; RULEBOOK D7, D14). Stage 2: `false`. Steps that need them print
+//! `SKIPPED` and are left out. There is no hooks capability: since the D1 revision (2026-10-10) every adapter
+//! has the hooks, and `run.py --stage 2` always compares the allocator section.
 //!
 //! Locking. The library has process-global state (hooks, error position, RULEBOOK D1/D9). Tests run on
 //! threads, so every test holds `upstream.rs::lock()`; the adapter itself is not synchronised.
@@ -41,8 +61,6 @@ use cjson::cJSON as lib;
 use cjson::cJSON::{cJSON, cJSON_Hooks};
 use cjson::cJSON_Utils as utils;
 
-/// Stage 1: allocator hooks exist.
-pub const HOOKS: bool = true;
 /// Stage 1: the `raw_*` functions work.
 pub const C_LAYOUT: bool = true;
 
@@ -124,13 +142,15 @@ pub enum ErrPos {
     Unset,
     /// Offset of the error pointer into the input.
     At(usize),
-    /// The error pointer is not inside the input (or the input was NULL).
+    /// The error pointer is set but not inside this call's input: the input was NULL and the error is the
+    /// stale one of the previous parse (RULEBOOK Q26).
     Outside,
 }
 
 pub struct Parsed {
     pub item: Item,
-    /// Offset of `*return_parse_end` (only when `want_end` was set and the library wrote it).
+    /// Offset of `*return_parse_end` (only when `want_end` was set and the library wrote it): the end of the
+    /// value on success, the error offset on failure (cJSON.c:1209-1212).
     pub end: Option<usize>,
     pub err: ErrPos,
 }
@@ -207,6 +227,16 @@ impl Printed {
     pub fn bytes(&self) -> &[u8] {
         // SAFETY: non-NULL by construction, NUL-terminated, alive until drop.
         unsafe { CStr::from_ptr(self.0) }.to_bytes()
+    }
+
+    /// RULEBOOK D21: the returned buffer as writable bytes (those before the NUL); a NUL written inside
+    /// shortens what [`Printed::bytes`] returns afterwards.
+    pub fn bytes_mut(&mut self) -> &mut [u8] {
+        // SAFETY: non-NULL, NUL-terminated, exclusively borrowed through `self`; the slice ends before the NUL.
+        unsafe {
+            let n = CStr::from_ptr(self.0).to_bytes().len();
+            std::slice::from_raw_parts_mut(self.0 as *mut u8, n)
+        }
     }
 }
 
@@ -300,6 +330,47 @@ pub fn value_string(item: Item) -> Option<Vec<u8>> {
     assert!(!item.is_null());
     // SAFETY: as above.
     opt_bytes(unsafe { (*item.0).valuestring })
+}
+
+/// Address of the `valuestring` buffer (0 for NULL), for the "no copy" / "did not reallocate" assertions.
+pub fn value_string_addr(item: Item) -> usize {
+    assert!(!item.is_null());
+    // SAFETY: live node; only the pointer value is read.
+    unsafe { (*item.0).valuestring as usize }
+}
+
+/// Write the `valueint` field only (C: `item->valueint = v`; `valuedouble` is not touched, Q3).
+pub fn set_value_int(item: Item, v: i32) {
+    assert!(!item.is_null());
+    // SAFETY: live node.
+    unsafe { (*item.0).valueint = v }
+}
+
+/// Write the `valuedouble` field only (C: `item->valuedouble = v`; `valueint` is not touched, Q3).
+pub fn set_value_double(item: Item, v: f64) {
+    assert!(!item.is_null());
+    // SAFETY: live node.
+    unsafe { (*item.0).valuedouble = v }
+}
+
+/// RULEBOOK D21: `char *s = cJSON_GetStringValue(item)` used as a writable buffer. `f` gets the bytes before
+/// the NUL; a NUL written inside truncates the value for every later read. Returns `false` without calling
+/// `f` when C returns NULL (not a string, NULL item, no value) or the string is a reference (`IsReference`:
+/// the buffer is the caller's, RULEBOOK D13).
+pub fn with_string_value_mut(item: Item, f: impl FnOnce(&mut [u8])) -> bool {
+    if !is_string(item) || type_flags(item) & IS_REFERENCE != 0 {
+        return false;
+    }
+    // SAFETY: live String node; the library returns its own NUL-terminated valuestring (or NULL).
+    unsafe {
+        let p = lib::cJSON_GetStringValue(item.0);
+        if p.is_null() {
+            return false;
+        }
+        let n = CStr::from_ptr(p).to_bytes().len();
+        f(std::slice::from_raw_parts_mut(p as *mut u8, n));
+    }
+    true
 }
 
 pub fn child(item: Item) -> Item {
@@ -877,20 +948,6 @@ pub fn raw_add_item_with_aliased_key(object: Item, item: Item, name: &[u8]) -> b
         (*item.0).string = p as *mut c_char;
         b(lib::cJSON_AddItemToObject(object.0, (*item.0).string, item.0))
     }
-}
-
-/// Address of the `valuestring` buffer (0 for NULL), for the "did not reallocate" assertions.
-pub fn raw_value_string_addr(item: Item) -> usize {
-    assert!(!item.is_null());
-    // SAFETY: live node.
-    unsafe { (*item.0).valuestring as usize }
-}
-
-/// `cJSON_SetValuestring(item, s)` returning the address of the result (0 for NULL).
-pub fn raw_set_valuestring_addr(item: Item, s: &[u8]) -> usize {
-    let a = CArg::new(Some(s));
-    // SAFETY: live node.
-    unsafe { lib::cJSON_SetValuestring(item.0, a.ptr()) as usize }
 }
 
 /// `cJSON_SetValuestring(item, item->valuestring + offset)`: the new value overlaps the old buffer (D7).

@@ -11,3 +11,6 @@ date	phase	model	input	output	cache_create	cache_read	messages
 2026-10-10 21:25	E5-stage2-judge	claude-sonnet-5-5	300	54934	1293175	23544262	149
 2026-10-10 21:46	E5-stage2-review	claude-opus-5-5	62	294	133382	2807252	31
 2026-10-10 21:46	E5-stage2-review	claude-sonnet-5-5	38	13560	134356	2454103	18
+2026-10-11 03:54	E5-stage2-decisions	<synthetic>	0	0	0	0	4
+2026-10-11 03:54	E5-stage2-decisions	claude-opus-5-5	230	5105	1137008	22396709	113
+2026-10-11 03:54	E5-stage2-decisions	claude-sonnet-5-5	196	25473	1144487	7988855	88

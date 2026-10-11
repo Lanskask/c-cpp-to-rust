@@ -8,9 +8,10 @@
 //!   `skip_utf8_bom`, stack-built `cJSON` structs) go through the public API when the same behaviour is
 //!   observable there (a parse test parses a whole document, a print test prints one). The cases where it
 //!   is not are listed in `migration/RUN-NOTES.md`, section "Stage 2 Judge".
-//! - A step that only exists with the C node layout (`adapter::C_LAYOUT`, RULEBOOK D7, D11, D14) or with
-//!   allocator hooks (`adapter::HOOKS`, D1) prints `SKIPPED` and is left out when the adapter says so; the
-//!   Stage 1 adapter runs all of them.
+//! - A step that only exists with the C node layout (`adapter::C_LAYOUT`: hand-corrupted lists, a write into
+//!   the node's own key, a node with two kind bits; RULEBOOK D7, D14) prints `SKIPPED` and is left out when
+//!   the adapter says so; the Stage 1 adapter runs all of them. Allocator hooks (D1, revised 2026-10-10),
+//!   cycles (D11, revised) and `Invalid` nodes (built by a root `remove` patch, Q23) are in every adapter.
 //! - `ENABLE_LOCALES`: no upstream test file contains an `#ifdef`, so there is no `#[cfg(feature = "locales")]`
 //!   here; every test runs in both feature sets (RULEBOOK section 3, both run in the C locale).
 //! - The one `TEST_IGNORE()` test stays `#[ignore]`.
@@ -111,20 +112,29 @@ fn skipped(why: &str) {
     eprintln!("SKIPPED: {why}");
 }
 
-/// The upstream `failing_hooks` (malloc always fails); `None` when the adapter has no hooks (D1).
+/// The upstream `failing_hooks` (malloc always fails), reset to the defaults when the guard drops (D1).
 struct HooksReset;
 impl Drop for HooksReset {
     fn drop(&mut self) {
         a::hooks_off();
     }
 }
-fn failing_hooks() -> Option<HooksReset> {
-    if !a::HOOKS {
-        skipped("adapter has no allocator hooks (RULEBOOK D1)");
-        return None;
-    }
+fn failing_hooks() -> HooksReset {
     a::hooks_failing_malloc();
-    Some(HooksReset)
+    HooksReset
+}
+
+/// An `Invalid` node (type word 0) through the public API: a JSON Patch `remove` at the root path `""`
+/// overwrites the root with `{..., cJSON_Invalid, ...}` (cJSON_Utils.c:839-849, RULEBOOK Q23). The C tests
+/// zero a stack node instead.
+fn make_invalid() -> Item {
+    let root = pj("{\"a\":1}");
+    let patches = pj("[{\"op\":\"remove\",\"path\":\"\"}]");
+    assert_eq!(a::apply_patches(root, patches), 0);
+    a::delete(patches);
+    assert_eq!(a::type_flags(root), a::INVALID);
+    assert!(a::child(root).is_null() && a::key(root).is_none() && a::value_string(root).is_none());
+    root
 }
 
 // =====================================================================================================================
@@ -999,8 +1009,9 @@ fn cjson_get_object_item_case_sensitive_should_not_crash_with_array() {
     a::delete(array);
 }
 
-/// The C test builds stack nodes with `type = <kind> | cJSON_StringIsConst`. Here the item gets that flag by
-/// being added with `cJSON_AddItemToObjectCS`. The `invalid` node needs the C layout.
+/// The C test builds stack nodes with `type = <kind> | cJSON_StringIsConst`. Here every item gets that flag by
+/// being added with `cJSON_AddItemToObjectCS` (cJSON.c:2095); the `invalid` node is a root after a `remove`
+/// patch at `""` (type 0, [`make_invalid`]), so it ends with type `Invalid | StringIsConst` as in C.
 #[test]
 fn typecheck_functions_should_check_type() {
     let _g = lock();
@@ -1010,24 +1021,15 @@ fn typecheck_functions_should_check_type() {
         assert_eq!(a::type_flags(item) & a::STRING_IS_CONST, a::STRING_IS_CONST);
         item
     };
-    let invalid = if a::C_LAYOUT {
-        Some(a::raw_new_with_type(a::INVALID | a::STRING_IS_CONST))
-    } else {
-        skipped("typecheck: an Invalid node with StringIsConst needs the C layout (D14)");
-        None
-    };
-    let not_invalid = |f: fn(Item) -> bool| {
-        if let Some(inv) = invalid {
-            assert!(!f(inv));
-        }
-    };
+    let invalid = make_invalid();
+    assert!(a::add_item_to_object_cs(holder, Some(c"invalid"), invalid));
+    assert_eq!(a::type_flags(invalid), a::INVALID | a::STRING_IS_CONST);
+    let not_invalid = |f: fn(Item) -> bool| assert!(!f(invalid));
 
     assert!(!a::is_invalid(NULL));
     let item = with_const(a::create_false());
     assert!(!a::is_invalid(item));
-    if let Some(inv) = invalid {
-        assert!(a::is_invalid(inv));
-    }
+    assert!(a::is_invalid(invalid));
     let _ = a::delete_item_from_object_cs(holder, Some(b"k"));
 
     let item = with_const(a::create_false());
@@ -1080,10 +1082,7 @@ fn typecheck_functions_should_check_type() {
     assert!(a::is_raw(item));
     a::delete_item_from_object_cs(holder, Some(b"k"));
 
-    a::delete(holder);
-    if let Some(inv) = invalid {
-        a::delete(inv);
-    }
+    a::delete(holder); // also deletes `invalid`, its child
 }
 
 #[test]
@@ -1096,14 +1095,10 @@ fn cjson_should_not_parse_to_deeply_nested_jsons() {
     });
 }
 
-/// D11: the cycle itself needs the C layout (an owned tree cannot hold one).
+/// Runs as written in both Stages: node handles can form the cycle (RULEBOOK D11, revised 2026-10-10).
 #[test]
 fn cjson_should_not_follow_too_deep_circular_references() {
     let _g = lock();
-    if !a::C_LAYOUT {
-        skipped("circular references cannot be built (RULEBOOK D11)");
-        return;
-    }
     on_big_stack(|| {
         let o = a::create_array();
         let aa = a::create_array();
@@ -1133,6 +1128,43 @@ fn extra_duplicate_should_stop_at_the_circular_limit_without_a_cycle() {
         }
         assert!(a::duplicate(root, true).is_null());
         a::delete(root);
+    });
+}
+
+/// Not an upstream test: the RULEBOOK D10 duty. A release build must reach the C limits on a 2 MiB thread (a
+/// spawned Rust thread's default; C gets them on its 8 MiB main stack): parse and print a document nested
+/// `NESTING_LIMIT` deep, duplicate an array nested `CIRCULAR_LIMIT` deep, delete both. `run.py --stage 2`
+/// runs it with `cargo test --release`; debug builds ignore it (their frames are several times larger).
+#[test]
+#[cfg_attr(debug_assertions, ignore = "release only: run.py --stage 2 runs it with --release (RULEBOOK D10)")]
+fn extra_release_build_reaches_the_limits_on_a_2_mib_stack() {
+    let _g = lock();
+    std::thread::scope(|s| {
+        let t = std::thread::Builder::new().stack_size(2 << 20).spawn_scoped(s, || {
+            let mut text = vec![b'['; a::NESTING_LIMIT];
+            text.extend(vec![b']'; a::NESTING_LIMIT]);
+            let doc = a::parse(Some(&text)).item;
+            assert!(!doc.is_null(), "a document nested NESTING_LIMIT deep must parse");
+            assert_eq!(a::print_unformatted(doc).map(|p| p.bytes().to_vec()), Some(text.clone()));
+            assert!(a::print(doc).is_some());
+            a::delete(doc);
+            let mut deeper = vec![b'['; a::NESTING_LIMIT + 1];
+            deeper.extend(vec![b']'; a::NESTING_LIMIT + 1]);
+            assert!(a::parse(Some(&deeper)).item.is_null(), "one level more must not parse");
+
+            let root = a::create_array();
+            let mut cur = root;
+            for _ in 1..a::CIRCULAR_LIMIT {
+                let next = a::create_array();
+                assert!(a::add_item_to_array(cur, next));
+                cur = next;
+            }
+            let copy = a::duplicate(root, true);
+            assert!(!copy.is_null(), "an array nested CIRCULAR_LIMIT deep must be duplicated");
+            a::delete(copy);
+            a::delete(root);
+        });
+        t.unwrap().join().unwrap();
     });
 }
 
@@ -1194,10 +1226,44 @@ fn cjson_detach_item_via_pointer_should_detach_items() {
     a::delete(parent);
 }
 
-/// D14: needs a list whose `prev` pointers were zeroed by hand.
+/// Not an upstream test: RULEBOOK D14 (narrowed). A reference made by `cJSON_CreateArrayReference(x)` has `x` as
+/// its first child; when `x` is in no list its `prev` is NULL, so `cJSON_AddItemToArray` and
+/// `cJSON_InsertItemInArray` return true without appending (cJSON.c:2050-2055; measured on the original C by
+/// `experiments/e6_cjson_reference_add_probe.c`). Stage 2 must keep that branch.
+#[test]
+fn extra_add_to_a_reference_of_a_node_in_no_list_succeeds_without_appending() {
+    let _g = lock();
+    let x = a::create_null();
+    let y = a::create_true();
+    let z = a::create_false();
+    let r = a::create_array_reference(x);
+    assert!(a::add_item_to_array(r, y));
+    assert!(a::insert_item_in_array(r, 5, z));
+    assert_eq!(a::array_size(r), 1);
+    assert_eq!(pu(r).as_deref(), Some("[null]"));
+    assert!(a::prev(y).is_null() && a::prev(z).is_null() && a::next(x).is_null());
+    a::delete(r);
+    a::delete(x);
+    a::delete(y);
+    a::delete(z);
+}
+
+/// The C test zeroes `prev` by hand (D14, `C_LAYOUT` only). The guard it tests (cJSON.c:2260) is also
+/// reachable publicly: a node in no list has `prev` NULL (cJSON.c:243-246), so detaching it from an array
+/// whose first child it is not returns NULL and leaves the array as it was. That variant runs always.
 #[test]
 fn cjson_detach_item_via_pointer_should_return_null_if_item_prev_is_null() {
     let _g = lock();
+    let parent = a::create_array();
+    let l0 = a::create_null();
+    let stray = a::create_null();
+    assert!(a::add_item_to_array(parent, l0));
+    assert!(a::prev(stray).is_null());
+    assert!(a::detach_item_via_pointer(parent, stray).is_null(), "a node in no list must not be detached");
+    assert!(a::child(parent) == l0 && a::prev(l0) == l0 && a::next(l0).is_null());
+    a::delete(stray);
+    a::delete(parent);
+
     if !a::C_LAYOUT {
         skipped("corrupted list: prev set to NULL by hand (RULEBOOK D14)");
         return;
@@ -1409,11 +1475,22 @@ fn cjson_set_valuestring_should_return_null_if_strings_overlap() {
     a::delete(obj);
 }
 
-/// `ensure` with a failing `realloc` hook: `ensure` is private and `cJSON_InitHooks` cannot install a
-/// `realloc`, so nothing public reaches it (RULEBOOK D1).
+/// `ensure` is private and the public `cJSON_Hooks` has no `realloc`: with custom hooks C grows a print buffer by
+/// allocating the new size, copying and freeing the old one (cJSON.c:233-237, 545-565). The same failure through
+/// the public API (RULEBOOK D1, revised): `PrintBuffered` with a 10-byte prebuffer (allocation 1) that must grow,
+/// and the growth allocation (number 2) fails. `ensure` frees the old buffer and fails, so the print returns NULL.
 #[test]
-#[ignore = "ensure() is private and realloc hooks are not part of the public API (RULEBOOK D1)"]
-fn ensure_should_fail_on_failed_realloc() {}
+fn ensure_should_fail_on_failed_realloc() {
+    let _g = lock();
+    let item = a::create_string(Some(&[b'a'; 200]));
+    a::hooks_on(2);
+    let printed = a::print_buffered(item, 10, false);
+    let st = a::hook_stats();
+    a::hooks_off();
+    assert!(printed.is_none(), "Ensure didn't fail with failing realloc.");
+    assert_eq!((st.allocs, st.frees, st.bytes), (2, 1, 10), "growth = allocate(new), free(old) on failure");
+    a::delete(item);
+}
 
 /// `skip_utf8_bom` is private; the BOM is observable as the parse end of a document that starts with one.
 #[test]
@@ -1463,9 +1540,7 @@ fn cjson_create_string_reference_should_create_a_string_reference() {
     const S: &std::ffi::CStr = c"I am a string!";
     let r = a::create_string_reference(Some(S));
     assert_eq!(a::value_string(r).as_deref(), Some(S.to_bytes()));
-    if a::C_LAYOUT {
-        assert_eq!(a::raw_value_string_addr(r), S.as_ptr() as usize, "the reference must not copy");
-    }
+    assert_eq!(a::value_string_addr(r), S.as_ptr() as usize, "the reference must not copy");
     assert_eq!(a::IS_REFERENCE | a::STRING, a::type_flags(r));
     a::delete(r);
 }
@@ -1515,12 +1590,12 @@ fn cjson_add_item_to_object_or_array_should_not_add_itself() {
     a::delete(array);
 }
 
-/// The key argument is the item's own `string`; writing that member needs the C layout.
+/// The key argument is the item's own `string`; writing that member needs the C layout (RULEBOOK D7).
 #[test]
 fn cjson_add_item_to_object_should_not_use_after_free_when_string_is_aliased() {
     let _g = lock();
     if !a::C_LAYOUT {
-        skipped("aliased key string (item->string passed as the key)");
+        skipped("aliased key string: item->string passed as the key (RULEBOOK D7)");
         return;
     }
     let object = a::create_object();
@@ -1568,21 +1643,17 @@ fn cjson_set_valuestring_to_object_should_not_leak_memory() {
     a::add_item_to_object(root, Some(b"one"), item1);
     a::add_item_to_object(root, Some(b"two"), item2);
 
-    let ptr1 = if a::C_LAYOUT { a::raw_value_string_addr(item1) } else { 0 };
+    let ptr1 = a::value_string_addr(item1);
     let rv = a::set_valuestring(a::object_item(root, Some(b"one")), Some(short_valuestring.as_bytes()));
     assert!(rv.is_some());
-    if a::C_LAYOUT {
-        assert_eq!(ptr1, a::raw_value_string_addr(item1), "new valuestring shorter than old should not reallocate memory");
-    }
+    assert_eq!(ptr1, a::value_string_addr(item1), "new valuestring shorter than old should not reallocate memory");
     assert_eq!(vstr(a::object_item(root, Some(b"one"))).as_deref(), Some(short_valuestring));
 
     // we needn't to free the original valuestring manually
-    let ptr1 = if a::C_LAYOUT { a::raw_value_string_addr(item1) } else { 0 };
+    let ptr1 = a::value_string_addr(item1);
     let rv = a::set_valuestring(a::object_item(root, Some(b"one")), Some(long_valuestring.as_bytes()));
     assert!(rv.is_some());
-    if a::C_LAYOUT {
-        assert_ne!(ptr1, a::raw_value_string_addr(item1), "new valuestring longer than old should reallocate memory");
-    }
+    assert_ne!(ptr1, a::value_string_addr(item1), "new valuestring longer than old should reallocate memory");
     assert_eq!(vstr(a::object_item(root, Some(b"one"))).as_deref(), Some(long_valuestring));
 
     let rv = a::set_valuestring(a::object_item(root, Some(b"two")), Some(long_valuestring.as_bytes()));
@@ -1761,15 +1832,11 @@ fn cjson_compare_should_compare_null_pointer_as_not_equal() {
     assert!(!a::compare(NULL, NULL, false));
 }
 
-/// A zeroed node (type Invalid); needs the C layout.
+/// The C test zeroes a stack node (type Invalid); here it is a root after a `remove` patch at `""`.
 #[test]
 fn cjson_compare_should_compare_invalid_as_not_equal() {
     let _g = lock();
-    if !a::C_LAYOUT {
-        skipped("an Invalid node cannot be built (RULEBOOK D14)");
-        return;
-    }
-    let invalid = a::raw_new_with_type(a::INVALID);
+    let invalid = make_invalid();
     assert!(!a::compare(invalid, invalid, false));
     assert!(!a::compare(invalid, invalid, true));
     a::delete(invalid);
@@ -1924,7 +1991,8 @@ fn cjson_add_null_should_fail_with_null_pointers() {
 fn cjson_add_null_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_null_to_object(root, Some(b"null")).is_null());
         drop(h);
     }
@@ -1953,7 +2021,8 @@ fn cjson_add_true_should_fail_with_null_pointers() {
 fn cjson_add_true_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_true_to_object(root, Some(b"true")).is_null());
         drop(h);
     }
@@ -1964,7 +2033,8 @@ fn cjson_add_true_should_fail_on_allocation_failure() {
 fn cjson_create_int_array_should_fail_on_allocation_failure() {
     let _g = lock();
     let numbers = [1, 2, 3];
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::create_int_array(Some(&numbers), 3).is_null());
         drop(h);
     }
@@ -1974,7 +2044,8 @@ fn cjson_create_int_array_should_fail_on_allocation_failure() {
 fn cjson_create_float_array_should_fail_on_allocation_failure() {
     let _g = lock();
     let numbers = [1.0f32, 2.0, 3.0];
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::create_float_array(Some(&numbers), 3).is_null());
         drop(h);
     }
@@ -1984,7 +2055,8 @@ fn cjson_create_float_array_should_fail_on_allocation_failure() {
 fn cjson_create_double_array_should_fail_on_allocation_failure() {
     let _g = lock();
     let numbers = [1.0f64, 2.0, 3.0];
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::create_double_array(Some(&numbers), 3).is_null());
         drop(h);
     }
@@ -1994,7 +2066,8 @@ fn cjson_create_double_array_should_fail_on_allocation_failure() {
 fn cjson_create_string_array_should_fail_on_allocation_failure() {
     let _g = lock();
     let strings: [&[u8]; 3] = [b"1", b"2", b"3"];
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::create_string_array(Some(&strings), 3).is_null());
         drop(h);
     }
@@ -2022,7 +2095,8 @@ fn cjson_add_false_should_fail_with_null_pointers() {
 fn cjson_add_false_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_false_to_object(root, Some(b"false")).is_null());
         drop(h);
     }
@@ -2055,7 +2129,8 @@ fn cjson_add_bool_should_fail_with_null_pointers() {
 fn cjson_add_bool_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_bool_to_object(root, Some(b"false"), false).is_null());
         drop(h);
     }
@@ -2087,7 +2162,8 @@ fn cjson_add_number_should_fail_with_null_pointers() {
 fn cjson_add_number_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_number_to_object(root, Some(b"number"), 42.0).is_null());
         drop(h);
     }
@@ -2118,7 +2194,8 @@ fn cjson_add_string_should_fail_with_null_pointers() {
 fn cjson_add_string_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_string_to_object(root, Some(b"string"), Some(b"string")).is_null());
         drop(h);
     }
@@ -2149,7 +2226,8 @@ fn cjson_add_raw_should_fail_with_null_pointers() {
 fn cjson_add_raw_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_raw_to_object(root, Some(b"raw"), Some(b"{}")).is_null());
         drop(h);
     }
@@ -2178,7 +2256,8 @@ fn cjson_add_object_should_fail_with_null_pointers() {
 fn cjson_add_object_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_object_to_object(root, Some(b"object")).is_null());
         drop(h);
     }
@@ -2207,7 +2286,8 @@ fn cjson_add_array_should_fail_with_null_pointers() {
 fn cjson_add_array_should_fail_on_allocation_failure() {
     let _g = lock();
     let root = a::create_object();
-    if let Some(h) = failing_hooks() {
+    {
+        let h = failing_hooks();
         assert!(a::add_array_to_object(root, Some(b"array")).is_null());
         drop(h);
     }

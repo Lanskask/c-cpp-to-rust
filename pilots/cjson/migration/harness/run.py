@@ -8,7 +8,8 @@ Usage: python3 -I run.py [--crate DIR | --scratch] [--stage 1|2] [FEATURES]
        --scratch use the c2rust SCRATCH crate for the feature set (work/scratch/<default|locales>/, made by
                  make_scratch.py on first use). Ticket 02 validates the Judge on these; they are not the target.
        --stage   1 (default): the steps below. 2: the Stage 2 Judge of judge.md section 5: `cargo test` of the
-                 translated tests (rust/tests/upstream.rs through rust/tests/adapter/mod.rs), then the original
+                 translated tests (rust/tests/upstream.rs through rust/tests/adapter/mod.rs), the release stack
+                 check of RULEBOOK D10 (`cargo test --release`, one test on a 2 MiB thread), then the original
                  C driver vs `cargo build --example dump` (rust/examples/dump.rs) on the same corpus. No C ABI
                  and no `test-internals` needed. Outputs under work/run/<crate-tag>/<set>-stage2/.
 Steps (outputs under work/<crate-tag>/<features>/, git-ignored):
@@ -221,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 ADAPTER = "tests/adapter/mod.rs"
+RELEASE_STACK_TEST = "extra_release_build_reaches_the_limits_on_a_2_mib_stack"
 
 
 def stage2_test_numbers(out: str) -> tuple[int, int, int]:
@@ -238,13 +240,10 @@ def stage2(crate: Path, feats: list[str], defines: list[str], build: Path, input
     if feats:
         base += ["--features", ",".join(feats)]
     adapter_src = (crate / ADAPTER).read_text()
-    m = re.search(r"pub const HOOKS: bool = (true|false);", adapter_src)
-    if m is None:
-        print(f"run: {ADAPTER} has no `pub const HOOKS: bool = ...;`", file=sys.stderr)
-        return 1
-    hooks = m.group(1) == "true"
     layout = re.search(r"pub const C_LAYOUT: bool = (true|false);", adapter_src)
-    print(f"judge: stage 2, adapter HOOKS={m.group(1)} C_LAYOUT={layout.group(1) if layout else '?'}")
+    # RULEBOOK D1 (revised 2026-10-10): every adapter has the allocator hooks; the C driver is always built with
+    # its allocator section, so the allocation counts and the fail-the-Nth sweep are compared in Stage 2 too.
+    print(f"judge: stage 2, adapter C_LAYOUT={layout.group(1) if layout else '?'}")
 
     if not skip_tests:
         r = sh(["cargo", "test", *base, "--", "--nocapture"])
@@ -259,6 +258,14 @@ def stage2(crate: Path, feats: list[str], defines: list[str], build: Path, input
             fails = [ln for ln in out.splitlines() if ln.startswith("test ") and ln.endswith("FAILED")]
             print("\n".join(fails) or out[-3000:], file=sys.stderr)
             return 1
+        # RULEBOOK D10: the release build reaches the nesting and circular limits on a 2 MiB thread
+        r = sh(["cargo", "test", "--release", *base, "--test", "upstream", RELEASE_STACK_TEST])
+        out = r.stdout + r.stderr
+        p, f, _ = stage2_test_numbers(out)
+        print(f"release stack check [{','.join(feats) or 'default'}]: {p} passed, {f} failed")
+        if r.returncode or f or p != 1:
+            print(out[-3000:], file=sys.stderr)
+            return 1
 
     r = sh(["cargo", "build", "-q", "--example", "dump", *base])
     if r.returncode:
@@ -266,8 +273,8 @@ def stage2(crate: Path, feats: list[str], defines: list[str], build: Path, input
         return 1
     rust = tdir / "debug" / "examples" / "dump"
     orig = build / "dump_orig"
-    cmd = ["cc", *CFLAGS, f"-I{SRC}", *defines, *([] if hooks else ["-DDUMP_NO_HOOKS"]), str(HERE / "dump.c"),
-           str(SRC / "cJSON.c"), str(SRC / "cJSON_Utils.c"), "-lm", "-o", str(orig)]
+    cmd = ["cc", *CFLAGS, f"-I{SRC}", *defines, str(HERE / "dump.c"), str(SRC / "cJSON.c"),
+           str(SRC / "cJSON_Utils.c"), "-lm", "-o", str(orig)]
     r = sh(cmd)
     if r.returncode:
         print(f"run: driver build failed\n{r.stderr[-2000:]}", file=sys.stderr)

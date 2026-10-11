@@ -569,7 +569,7 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   gave 62.6 s again.
 - **Next:** cJSON session re-reads judge.md §6 before ticket 06.
 
-## 35. Opus review of the Stage 2 rule proposals P1-P5
+## 37. Opus review of the Stage 2 rule proposals P1-P5
 - **Date:** 2026-10-10
 - **Who:** Opus 5.5 subagent (134,746 subagent tokens, 37 tool calls); governor verified two claims in the C source
 - **Done:** `pilots/cjson/experiments/stage2_proposals_review.md` (210 lines): all five proposals "modify". User
@@ -583,3 +583,28 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `Copy` handles, so the circular case is representable), new D21 (writes through the returned `char *`).
 - **Next:** apply the user's answers to RULEBOOK §6, §9 (Q26) and §10, make the Judge changes the review lists, rerun
   Stage 1 and 2, then ticket 06.
+
+## 38. cJSON ticket 05 rework: D1, D11, D21 applied to RULEBOOK section 6 and the Stage 2 Judge
+- **Date:** 2026-10-11
+- **Who:** Opus 5.5 subagent (294,815 + 88,249 subagent tokens incl. one nested helper), governor verified
+- **Done (user decisions 2026-10-10):** D1 revised (`AllocHooks` seam, allocation-failure tests and sweep stay in the
+  Stage 2 Judge), D11 revised (`Copy`-handle node store, circular test runs as written), D21 added (mutable byte-slice
+  view), Q26 added (Parse(NULL) keeps the previous error). RULEBOOK §6 written, §2/§3/§7/§8/§9/§10/§12 updated;
+  Judge: adapter contract, `upstream.rs` (164 tests), `dump.rs`/`dump.c` (`live=` counts), `run.py` release stack
+  check, e5 mutants (`--set`, `--quick`, 6 new), `e6_cjson_reference_add_probe.c`.
+- **Verified by the governor:** Stage 2 `""`: 164 / 0 / 2, release check 1 passed, harness 3881/3881; Stage 2
+  `locales`: same, 1:09.30 wall; Stage 1 `""` and `locales`: 163 tests, 0 failing, 3881/3881; mutants
+  `patch-status-13` (279 of 3881 DIFF) and `circular-boundary` (the extra circular test fails) red in `""`; `git diff`
+  of `rust/src` empty. The other 4 new mutants and the all-sets 20/20 run are the subagent's report only.
+- **Incident:** after a rate-limit pause three Judge runs and two `harness.py` children ran concurrently in the same
+  `work/` dir (load average 50 to 150): one Stage 2 run took 58:19 wall for about 103 s CPU, and an earlier run hit
+  the 20 s per-input timeout on three inputs. Cause: the resumed agent had left a run behind and a nested helper
+  agent started others. A `kill` of the strays was refused by the auto-mode classifier; they ended on their own.
+  Rule (judge.md §6): one Judge run at a time.
+- **Skill gaps:** (a) a subagent that resumes after a rate limit does not know which runs are still alive; the
+  governor needs a `ps` check before the next run; (b) work-log numbers 35 and 36 were taken by the skill-editing
+  session at the same time as mine, so mine are 37 and 38.
+- **Decisions the user still owes:** field setters `set_valueint` / `set_valuedouble` (RULEBOOK §6.5) were added by
+  the subagent following the review; the `HOOKS` constant was removed.
+- **Next:** ticket 06 (Stage 2 fan-out): time the first Gate run and note it in RUN-NOTES (done: 1:09.30 for
+  `locales`), then `mark 06 in_progress`.

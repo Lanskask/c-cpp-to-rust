@@ -5,8 +5,9 @@
 //! compared byte for byte with the C driver on the whole corpus (`run.py --stage 2`).
 //!
 //! Input file = last argument. One JSON text "A", or "A" + "\n===\n" + "B". Modes: M1 parse, M2 print,
-//! M3 lookups and mutations, M4 allocator hooks (skipped when `adapter::HOOKS` is false, RULEBOOK D1),
-//! M5 cJSON_Utils, M6 locale (LC_NUMERIC for D3, LC_CTYPE for D19), M7 fixed constructors.
+//! M3 lookups and mutations, M4 allocator hooks (RULEBOOK D1, revised: every adapter has them),
+//! M5 cJSON_Utils, M6 locale (LC_NUMERIC for D3, LC_CTYPE for D19), M7 fixed constructors, writable views
+//! (D21) and field writes (Q3).
 //!
 //! The only `unsafe` here is the C library's formatting and locale functions (`snprintf` for `%.17g`,
 //! `setlocale`, `localeconv`, `tolower`), which are part of the observable output, not of the crate.
@@ -462,6 +463,12 @@ fn minify_pass(text: &[u8]) {
 
 // ---- M4: hooks -----------------------------------------------------------------------------------------------
 
+/// `live_now`: allocations still alive after a fail-the-Nth run (the failed allocation is not one); 0 = no leak.
+fn live_now() -> i64 {
+    let st = adapter::hook_stats();
+    (st.allocs - if st.fail_at != 0 && st.fail_at <= st.allocs { 1 } else { 0 }) - st.frees
+}
+
 fn hooks_pass(text: &[u8], len: usize) {
     p!("== hooks\n");
     adapter::hooks_on(0);
@@ -526,13 +533,15 @@ fn hooks_pass(text: &[u8], len: usize) {
     for i in 1..=limit {
         adapter::hooks_on(i);
         let s = adapter::print(root);
-        p!("fail-print[{i}] out={}\n", yes_no(s.is_some(), "ok", "NULL"));
+        let ok = s.is_some();
         drop(s);
+        p!("fail-print[{i}] out={} live={}\n", yes_no(ok, "ok", "NULL"), live_now());
         adapter::hooks_off();
         adapter::hooks_on(i);
         let s = adapter::print_buffered(root, 8, false);
-        p!("fail-buffered[{i}] out={}\n", yes_no(s.is_some(), "ok", "NULL"));
+        let ok = s.is_some();
         drop(s);
+        p!("fail-buffered[{i}] out={} live={}\n", yes_no(ok, "ok", "NULL"), live_now());
         adapter::hooks_off();
     }
     adapter::hooks_on(0);
@@ -546,8 +555,8 @@ fn hooks_pass(text: &[u8], len: usize) {
     for i in 1..=limit {
         adapter::hooks_on(i);
         let d = adapter::duplicate(root, true);
-        p!("fail-duplicate[{i}] out={}\n", yes_no(!d.is_null(), "ok", "NULL"));
         adapter::delete(d);
+        p!("fail-duplicate[{i}] out={} live={}\n", yes_no(!d.is_null(), "ok", "NULL"), live_now());
         adapter::hooks_off();
     }
     adapter::delete(root);
@@ -910,6 +919,40 @@ fn constructors() {
     p!("AddItemToArray(NULL,NULL)={}\n", adapter::add_item_to_array(NULL, NULL) as i32);
     p!("InsertItemInArray(self)={}\n", adapter::insert_item_in_array(n, 0, n) as i32);
     adapter::delete(n);
+
+    // D21: writes through the char * that GetStringValue, SetValuestring and the print functions return
+    let n = adapter::create_string(Some(b"abcdef"));
+    let first = adapter::value_string_addr(n);
+    adapter::with_string_value_mut(n, |v| {
+        v[0] = b'X';
+        v[3] = 0;
+    });
+    put_line("view GetStringValue", adapter::get_string_value(n).as_deref());
+    show("view print", n);
+    adapter::set_valuestring(n, Some(b"xyz")); // 3 <= strlen 3: copied in place
+    p!("view SetValuestring(xyz) same-buffer={}\n", (adapter::value_string_addr(n) == first) as i32);
+    adapter::with_string_value_mut(n, |v| v[1] = b'Y');
+    put_line("view after write", adapter::get_string_value(n).as_deref());
+    adapter::set_valuestring(n, Some(b"long1")); // longer: new buffer, allocated before the old one is freed
+    p!("view SetValuestring(long1) same-buffer={}\n", (adapter::value_string_addr(n) == first) as i32);
+    if let Some(mut out) = adapter::print_unformatted(n) {
+        out.bytes_mut()[1] = b'Q';
+        out.bytes_mut()[4] = 0;
+        put_line("view printed", Some(out.bytes()));
+    }
+    adapter::delete(n);
+    // Q3: valueint and valuedouble are separate fields; print uses %d only when they agree
+    let n = adapter::create_number(7.0);
+    adapter::set_value_double(n, 7.5);
+    show("field vd=7.5", n);
+    adapter::set_value_int(n, 3);
+    show("field vi=3", n);
+    adapter::set_value_double(n, 3.0);
+    show("field vd=3", n);
+    adapter::set_value_int(n, 100);
+    show("field vi=100", n);
+    p!("field getnumber={} vi={}\n", g17(adapter::get_number_value(n)), adapter::value_int(n));
+    adapter::delete(n);
 }
 
 // ---- main ----------------------------------------------------------------------------------------------------
@@ -977,9 +1020,7 @@ fn real_main() {
     if sep.is_some() {
         run_document("B", &b, lb);
     }
-    if adapter::HOOKS {
-        hooks_pass(&a, la);
-    }
+    hooks_pass(&a, la);
     pair_ops(&a, &b);
     locale_pass(&a);
     constructors();
