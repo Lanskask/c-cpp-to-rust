@@ -1,3 +1,3 @@
 part_id	kind	source_paths	target_path	tier	deps	state	attempts	model	last_error	commit	updated
-cJSON	file	cJSON.c,cJSON.h	rust/src/cJSON.rs	judgment		in_progress	1				2026-10-11T03:57:47+00:00
-cJSON_Utils	file	cJSON_Utils.c	rust/src/cJSON_Utils.rs	judgment	cJSON	todo	0				
+cJSON	file	cJSON.c,cJSON.h	rust/src/cJSON.rs	judgment		done	1			3e23a08	2026-10-11T21:43:53+00:00
+cJSON_Utils	file	cJSON_Utils.c	rust/src/cJSON_Utils.rs	judgment	cJSON	done	0			3e23a08	2026-10-11T21:43:54+00:00
