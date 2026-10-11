@@ -59,39 +59,43 @@ class Mutant:
 
 
 MUTANTS = [
-    Mutant("ws-boundary", "cJSON.rs", "buffer_skip_whitespace", "32", "31", 0,
+    Mutant("ws-boundary", "cJSON.rs", "skip_whitespace", "32", "31", 0,
            "cJSON.c:1102 whitespace is every byte <= 32 -> <= 31: a space is no longer skipped"),
-    Mutant("hex-digit", "cJSON.rs", "parse_hex4", "9", "8", 0,
-           "cJSON.c:675 hex digit class '0'..'9' -> '0'..'8': \\u0009 is no longer a valid escape"),
+    Mutant("hex-digit", "cJSON.rs", "is_hex_digit_value", "b'0'..=b'9' => Some(u32::from(c - b'0'))",
+           "b'0'..=b'8' => Some(u32::from(c - b'0'))", 0,
+           "cJSON.c:675 hex digit class '0'..'9' -> '0'..'8': \\u0009 is no longer a valid escape", kind="text"),
     Mutant("string-escape-boundary", "cJSON.rs", "print_string_ptr", "32", "31", 0,
            "cJSON.c:1040 bytes < 32 are escaped as \\u00xx -> < 31: byte 0x1f printed raw"),
-    Mutant("array-index-digit", "cJSON_Utils.rs", "decode_array_index_from_pointer", "9", "8", 0,
-           "cJSON_Utils.c:285 index digits '0'..'9' -> '0'..'8': a '9' in an array index is rejected"),
-    # added 2026-10-10 with the D1/D11/D21 revision: one per behaviour the Stage 2 Judge newly observes
-    Mutant("strdup-size", "cJSON.rs", "cJSON_strdup", "1", "2", 0,
-           "cJSON.c:198 strdup allocates strlen + 1 -> strlen + 2: only the C-byte counts of the hooks see it"),
-    Mutant("duplicate-fail-leak", "cJSON.rs", "cJSON_Duplicate_rec", "cJSON_Delete(newitem);", "drop(newitem);", 0,
+    Mutant("array-index-digit", "cJSON_Utils.rs", "decode_array_index_from_pointer",
+           "while at(pointer, position).is_ascii_digit() {",
+           "while at(pointer, position).is_ascii_digit() && at(pointer, position) != b'9' {", 0,
+           "cJSON_Utils.c:285 index digits '0'..'9' -> '0'..'8': a '9' in an array index is rejected", kind="text"),
+    Mutant("strdup-size", "cJSON.rs", "strdup", "alloc_event(string.len() + 1)", "alloc_event(string.len() + 2)", 0,
+           "cJSON.c:198 strdup allocates strlen + 1 -> strlen + 2: only the C-byte counts of the hooks see it",
+           kind="text"),
+    Mutant("duplicate-fail-leak", "cJSON.rs", "duplicate_node", "self.delete(Some(new_item));", "drop(new_item);", 0,
            "cJSON.c:2869 a failed Duplicate frees the partial copy -> leaks it (allocation-failure path)",
            kind="text"),
-    Mutant("patch-status-13", "cJSON_Utils.rs", "apply_patch", "13", "12", 0,
+    Mutant("patch-status-13", "cJSON_Utils.rs", "code", "13", "12", 0,
            "cJSON_Utils.c:893 status 13 (nothing to remove) -> 12 (Q23 status codes)"),
-    Mutant("circular-boundary", "cJSON.rs", "cJSON_Duplicate_rec", "depth >= CJSON_CIRCULAR_LIMIT",
-           "depth > CJSON_CIRCULAR_LIMIT", 0,
+    Mutant("circular-boundary", "cJSON.rs", "duplicate", "top.depth >= CJSON_CIRCULAR_LIMIT",
+           "top.depth > CJSON_CIRCULAR_LIMIT", 0,
            "cJSON.c:2836 depth >= CJSON_CIRCULAR_LIMIT -> >: one level more is duplicated (D11)", kind="text"),
-    Mutant("invalid-type", "cJSON.rs", "cJSON_IsInvalid", "cJSON_Invalid", "cJSON_NULL", 0,
+    Mutant("invalid-type", "cJSON.rs", "is_invalid", "flags::INVALID", "flags::NULL", 0,
            "cJSON.c:2979 IsInvalid tests type 0 -> type NULL: a root after a `remove` at \"\" (Q23)", kind="text"),
-    Mutant("print-valueint", "cJSON.rs", "print_number", "d == (*item).valueint as",
-           "d == (d as ::core::ffi::c_int) as", 0,
+    Mutant("print-valueint", "cJSON.rs", "print_number", "d == f64::from(valueint)",
+           "d == f64::from(d as i32)", 0,
            "cJSON.c:616 %d only when valuedouble == (double)valueint -> derived from valuedouble (Q3 field writes)",
            kind="text"),
 ]
 
 
 def body_span(text: str, function: str) -> tuple[int, int] | None:
-    m = re.search(rf"^(?:pub )?unsafe extern \"C\" fn {re.escape(function)}\(", text, flags=re.M)
+    """Span of `fn <function>(` (free function or method, any visibility) up to the next `fn` at indent <= 4."""
+    m = re.search(rf"^ {{0,4}}(?:pub(?:\(crate\))? )?fn {re.escape(function)}\(", text, flags=re.M)
     if m is None:
         return None
-    end = re.search(r"^(?:#\[|pub |unsafe |static |extern |type |const |impl |fn )", text[m.end():], flags=re.M)
+    end = re.search(r"^ {0,4}(?:pub(?:\(crate\))? )?fn \w+", text[m.end():], flags=re.M)
     return m.start(), m.end() + (end.start() if end else len(text) - m.end())
 
 

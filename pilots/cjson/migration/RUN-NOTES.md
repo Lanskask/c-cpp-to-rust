@@ -408,6 +408,28 @@ Second Opus review (`experiments/stage2_port_review2.md`): GAP 5 added as `d22_n
 its NUL (out-of-bounds read), so a corpus pass could not be compared; the two `*_unterminated` translated tests cover
 it.
 
+### Judge sensitivity at the end of Stage 2 (ticket 06, 2026-10-11, commit 91cc3c4, set `""`)
+
+`experiments/e5_cjson_stage2_judge_sensitivity.py --set default` (site map updated to the Stage 2 function names): all
+10 mutants detected, `rust/src` restored (empty diff).
+
+| Mutant                 | First red piece (tests, then harness)                          | Harness alone     |
+|------------------------|----------------------------------------------------------------|-------------------|
+| ws-boundary            | translated tests, 26 failing                                   | detected          |
+| hex-digit              | `parse_hex4_should_parse_all_combinations`                     | 2 of 3886 DIFF    |
+| string-escape-boundary | harness                                                        | 4 of 3886 DIFF    |
+| array-index-digit      | harness                                                        | 733 of 3886 DIFF  |
+| strdup-size            | harness                                                        | 1772 of 3886 DIFF |
+| duplicate-fail-leak    | harness                                                        | 912 of 3886 DIFF  |
+| patch-status-13        | `d22_null_valuestring_results_are_pinned`                      | 317 of 3886 DIFF  |
+| circular-boundary      | `extra_duplicate_should_stop_at_the_circular_limit_...`        | **not detected**  |
+| invalid-type           | `typecheck_functions_should_check_type`                        | 16 of 3886 DIFF   |
+| print-valueint         | harness                                                        | 3886 of 3886 DIFF |
+
+`circular-boundary` is seen by the translated test only: no corpus input is 10000 levels deep (D11 limit), as in the
+Stage 1 table. The `locales` set was not run per mutant (one set per mutant, judge.md section 6); both sets pass the
+gate and the Judge unmutated.
+
 ## Rule proposals
 
 Gaps found while building the Stage 2 Judge. Reviewed in `experiments/stage2_proposals_review.md`; resolved on
