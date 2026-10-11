@@ -654,3 +654,12 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `review-prompt.md` check 1; `SKILL.md` step 4.4 (`--allow-lint`) and a rule for a `RULE`/`GAP` mid-fan-out
   (ledger, `mark todo`, §12 row, Judge commit, red run); ticket 05 how-step in `tickets.py`.
 - **Not done:** the cJSON RULEBOOK/Judge changes of `stage2_review_patch.md` (Translation session).
+
+## 41. cJSON tickets rewritten to the decision-52 layout
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's explicit request
+- **Done:** `pilots/cjson/migration/tickets/01-07` re-rendered from `tickets.CHAIN` (Tasks with how-steps,
+  Acceptance, blocker names), state kept (01-05 done, 06 todo, 07 todo). 01-05 got a `-----------` brief built only
+  from the commit messages of the run (not re-run; the briefs say so). Ticket 03 tasks read
+  `(skipped: user decision, c2rust engine)`. `render` now wraps lines at 120 columns.
+- **Note:** ticket 06 is at `todo` (patch flow); the Translation session ticks its tasks as before.

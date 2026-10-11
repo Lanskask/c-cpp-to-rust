@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -302,10 +303,15 @@ CHAIN = (
 def render(spec: Spec, pilot: str) -> str:
     names = {c.num: c.title for c in CHAIN}
     blocked = ", ".join(f"{b} {names[b]}" for b in spec.blocked_by) or "None (can start immediately)"
-    tasks = "\n".join(f"- [ ] {t.text}" + "".join(f"\n  - {h}" for h in t.how) for t in spec.tasks)
+
+    def how(h: str) -> str:
+        return textwrap.fill(h, 120, initial_indent="  - ", subsequent_indent="    ", break_long_words=False)
+
+    tasks = "\n".join(f"- [ ] {t.text}" + "".join(f"\n{how(h)}" for h in t.how) for t in spec.tasks)
     checks = "\n".join(f"- [ ] {a}" for a in spec.acceptance)
+    build = textwrap.fill(f"**What to build:** {spec.build}", 120, break_long_words=False)
     return (
-        f"# {spec.num}: {spec.title} ({pilot})\n\n**What to build:** {spec.build}\n\n"
+        f"# {spec.num}: {spec.title} ({pilot})\n\n{build}\n\n"
         f"**Blocked by:** {blocked}\n\n**Status:** todo\n\n"
         f"## Tasks\n\n{tasks}\n\n## Acceptance\n\n{checks}\n"
     )
