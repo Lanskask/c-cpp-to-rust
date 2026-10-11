@@ -7,15 +7,18 @@ files in `--inputs`, in sorted order. Report TSV columns: input, orig_exit, rust
 Status is `same`, `DIFF` or `UNSTABLE`. Output is compared as raw bytes; a timeout on either side is a DIFF.
 `--repeat N` runs the original N times: an input whose output or exit code differs between runs is
 `UNSTABLE` (judge.md §3 item 5), is not compared with the Rust side and does not fail the run.
+`--jobs N` compares N inputs at once (default: CPU count); the report is identical to `--jobs 1`.
 Exit code 0 if no input is a DIFF, 1 otherwise. Drivers are written per Pilot (references/judge.md).
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 TIMEOUT_S = 20
@@ -40,23 +43,25 @@ def first_difference(a: bytes, b: bytes) -> str:
     return f"length differs: orig {len(la)} lines, rust {len(lb)} lines"
 
 
+def compare_one(orig: list[str], rust: list[str], path: Path, repeat: int = 1) -> tuple[str, int, int, str, str]:
+    runs = [run_driver(orig, path) for _ in range(max(repeat, 1))]
+    if len(set(runs)) > 1:
+        return (path.name, runs[0][0], 0, "UNSTABLE", f"{len(set(runs))} distinct outputs in {len(runs)} runs")
+    oc, oo = runs[0]
+    rc, ro = run_driver(rust, path)
+    same = oc == rc and oo == ro and TIMEOUT_CODE not in (oc, rc)
+    detail = "" if same else (f"exit {oc} vs {rc}; " if oc != rc else "") + first_difference(oo, ro)
+    return (path.name, oc, rc, "same" if same else "DIFF", detail)
+
+
 def compare(
-    orig: list[str], rust: list[str], inputs: list[Path], repeat: int = 1
+    orig: list[str], rust: list[str], inputs: list[Path], repeat: int = 1, jobs: int = 1
 ) -> list[tuple[str, int, int, str, str]]:
-    rows = []
-    for path in inputs:
-        runs = [run_driver(orig, path) for _ in range(max(repeat, 1))]
-        if len(set(runs)) > 1:
-            rows.append(
-                (path.name, runs[0][0], 0, "UNSTABLE", f"{len(set(runs))} distinct outputs in {len(runs)} runs")
-            )
-            continue
-        oc, oo = runs[0]
-        rc, ro = run_driver(rust, path)
-        same = oc == rc and oo == ro and TIMEOUT_CODE not in (oc, rc)
-        detail = "" if same else (f"exit {oc} vs {rc}; " if oc != rc else "") + first_difference(oo, ro)
-        rows.append((path.name, oc, rc, "same" if same else "DIFF", detail))
-    return rows
+    """One row per input, in input order. Inputs are independent, so `jobs` of them run at once."""
+    if jobs <= 1:
+        return [compare_one(orig, rust, path, repeat) for path in inputs]
+    with ThreadPoolExecutor(max_workers=jobs) as pool:  # map keeps input order
+        return list(pool.map(lambda path: compare_one(orig, rust, path, repeat), inputs))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--inputs", default="migration/harness/inputs")
     p.add_argument("--out", default="migration/harness-report.tsv")
     p.add_argument("--repeat", type=int, default=1, help="run the original N times; unstable inputs are not compared")
+    p.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="inputs compared in parallel (1 = serial)")
     return p
 
 
@@ -75,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     if not inputs:
         print(f"harness: no inputs in {args.inputs}", file=sys.stderr)
         return 1
-    rows = compare(shlex.split(args.orig), shlex.split(args.rust), inputs, args.repeat)
+    rows = compare(shlex.split(args.orig), shlex.split(args.rust), inputs, args.repeat, args.jobs)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     header = "input\torig_exit\trust_exit\tstatus\tdetail"

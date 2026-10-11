@@ -37,3 +37,18 @@ def test_main_exit_codes(tmp_path: Path) -> None:
     assert harness.main(["--orig", cmd, "--rust", cmd, "--inputs", str(inputs), "--out", str(out)]) == 0
     assert "same" in out.read_text()
     assert harness.main(["--orig", cmd, "--rust", cmd, "--inputs", str(tmp_path / "none")]) == 1
+
+
+def test_parallel_rows_equal_serial_rows_in_order(tmp_path: Path) -> None:
+    inputs = tmp_path / "in"
+    inputs.mkdir()
+    for n in range(40):
+        (inputs / f"{n:02d}.txt").write_text("boom" if n % 7 == 0 else f"v{n}")
+    orig = driver(tmp_path, "o.py", "print(data.upper())\n")
+    rust = driver(tmp_path, "r.py", "print('BANG' if data == 'boom' else data.upper())\n")
+    files = sorted(inputs.iterdir())
+    serial = harness.compare(orig, rust, files, repeat=2, jobs=1)
+    parallel = harness.compare(orig, rust, files, repeat=2, jobs=8)
+    assert parallel == serial
+    assert [r[0] for r in parallel] == [p.name for p in files]
+    assert sum(r[3] == "DIFF" for r in parallel) == 6

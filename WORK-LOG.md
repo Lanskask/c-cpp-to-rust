@@ -608,3 +608,15 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   the subagent following the review; the `HOOKS` constant was removed.
 - **Next:** ticket 06 (Stage 2 fan-out): time the first Gate run and note it in RUN-NOTES (done: 1:09.30 for
   `locales`), then `mark 06 in_progress`.
+
+## 37. `harness.py --jobs`: corpus compared in parallel
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's request
+- **Done:** `compare_one` + `compare(..., jobs)` with a `ThreadPoolExecutor` (`map` keeps input order); `--jobs N`,
+  default CPU count. Checked by running: pytest 96 passed, 1 skipped (new test: parallel rows equal serial rows in
+  order, with DIFFs); `make lint` clean; `make pilot-jsmn STAGE=2` passes all four feature sets in 26.6 s; cJSON
+  corpus, same drivers: `--jobs 1` 62.4 s, `--jobs 8` 21.6 s wall, report files byte-identical (`cmp`).
+- **Caveat:** at that moment the cJSON session's work dir held a Rust driver that differed on every input (ticket 06
+  in progress), so both runs reported 0/3881 matches; speed and equality hold, a clean 3881/3881 timing is still to
+  be taken. Gate runs by concurrent subagents now multiply: 8 workers each.
+- **Next:** none; the cJSON session gets it on its next Gate run (the script is read at run time).

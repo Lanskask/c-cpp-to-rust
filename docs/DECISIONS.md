@@ -261,3 +261,8 @@ Each entry: decision, reason, who/what it came from. Newest last.
     the one open task whose text contains TEXT, so the governor ticks a criterion the moment its evidence exists.
     _Reason:_ the user asked for one command per migration folder to see where the run stands, and cJSON tickets
     were marked done with every box open (decision 49); a one-line `tick` makes ticking cheaper than skipping it.
+
+51. **`harness.py` compares inputs in parallel (`--jobs`, default CPU count; `--jobs 1` is the old serial loop).**
+    _Reason:_ the corpus step is about 85% of a Judge run and is process spawning (measured, WORK-LOG 36); inputs are
+    independent. Rows keep input order, so the report is byte-identical to the serial one (checked on the cJSON
+    corpus and by `tests/test_harness.py`). Not done: caching the original side's outputs.
