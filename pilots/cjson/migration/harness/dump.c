@@ -975,6 +975,8 @@ static void utils_once(int op, const cJSON *A, const cJSON *B, long fail, const 
     cJSON *y = cJSON_Duplicate(B, 1);
     cJSON *r = NULL;
     char *ptr = NULL;
+    char ptr_copy[256];
+    int ptr_ok = 0;
     int st = 0;
     long live;
     trace_len = 0;
@@ -1002,6 +1004,15 @@ static void utils_once(int op, const cJSON *A, const cJSON *B, long fail, const 
         ptr = cJSONUtils_FindPointerFromObjectTo(x, x->child != NULL ? (x->child->child != NULL ? x->child->child : x->child) : x);
         break;
     }
+    if (op == 5 && ptr != NULL)
+    {
+        /* the Rust adapter returns an owned Vec (the string is freed inside the call): free the C string here,
+         * inside the counted window, so both drivers record the same trace */
+        strncpy(ptr_copy, ptr, sizeof ptr_copy - 1);
+        ptr_copy[sizeof ptr_copy - 1] = 0;
+        cJSON_free(ptr);
+        ptr_ok = 1;
+    }
     trace_on = 0;
     live = live_now();
     if (total != NULL)
@@ -1009,10 +1020,7 @@ static void utils_once(int op, const cJSON *A, const cJSON *B, long fail, const 
     printf("utils-%s[%ld] st=%d live=%ld allocs=%ld trace=%s\n", label, fail, st, live, n_alloc, trace_buf);
     hooks_off();
     if (op == 5)
-    {
-        put_line("  pointer", ptr);
-        cJSON_free(ptr);
-    }
+        put_line("  pointer", ptr_ok ? ptr_copy : NULL);
     else
     {
         show("  target", x);
@@ -1059,8 +1067,8 @@ static void utils_hooks_pass(const char *ta, size_t la, const char *tb, size_t l
             hooks_on(1);
             pp = cJSONUtils_FindPointerFromObjectTo(A, tgt);
             printf("probe findptr[fail 1] %s live=%ld\n", pp ? "ok" : "NULL", live_now());
-            hooks_off();
             cJSON_free(pp);
+            hooks_off();
             trace_len = 0;
             trace_buf[0] = 0;
             hooks_on(0);
