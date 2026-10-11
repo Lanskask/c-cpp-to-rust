@@ -33,7 +33,9 @@ blocking edges, and the Makefile. For a run started before the Makefile existed:
 Work the `READY` ticket: `tickets.py mark NN in_progress` when you start it. **Tick each task yourself the moment its
 evidence exists**, not at the end: `tickets.py --ws <ws> tick NN "<text of the task>"` (the text must match exactly one
 open task). A task you decide not to do is edited to `- [x] <task> (skipped: <reason>)`. `mark NN done` refuses while a
-task is `[ ]`. The ticket state and `parts.tsv` are the resume points; commit ticket changes with the step they belong
+task is `[ ]` and needs `--brief "<what was produced, commit, numbers; max 8 lines>"`, which is written below the
+`-----------` line. `tickets.py --ws <ws> show NN` prints the ticket (Tasks with their how-steps, Acceptance) and the
+briefs of its blockers; `mark NN in_progress` prints the same briefs. The ticket state and `parts.tsv` are the resume points; commit ticket changes with the step they belong
 to.
 
 ### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)

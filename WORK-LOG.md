@@ -620,3 +620,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   in progress), so both runs reported 0/3881 matches; speed and equality hold, a clean 3881/3881 timing is still to
   be taken. Gate runs by concurrent subagents now multiply: 8 workers each.
 - **Next:** none; the cJSON session gets it on its next Gate run (the script is read at run time).
+
+## 38. Tickets: Tasks with how-steps, Acceptance, Done brief
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's request
+- **Done:** `tickets.py`: `Task(text, how)`, `## Tasks` / `## Acceptance` layout, blocker names, `mark done --brief`
+  (required, max 8 lines of 120 columns) under `-----------`, `show NN`, blocker briefs on `mark in_progress`. All
+  seven tickets have real how-steps. Checked by running: pytest 101 passed, 1 skipped (6 new tests incl. a legacy
+  ticket and a check that referenced `references/*.md` exist); `make lint` clean.
+- **Not done:** the existing cJSON tickets were not rewritten (they keep working); `mark 06 done` there now needs
+  `--brief`.
+- **Next:** SKILL.md step 0 names `--brief` and `show` (done in the same commit).

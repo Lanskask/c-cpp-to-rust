@@ -266,3 +266,12 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ the corpus step is about 85% of a Judge run and is process spawning (measured, WORK-LOG 36); inputs are
     independent. Rows keep input order, so the report is byte-identical to the serial one (checked on the cJSON
     corpus and by `tests/test_harness.py`). Not done: caching the original side's outputs.
+
+52. **A ticket has Tasks (with how-steps), Acceptance, and a Done brief below `-----------`.** `init` writes `## Tasks`
+    (what to do; each task has indented how-steps: the command, the file, the reference section), `## Acceptance`
+    (what proves it) and "Blocked by" with names. `mark NN done` needs `--brief TEXT` (at most 8 lines of 120
+    columns), written under `-----------`; `show NN` and `mark NN in_progress` print the briefs of the blockers only.
+    Old tickets (no `## Tasks`, no brief) still work and show "(no brief yet)". _Reason:_ the user lost track of what
+    the LLM was doing; a checkbox title alone told neither of them how. How-steps point to the existing reference
+    section instead of repeating it, so SKILL.md and judge.md stay the single source; the brief is a claim for
+    orientation, and `parts.tsv`, `gate-passed.tsv` and git stay the resume truth.

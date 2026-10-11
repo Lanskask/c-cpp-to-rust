@@ -9,8 +9,12 @@ A run on a Pilot is seven tickets in a chain (tracer-bullet phases, each demoabl
 --tasks` also lists every checkbox task (`[x]` done, `[ ]` open). `tick NN TEXT` ticks the one open task of ticket NN
 whose text contains TEXT. `mark NN <todo|in_progress|done>` changes the `**Status:**` line and refuses
 `done`/`in_progress` while a blocker is not done, and `done` while a task is still `[ ]` (`--tick-all` ticks them
-after the governor has checked each). The governor reads `status` at the start of every session.
-Exit code 0 on success, 1 on failure.
+after the governor has checked each). `done` also needs `--brief TEXT` (at most 8 lines of 120 columns: what was
+produced, commit, numbers from runs): it is written under the `-----------` line of the ticket. `show NN` prints
+ticket NN and the briefs of its blockers only (`mark NN in_progress` prints the same). A ticket is: What to build,
+Blocked by (number and name), Status, `## Tasks` (what to do, each with its how-steps), `## Acceptance` (what proves
+it), then after `-----------` the brief. Tickets written before this layout (no `## Tasks`, no brief) still work.
+The governor reads `status` at the start of every session. Exit code 0 on success, 1 on failure.
 """
 
 from __future__ import annotations
@@ -25,6 +29,20 @@ STATES = ("todo", "in_progress", "done")
 OPEN_TASK = re.compile(r"^- \[ \] (.*)$", re.M)
 
 
+BRIEF_RULE = "-----------"
+BRIEF_LINE = re.compile(rf"^{BRIEF_RULE}$", re.M)
+BRIEF_MAX_LINES = 8
+BRIEF_MAX_WIDTH = 120
+
+
+@dataclass(frozen=True)
+class Task:
+    """One thing to do: a checkbox line and the how-steps printed under it (commands, files, references)."""
+
+    text: str
+    how: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class Spec:
     num: str
@@ -32,6 +50,7 @@ class Spec:
     title: str
     build: str
     blocked_by: tuple[str, ...]
+    tasks: tuple[Task, ...]
     acceptance: tuple[str, ...]
 
 
@@ -43,6 +62,36 @@ CHAIN = (
         "The Source project is inventoried, its dependencies mapped, Parts tiered, and a RULEBOOK drafted whose "
         "Deviations table the user can approve.",
         (),
+        (
+            Task(
+                "Inventory the Source and map its dependencies",
+                (
+                    "`make spend-now`, note the timestamp for the SPEND row",
+                    "`inventory.py <ws>/src --lang c|cpp --out <ws>/migration/inventory.tsv` (add `--exclude GLOB` for "
+                    "non-library directories; tests and examples are never Parts)",
+                    "`depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`",
+                ),
+            ),
+            Task(
+                "Tier the Parts",
+                ("`tier.py <ws>/migration/inventory.tsv <ws>/migration/order.txt --out <ws>/migration/parts.tsv`",),
+            ),
+            Task(
+                "Draft RULEBOOK.md (Opus)",
+                (
+                    "start from `references/rulebook-template.md` and `references/idiom-table-c.md`",
+                    "every `config-macro:` tag gets a §3 row, every UB or platform behaviour a §8 Deviation row "
+                    "with status `proposed`",
+                ),
+            ),
+            Task(
+                "Get the Deviations decided by the user",
+                (
+                    "show the §8 table and stop; the user marks each row `approved` or `vetoed`",
+                    "set the rulebook status line to `deviations-approved`",
+                ),
+            ),
+        ),
         (
             "inventory.tsv, edges.tsv, order.txt, parts.tsv exist",
             "every config-macro has a RULEBOOK §3 row",
@@ -57,6 +106,34 @@ CHAIN = (
         "The acceptance checks for Same behaviour exist and are shown able to fail (judge.md §1-§4, §6).",
         ("01",),
         (
+            Task(
+                "Write the driver and the corpus generator",
+                (
+                    "one canonical dump of every observable, in every API mode (`references/judge.md` §2)",
+                    "`make_inputs.py` with a fixed seed writes the git-ignored corpus; drop non-deterministic inputs "
+                    "(§3)",
+                ),
+            ),
+            Task(
+                "Write run.py for every feature set",
+                (
+                    "build the staticlib, link the original tests (C only), build the driver twice, run "
+                    "`harness.py --orig --rust --inputs --out` (§4)",
+                    "outputs go under `migration/harness/work/`",
+                    "the crate does not exist yet: validate on a scratch crate in `<ws>/experiments/scratch-crate/` "
+                    "(§4a)",
+                ),
+            ),
+            Task(
+                "Prove the Judge can fail",
+                (
+                    "plant a one-character mutant in the scratch crate, run, restore (§6)",
+                    "write `<ws>/experiments/e<N>_<pilot>_judge_sensitivity.py`, docstring: which piece caught it",
+                    "time the first run and record the numbers in RUN-NOTES.md",
+                ),
+            ),
+        ),
+        (
             "original tests link to the Rust crate (C only)",
             "driver and deterministic corpus per feature set",
             "a planted mutant makes the Judge fail in every feature set",
@@ -70,6 +147,27 @@ CHAIN = (
         "The hardest Parts are translated twice with the Stage 1 prompt and the differences become rules.",
         ("01", "02"),
         (
+            Task(
+                "Translate the hardest Parts twice",
+                (
+                    "pick the 3 hardest `judgment` Parts of `parts.tsv` (fewer if fewer exist)",
+                    "each twice with `references/stage1-prompt.md`, into scratch copies, never the accepted target",
+                ),
+            ),
+            Task(
+                "Turn every disagreement into a rule proposal",
+                (
+                    "diff the two translations of each Part; each difference two agents decided differently is a "
+                    "missing rule",
+                    "write them under `## Rule proposals` in RUN-NOTES.md",
+                ),
+            ),
+            Task(
+                "Apply the accepted proposals (Opus)",
+                ("set the rulebook status line to `stress-tested (<date>)`; if the user skips the ticket, record why",),
+            ),
+        ),
+        (
             "each difference is a rule proposal in RUN-NOTES.md",
             "accepted proposals applied by Opus",
             "a same-model rerun agrees, or the remaining differences are classified",
@@ -82,6 +180,29 @@ CHAIN = (
         "Stage 1 Faithful port",
         "Every Part is done or stubbed, each accepted by the Gate and committed.",
         ("03",),
+        (
+            Task(
+                "Protect the Rulebook and the Judge, then start the fan-out",
+                (
+                    "session started with `claude --settings skill/c-to-rust/assets/settings.json` (SKILL.md step 3.1)",
+                    "`tickets.py mark 04 in_progress`, then an `Edit` of RULEBOOK.md must be refused; if not, stop",
+                    "write `rust/src/lib.rs` (`pub mod <stem>;` per Part) and the cargo features of rulebook §3",
+                ),
+            ),
+            Task(
+                "Port every Part in batches",
+                (
+                    "`workqueue.py --parts <ws>/migration/parts.tsv next --batch N`",
+                    "per Part: `gate.py --snapshot` -> implementer (`references/stage1-prompt.md`) -> `gate.py` -> "
+                    "review (`references/review-prompt.md`) -> commit -> `workqueue.py mark`",
+                    "up to 5 attempts, then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry)",
+                ),
+            ),
+            Task(
+                "Log every batch",
+                ("`make spend PHASE=<phase> SINCE=<timestamp> NOTE=...` and one WORK-LOG entry per batch",),
+            ),
+        ),
         ("workqueue.py verify passes", "gate pass recorded for every done Part", "SPEND.md has the batch rows"),
     ),
     Spec(
@@ -91,6 +212,28 @@ CHAIN = (
         "The adapter, Rust driver and translated tests pass on the Faithful port and fail on the mutant "
         "(judge.md §5), in their own commit.",
         ("04",),
+        (
+            Task(
+                "Check that rulebook §6 (Stage 2 API) is filled",
+                ("if empty, stop and ask the user for it (Opus writes it)",),
+            ),
+            Task(
+                "Write the adapter, the Rust driver and the translated tests",
+                (
+                    "`rust/tests/adapter/mod.rs` (the only file that calls the crate), `rust/examples/dump.rs`, "
+                    "`rust/tests/upstream.rs` (`references/judge.md` §5)",
+                    "`run.py --stage 2` runs `cargo test`, then `harness.py` with the C driver against the Rust one",
+                ),
+            ),
+            Task(
+                "Validate on the Faithful port and on the mutant",
+                (
+                    "green in every feature set on the Faithful port; red with the planted mutant, then restore",
+                    "one commit for the adapter, driver and tests, before the Stage 2 implementer starts",
+                    "copy `parts.tsv` to `parts-stage2.tsv` (all `todo`, attempts 0, no commit)",
+                ),
+            ),
+        ),
         ("passes on the Faithful port in every feature set", "mutant goes red", "parts-stage2.tsv created"),
     ),
     Spec(
@@ -100,6 +243,28 @@ CHAIN = (
         "Every Part is idiomatic Rust that passes the Gate: zero unsafe, clippy and rustfmt clean, no unjustified "
         "unwrap, same Corpus output.",
         ("05",),
+        (
+            Task(
+                "Start the fan-out with the guard active",
+                ("`tickets.py mark 06 in_progress`, then an `Edit` of RULEBOOK.md must be refused (SKILL.md 3.1)",),
+            ),
+            Task(
+                "Rewrite every Part in batches",
+                (
+                    "`workqueue.py --parts <ws>/migration/parts-stage2.tsv next --batch N`",
+                    "per Part: snapshot -> implementer (`references/stage2-prompt.md`) -> `gate.py --stage 2` -> "
+                    "review -> commit -> mark; the Rust stays as close to the C behaviour as the rulebook says",
+                    "a behaviour change is a Deviation row, not a silent edit",
+                ),
+            ),
+            Task(
+                "Log every batch and count the open ports",
+                (
+                    "`make spend ...` and a WORK-LOG entry per batch",
+                    '`grep -rn "TODO(port)" <ws>/rust/src` for the report',
+                ),
+            ),
+        ),
         ("all Stage 2 rows done", "Gate passes in every feature set with the full corpus", "TODO(port) count reported"),
     ),
     Spec(
@@ -110,6 +275,20 @@ CHAIN = (
         "the user had to make, one recommended next step.",
         ("06",),
         (
+            Task(
+                "Collect the numbers",
+                (
+                    "`workqueue.py status` for both stages; the §8 Deviations table with statuses",
+                    "tokens for this Pilot from `SPEND.md` / `SPEND-MODELS.tsv`; open `TODO(port)` count",
+                ),
+            ),
+            Task(
+                "List the interventions",
+                ("every time the user had to step in; each one not on the allowed list is a Skill bug in WORK-LOG",),
+            ),
+            Task("Write the report and recommend one next step"),
+        ),
+        (
             "SPEND-MODELS.tsv rows for the run",
             "every intervention not in the allowed list is a Skill bug in WORK-LOG",
             "next step recommended",
@@ -119,11 +298,14 @@ CHAIN = (
 
 
 def render(spec: Spec, pilot: str) -> str:
-    blocked = ", ".join(spec.blocked_by) or "None (can start immediately)"
+    names = {c.num: c.title for c in CHAIN}
+    blocked = ", ".join(f"{b} {names[b]}" for b in spec.blocked_by) or "None (can start immediately)"
+    tasks = "\n".join(f"- [ ] {t.text}" + "".join(f"\n  - {h}" for h in t.how) for t in spec.tasks)
     checks = "\n".join(f"- [ ] {a}" for a in spec.acceptance)
     return (
         f"# {spec.num}: {spec.title} ({pilot})\n\n**What to build:** {spec.build}\n\n"
-        f"**Blocked by:** {blocked}\n\n**Status:** todo\n\n{checks}\n"
+        f"**Blocked by:** {blocked}\n\n**Status:** todo\n\n"
+        f"## Tasks\n\n{tasks}\n\n## Acceptance\n\n{checks}\n"
     )
 
 
@@ -140,7 +322,41 @@ def read_state(path: Path) -> str:
 
 def blockers(path: Path) -> list[str]:
     m = re.search(r"^\*\*Blocked by:\*\* (.*)$", path.read_text(), re.M)
-    return re.findall(r"\b\d{2}\b", m.group(1)) if m else []
+    if not m:
+        return []
+    return [n.group(1) for item in m.group(1).split(",") if (n := re.match(r"\s*(\d{2})\b", item))]
+
+
+def split_brief(text: str) -> tuple[str, str | None]:
+    """The ticket body above the `-----------` line, and the brief below it (None when there is none yet)."""
+    m = BRIEF_LINE.search(text)
+    if not m:
+        return text, None
+    return text[: m.start()], text[m.end() :].strip() or None
+
+
+def format_brief(raw: str) -> str:
+    lines = [ln.strip() for ln in raw.strip().splitlines() if ln.strip()]
+    if not lines:
+        raise ValueError("--brief is empty: say what was produced, the commit and the numbers (max 8 short lines)")
+    bullets = [ln if ln.startswith("- ") else f"- {ln}" for ln in lines]
+    if len(bullets) > BRIEF_MAX_LINES or any(len(b) > BRIEF_MAX_WIDTH for b in bullets):
+        raise ValueError(f"--brief is too long: at most {BRIEF_MAX_LINES} lines of {BRIEF_MAX_WIDTH} columns")
+    return "## Done\n\n" + "\n".join(bullets)
+
+
+def display_title(ws: Path, path: Path) -> str:
+    title, _ = title_and_tasks(path)
+    return title.removesuffix(f" ({ws.name})")
+
+
+def print_blocker_briefs(ws: Path, tickets: dict[str, Path], num: str) -> None:
+    for b in blockers(tickets[num]):
+        if b not in tickets:
+            continue
+        _, brief = split_brief(tickets[b].read_text())
+        body = brief.removeprefix("## Done").strip() if brief else "(no brief yet)"
+        print(f"== brief of {b} {display_title(ws, tickets[b])}\n{body}")
 
 
 def load(ws: Path) -> dict[str, Path]:
@@ -164,7 +380,7 @@ def cmd_tick(ws: Path, num: str, text: str) -> int:
     if num not in tickets:
         raise ValueError(f"no ticket {num}")
     body = tickets[num].read_text()
-    hits = [t for t in OPEN_TASK.findall(body) if text.lower() in t.lower()]
+    hits = [t for t in OPEN_TASK.findall(split_brief(body)[0]) if text.lower() in t.lower()]
     if len(hits) != 1:
         open_tasks = OPEN_TASK.findall(body)
         raise ValueError(
@@ -189,7 +405,7 @@ def cmd_init(ws: Path, force: bool) -> int:
 
 
 def title_and_tasks(path: Path) -> tuple[str, list[str]]:
-    text = path.read_text()
+    text = split_brief(path.read_text())[0]
     m = re.search(r"^# \d{2}: (.*)$", text, re.M)
     tasks = [f"  - [{c.lower()}] {t}" for c, t in re.findall(r"^- \[([ xX])\] (.*)$", text, re.M)]
     return (m.group(1) if m else path.stem[3:]), tasks
@@ -213,27 +429,47 @@ def cmd_status(ws: Path, with_tasks: bool = False) -> int:
     return 0
 
 
-def cmd_mark(ws: Path, num: str, new: str, tick_all: bool = False) -> int:
+def cmd_mark(ws: Path, num: str, new: str, tick_all: bool = False, brief: str | None = None) -> int:
     tickets = load(ws)
     if num not in tickets:
         raise ValueError(f"no ticket {num}")
+    path = tickets[num]
+    text = path.read_text()
     if new == "done":
-        open_tasks = OPEN_TASK.findall(tickets[num].read_text())
+        open_tasks = OPEN_TASK.findall(split_brief(text)[0])
         if open_tasks and not tick_all:
             raise ValueError(
                 f"ticket {num} has {len(open_tasks)} open task(s); tick each `- [x]` once it holds "
                 f"(a skipped one: `- [x] <task> (skipped: <reason>)`), or pass --tick-all after checking them:\n  "
                 + "\n  ".join(open_tasks)
             )
-        if tick_all:
-            tickets[num].write_text(re.sub(r"^- \[ \] ", "- [x] ", tickets[num].read_text(), flags=re.M))
+        if brief is None:
+            raise ValueError(
+                f"ticket {num}: `done` needs --brief TEXT (what was produced, commit, numbers; max 8 lines)"
+            )
+        formatted = format_brief(brief)
     if new != "todo":
-        open_blockers = [b for b in blockers(tickets[num]) if read_state(tickets[b]) != "done"]
+        open_blockers = [b for b in blockers(path) if read_state(tickets[b]) != "done"]
         if open_blockers:
             raise ValueError(f"ticket {num} is blocked by {', '.join(open_blockers)}")
-    path = tickets[num]
-    path.write_text(re.sub(r"^(\*\*Status:\*\* )\w+", rf"\g<1>{new}", path.read_text(), count=1, flags=re.M))
+    if new == "done":
+        body = split_brief(text)[0]
+        if tick_all:
+            body = re.sub(r"^- \[ \] ", "- [x] ", body, flags=re.M)
+        text = f"{body.rstrip()}\n\n{BRIEF_RULE}\n{formatted}\n"
+    path.write_text(re.sub(r"^(\*\*Status:\*\* )\w+", rf"\g<1>{new}", text, count=1, flags=re.M))
     print(f"tickets: {num} -> {new}", file=sys.stderr)
+    if new == "in_progress":
+        print_blocker_briefs(ws, tickets, num)
+    return 0
+
+
+def cmd_show(ws: Path, num: str) -> int:
+    tickets = load(ws)
+    if num not in tickets:
+        raise ValueError(f"no ticket {num}")
+    print(tickets[num].read_text().rstrip())
+    print_blocker_briefs(ws, tickets, num)
     return 0
 
 
@@ -253,6 +489,9 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("num")
     m.add_argument("state", choices=STATES)
     m.add_argument("--tick-all", action="store_true", help="with `done`: tick every open task (only after checking)")
+    m.add_argument("--brief", help="with `done`: what was produced, commit, numbers; max 8 lines of 120 columns")
+    sh = sub.add_parser("show", help="print ticket NN and the briefs of its blockers")
+    sh.add_argument("num")
     args = p.parse_args(argv)
     try:
         if args.cmd == "init":
@@ -264,7 +503,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_tick(args.ws, args.num, args.text)
         if args.cmd == "status":
             return cmd_status(args.ws, args.tasks)
-        return cmd_mark(args.ws, args.num, args.state, args.tick_all)
+        if args.cmd == "show":
+            return cmd_show(args.ws, args.num)
+        return cmd_mark(args.ws, args.num, args.state, args.tick_all, args.brief)
     except (ValueError, OSError) as e:
         print(f"tickets: {e}", file=sys.stderr)
         return 1
