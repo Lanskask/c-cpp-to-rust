@@ -55,7 +55,9 @@ fn g17(v: f64) -> String {
     let n = unsafe { snprintf(buf.as_mut_ptr(), buf.len(), c"%.17g".as_ptr(), v) };
     assert!(n > 0 && (n as usize) < buf.len());
     // SAFETY: snprintf NUL-terminated the buffer.
-    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr(buf.as_ptr()) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// `setlocale(category, name)`; true when the OS accepted it.
@@ -72,7 +74,9 @@ fn probe_in_c_locale() -> bool {
 
 fn decimal_point() -> String {
     // SAFETY: localeconv returns a pointer to static storage whose first member is a C string.
-    unsafe { CStr::from_ptr((*localeconv()).decimal_point) }.to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr((*localeconv()).decimal_point) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn c_tolower(c: i32) -> i32 {
@@ -175,7 +179,11 @@ fn dump_tree(mut n: Item, depth: usize) {
         put_str(adapter::key(n).as_deref());
         p!(" vs=");
         put_str(adapter::value_string(n).as_deref());
-        p!(" first_prev_is_last={} prev_null={}\n", lastok as i32, adapter::prev(n).is_null() as i32);
+        p!(
+            " first_prev_is_last={} prev_null={}\n",
+            lastok as i32,
+            adapter::prev(n).is_null() as i32
+        );
         if !c.is_null() {
             dump_tree(c, depth + 1);
         }
@@ -218,7 +226,10 @@ fn print_modes(tag: &str, root: Item) {
     for fmt in 0..=1 {
         for pre in [0, 1, 256] {
             let s = adapter::print_buffered(root, pre, fmt != 0);
-            put_line(&format!("buffered[pre={pre},fmt={fmt}]"), s.as_ref().map(|s| s.bytes()));
+            put_line(
+                &format!("buffered[pre={pre},fmt={fmt}]"),
+                s.as_ref().map(|s| s.bytes()),
+            );
         }
     }
     let s = adapter::print_unformatted(root);
@@ -290,11 +301,17 @@ fn parse_modes(label: &str, text: &[u8], len: usize) {
         adapter::delete(r.item);
     }
     let r = adapter::parse_with_length(Some(text), len);
-    p!("ParseWithLength root={} ", yes_no(!r.item.is_null(), "ok", "NULL"));
+    p!(
+        "ParseWithLength root={} ",
+        yes_no(!r.item.is_null(), "ok", "NULL")
+    );
     put_err(r.err);
     adapter::delete(r.item);
     let r = adapter::parse(None);
-    p!("Parse(NULL) root={} ", yes_no(!r.item.is_null(), "ok", "NULL"));
+    p!(
+        "Parse(NULL) root={} ",
+        yes_no(!r.item.is_null(), "ok", "NULL")
+    );
     put_err(r.err);
     adapter::delete(r.item);
 }
@@ -355,22 +372,42 @@ fn lookups(root: Item) {
         p!(
             ": ci={} cs={} has={} | flip ",
             yes_no(adapter::object_item(root, Some(&k)) == c, "self", "other"),
-            yes_no(adapter::object_item_cs(root, Some(&k)) == c, "self", "other"),
+            yes_no(
+                adapter::object_item_cs(root, Some(&k)) == c,
+                "self",
+                "other"
+            ),
             adapter::has_object_item(root, Some(&k)) as i32
         );
         put_str(Some(&flip));
         p!(
             ": ci={} cs={} has={}\n",
-            yes_no(!adapter::object_item(root, Some(&flip)).is_null(), "found", "NULL"),
-            yes_no(!adapter::object_item_cs(root, Some(&flip)).is_null(), "found", "NULL"),
+            yes_no(
+                !adapter::object_item(root, Some(&flip)).is_null(),
+                "found",
+                "NULL"
+            ),
+            yes_no(
+                !adapter::object_item_cs(root, Some(&flip)).is_null(),
+                "found",
+                "NULL"
+            ),
             adapter::has_object_item(root, Some(&flip)) as i32
         );
         c = adapter::next(c);
     }
     p!(
         "get missing={} null_object={}\n",
-        yes_no(!adapter::object_item(root, Some(b"no-such-key")).is_null(), "found", "NULL"),
-        yes_no(!adapter::object_item(NULL, Some(b"a")).is_null(), "found", "NULL")
+        yes_no(
+            !adapter::object_item(root, Some(b"no-such-key")).is_null(),
+            "found",
+            "NULL"
+        ),
+        yes_no(
+            !adapter::object_item(NULL, Some(b"a")).is_null(),
+            "found",
+            "NULL"
+        )
     );
 }
 
@@ -388,49 +425,83 @@ fn mutations(src: Item) {
             show("  detached", x);
         }
         show("  after-detach", d);
-        let ins = if !x.is_null() { x } else { adapter::create_null() };
-        p!("insert[0]={}\n", adapter::insert_item_in_array(d, 0, ins) as i32);
-        p!("insert[99]={}\n", adapter::insert_item_in_array(d, 99, adapter::create_true()) as i32);
-        p!("replace[1]={}\n", adapter::replace_item_in_array(d, 1, adapter::create_number(7.0)) as i32);
-        p!("replace[-1]={}\n", adapter::replace_item_in_array(d, -1, adapter::create_null()) as i32);
+        let ins = if !x.is_null() {
+            x
+        } else {
+            adapter::create_null()
+        };
+        p!(
+            "insert[0]={}\n",
+            adapter::insert_item_in_array(d, 0, ins) as i32
+        );
+        p!(
+            "insert[99]={}\n",
+            adapter::insert_item_in_array(d, 99, adapter::create_true()) as i32
+        );
+        p!(
+            "replace[1]={}\n",
+            adapter::replace_item_in_array(d, 1, adapter::create_number(7.0)) as i32
+        );
+        p!(
+            "replace[-1]={}\n",
+            adapter::replace_item_in_array(d, -1, adapter::create_null()) as i32
+        );
         p!(
             "addref={}\n",
-            adapter::add_item_reference_to_array(d, adapter::create_string_reference(Some(c"ref"))) as i32
+            adapter::add_item_reference_to_array(d, adapter::create_string_reference(Some(c"ref")))
+                as i32
         );
         show("  after-edits", d);
         adapter::delete_item_from_array(d, adapter::array_size(d) - 1);
         adapter::delete_item_from_array(d, 1000);
         show("  after-delete", d);
         let x = adapter::detach_item_via_pointer(d, adapter::child(d));
-        p!("detach-via-pointer={}\n", yes_no(!x.is_null(), "ok", "NULL"));
+        p!(
+            "detach-via-pointer={}\n",
+            yes_no(!x.is_null(), "ok", "NULL")
+        );
         adapter::delete(x);
         show("  final", d);
     } else if adapter::is_object(d) {
         let first = adapter::child(d);
-        let k = if first.is_null() { None } else { adapter::key(first) };
+        let k = if first.is_null() {
+            None
+        } else {
+            adapter::key(first)
+        };
         if let Some(kc) = k {
             let fl = flip_case(&kc);
             let x = adapter::detach_item_from_object(d, Some(&fl));
             p!("detach-ci[flip]={}\n", yes_no(!x.is_null(), "ok", "NULL"));
             if !x.is_null() {
-                p!("re-add={}\n", adapter::add_item_to_object(d, Some(&kc), x) as i32);
+                p!(
+                    "re-add={}\n",
+                    adapter::add_item_to_object(d, Some(&kc), x) as i32
+                );
             }
             p!(
                 "replace-ci={}\n",
-                adapter::replace_item_in_object(d, Some(&fl), adapter::create_string(Some(b"rep"))) as i32
+                adapter::replace_item_in_object(d, Some(&fl), adapter::create_string(Some(b"rep")))
+                    as i32
             );
             p!(
                 "replace-cs={}\n",
-                adapter::replace_item_in_object_cs(d, Some(b"no-such-key"), adapter::create_string(Some(b"rep2"))) as i32
+                adapter::replace_item_in_object_cs(
+                    d,
+                    Some(b"no-such-key"),
+                    adapter::create_string(Some(b"rep2"))
+                ) as i32
             );
             show("  after-replace", d);
             p!(
                 "addCS={}\n",
-                adapter::add_item_to_object_cs(d, Some(c"const-key"), adapter::create_number(1.25)) as i32
+                adapter::add_item_to_object_cs(d, Some(c"const-key"), adapter::create_number(1.25))
+                    as i32
             );
             p!(
                 "addref={}\n",
-                adapter::add_item_reference_to_object(d, Some(b"ref-key"), adapter::child(d)) as i32
+                adapter::add_item_reference_to_object(d, Some(b"ref-key"), adapter::child(d))
+                    as i32
             );
             adapter::delete_item_from_object_cs(d, Some(b"const-key"));
             adapter::delete_item_from_object(d, Some(b"ref-key")); // the reference first: it aliases d->child's data
@@ -440,17 +511,41 @@ fn mutations(src: Item) {
             p!("object without keys\n");
         }
         let ok = |i: Item| yes_no(!i.is_null(), "ok", "NULL");
-        p!("AddStringToObject={}\n", ok(adapter::add_string_to_object(d, Some(b"added"), Some(b"v"))));
-        p!("AddNumberToObject={}\n", ok(adapter::add_number_to_object(d, Some(b"n"), 2.5)));
-        p!("AddNullToObject={}\n", ok(adapter::add_null_to_object(d, Some(b"z"))));
-        p!("AddRawToObject={}\n", ok(adapter::add_raw_to_object(d, Some(b"raw"), Some(b"[1,2]"))));
-        p!("AddObjectToObject={}\n", ok(adapter::add_object_to_object(d, Some(b"o"))));
-        p!("AddArrayToObject={}\n", ok(adapter::add_array_to_object(d, Some(b"a"))));
+        p!(
+            "AddStringToObject={}\n",
+            ok(adapter::add_string_to_object(d, Some(b"added"), Some(b"v")))
+        );
+        p!(
+            "AddNumberToObject={}\n",
+            ok(adapter::add_number_to_object(d, Some(b"n"), 2.5))
+        );
+        p!(
+            "AddNullToObject={}\n",
+            ok(adapter::add_null_to_object(d, Some(b"z")))
+        );
+        p!(
+            "AddRawToObject={}\n",
+            ok(adapter::add_raw_to_object(d, Some(b"raw"), Some(b"[1,2]")))
+        );
+        p!(
+            "AddObjectToObject={}\n",
+            ok(adapter::add_object_to_object(d, Some(b"o")))
+        );
+        p!(
+            "AddArrayToObject={}\n",
+            ok(adapter::add_array_to_object(d, Some(b"a")))
+        );
         show("  final", d);
     } else {
         p!("setters ");
-        p!("SetNumberHelper={} ", g17(adapter::set_number_helper(d, 3.75)));
-        put_line("SetValuestring", adapter::set_valuestring(d, Some(b"replaced")).as_deref());
+        p!(
+            "SetNumberHelper={} ",
+            g17(adapter::set_number_helper(d, 3.75))
+        );
+        put_line(
+            "SetValuestring",
+            adapter::set_valuestring(d, Some(b"replaced")).as_deref(),
+        );
         show("  final", d);
     }
     adapter::delete(d);
@@ -472,7 +567,13 @@ fn minify_pass(text: &[u8]) {
 /// `live_now`: allocations still alive after a fail-the-Nth run (the failed allocation is not one); 0 = no leak.
 fn live_now() -> i64 {
     let st = adapter::hook_stats();
-    (st.allocs - if st.fail_at != 0 && st.fail_at <= st.allocs { 1 } else { 0 }) - st.frees
+    (st.allocs
+        - if st.fail_at != 0 && st.fail_at <= st.allocs {
+            1
+        } else {
+            0
+        })
+        - st.frees
 }
 
 fn hooks_pass(text: &[u8], len: usize) {
@@ -492,25 +593,43 @@ fn hooks_pass(text: &[u8], len: usize) {
         let (a0, f0, b0) = (st.allocs, st.frees, st.bytes);
         let s = adapter::print(root);
         let st = adapter::hook_stats();
-        p!("count print allocs={} frees={} bytes={}\n", st.allocs - a0, st.frees - f0, st.bytes - b0);
+        p!(
+            "count print allocs={} frees={} bytes={}\n",
+            st.allocs - a0,
+            st.frees - f0,
+            st.bytes - b0
+        );
         drop(s);
         let st = adapter::hook_stats();
         let (a0, f0, b0) = (st.allocs, st.frees, st.bytes);
         let s = adapter::print_unformatted(root);
         let st = adapter::hook_stats();
-        p!("count print-unformatted allocs={} frees={} bytes={}\n", st.allocs - a0, st.frees - f0, st.bytes - b0);
+        p!(
+            "count print-unformatted allocs={} frees={} bytes={}\n",
+            st.allocs - a0,
+            st.frees - f0,
+            st.bytes - b0
+        );
         drop(s);
         let (a0, b0) = (adapter::hook_stats().allocs, adapter::hook_stats().bytes);
         {
             let d = adapter::duplicate(root, true);
             let st = adapter::hook_stats();
-            p!("count duplicate allocs={} bytes={}\n", st.allocs - a0, st.bytes - b0);
+            p!(
+                "count duplicate allocs={} bytes={}\n",
+                st.allocs - a0,
+                st.bytes - b0
+            );
             adapter::delete(d);
         }
     }
     adapter::delete(root);
     let st = adapter::hook_stats();
-    p!("count after delete: allocs={} frees={}\n", st.allocs, st.frees);
+    p!(
+        "count after delete: allocs={} frees={}\n",
+        st.allocs,
+        st.frees
+    );
     adapter::hooks_off();
 
     let limit = total.min(MAXFAIL);
@@ -541,13 +660,21 @@ fn hooks_pass(text: &[u8], len: usize) {
         let s = adapter::print(root);
         let ok = s.is_some();
         drop(s);
-        p!("fail-print[{i}] out={} live={}\n", yes_no(ok, "ok", "NULL"), live_now());
+        p!(
+            "fail-print[{i}] out={} live={}\n",
+            yes_no(ok, "ok", "NULL"),
+            live_now()
+        );
         adapter::hooks_off();
         adapter::hooks_on(i);
         let s = adapter::print_buffered(root, 8, false);
         let ok = s.is_some();
         drop(s);
-        p!("fail-buffered[{i}] out={} live={}\n", yes_no(ok, "ok", "NULL"), live_now());
+        p!(
+            "fail-buffered[{i}] out={} live={}\n",
+            yes_no(ok, "ok", "NULL"),
+            live_now()
+        );
         adapter::hooks_off();
     }
     adapter::hooks_on(0);
@@ -562,7 +689,11 @@ fn hooks_pass(text: &[u8], len: usize) {
         adapter::hooks_on(i);
         let d = adapter::duplicate(root, true);
         adapter::delete(d);
-        p!("fail-duplicate[{i}] out={} live={}\n", yes_no(!d.is_null(), "ok", "NULL"), live_now());
+        p!(
+            "fail-duplicate[{i}] out={} live={}\n",
+            yes_no(!d.is_null(), "ok", "NULL"),
+            live_now()
+        );
         adapter::hooks_off();
     }
     adapter::delete(root);
@@ -586,24 +717,55 @@ fn pointers(root: Item) {
     let mut n = 0;
     while !c.is_null() && n < 12 {
         let ptr = adapter::find_pointer_from_object_to(root, c);
-        let back1 = ptr.as_deref().map_or(NULL, |q| adapter::get_pointer(root, Some(q)));
-        let back2 = ptr.as_deref().map_or(NULL, |q| adapter::get_pointer_cs(root, Some(q)));
+        let back1 = ptr
+            .as_deref()
+            .map_or(NULL, |q| adapter::get_pointer(root, Some(q)));
+        let back2 = ptr
+            .as_deref()
+            .map_or(NULL, |q| adapter::get_pointer_cs(root, Some(q)));
         put_line("  pointer-to-child", ptr.as_deref());
         p!("  roundtrip ci={} cs={}\n", rel(back1, c), rel(back2, c));
         c = adapter::next(c);
         n += 1;
     }
     let fixed: [&[u8]; 26] = [
-        b"", b"/", b"/0", b"/1", b"/-", b"/00", b"/a", b"/A", b"/a/b", b"/a~1b", b"/a~0b", b"/~0", b"/~1", b"/~01",
-        b"/x~1", b"/ab~1cd", b"/\xC3\xA9", b"/\xC9", b"/\xE9", b"a", b"/key", b"/0/0", b"/1/a", b"//",
-        b"/18446744073709551616", b"/0/18446744073709551617",
+        b"",
+        b"/",
+        b"/0",
+        b"/1",
+        b"/-",
+        b"/00",
+        b"/a",
+        b"/A",
+        b"/a/b",
+        b"/a~1b",
+        b"/a~0b",
+        b"/~0",
+        b"/~1",
+        b"/~01",
+        b"/x~1",
+        b"/ab~1cd",
+        b"/\xC3\xA9",
+        b"/\xC9",
+        b"/\xE9",
+        b"a",
+        b"/key",
+        b"/0/0",
+        b"/1/a",
+        b"//",
+        b"/18446744073709551616",
+        b"/0/18446744073709551617",
     ];
     for f in fixed {
         let g = adapter::get_pointer(root, Some(f));
         let gc = adapter::get_pointer_cs(root, Some(f));
         p!("  GetPointer ");
         put_str(Some(f));
-        p!(" ci={} cs={}", yes_no(!g.is_null(), "ok", "NULL"), yes_no(!gc.is_null(), "ok", "NULL"));
+        p!(
+            " ci={} cs={}",
+            yes_no(!g.is_null(), "ok", "NULL"),
+            yes_no(!gc.is_null(), "ok", "NULL")
+        );
         if !g.is_null() {
             show(" ", g);
         } else {
@@ -636,7 +798,11 @@ fn pointers(root: Item) {
 fn pair_ops(ta: &[u8], tb: &[u8]) {
     let a = adapter::parse(Some(ta)).item;
     let b = adapter::parse(Some(tb)).item;
-    p!("== pair a={} b={}\n", yes_no(!a.is_null(), "ok", "NULL"), yes_no(!b.is_null(), "ok", "NULL"));
+    p!(
+        "== pair a={} b={}\n",
+        yes_no(!a.is_null(), "ok", "NULL"),
+        yes_no(!b.is_null(), "ok", "NULL")
+    );
     if !a.is_null() && !b.is_null() {
         if tree_depth(a) <= COMPARE_MAX_DEPTH && tree_depth(b) <= COMPARE_MAX_DEPTH {
             p!(
@@ -650,14 +816,22 @@ fn pair_ops(ta: &[u8], tb: &[u8]) {
         }
         for cs in 0..=1 {
             let cs = cs != 0;
-            let patches = if cs { adapter::generate_patches_cs(a, b) } else { adapter::generate_patches(a, b) };
+            let patches = if cs {
+                adapter::generate_patches_cs(a, b)
+            } else {
+                adapter::generate_patches(a, b)
+            };
             p!("-- GeneratePatches[cs={}]\n", cs as i32);
             show("  a-after", a); // Q18: sorting in place
             show("  b-after", b);
             if !patches.is_null() {
                 show("  patches", patches);
                 let target = adapter::duplicate(a, true);
-                let rc = if cs { adapter::apply_patches_cs(target, patches) } else { adapter::apply_patches(target, patches) };
+                let rc = if cs {
+                    adapter::apply_patches_cs(target, patches)
+                } else {
+                    adapter::apply_patches(target, patches)
+                };
                 p!("  apply-own rc={rc}\n");
                 show("  apply-own-result", target);
                 adapter::delete(target);
@@ -667,24 +841,43 @@ fn pair_ops(ta: &[u8], tb: &[u8]) {
             adapter::delete(patches);
 
             let target = adapter::duplicate(a, true);
-            let rc = if cs { adapter::apply_patches_cs(target, b) } else { adapter::apply_patches(target, b) };
-            p!("-- ApplyPatches(a, b as patches)[cs={}] rc={rc}\n", cs as i32);
+            let rc = if cs {
+                adapter::apply_patches_cs(target, b)
+            } else {
+                adapter::apply_patches(target, b)
+            };
+            p!(
+                "-- ApplyPatches(a, b as patches)[cs={}] rc={rc}\n",
+                cs as i32
+            );
             show("  result", target);
             adapter::delete(target);
 
             let target = adapter::duplicate(a, true);
-            let target = if cs { adapter::merge_patch_cs(target, b) } else { adapter::merge_patch(target, b) };
+            let target = if cs {
+                adapter::merge_patch_cs(target, b)
+            } else {
+                adapter::merge_patch(target, b)
+            };
             p!("-- MergePatch(a, b)[cs={}]\n", cs as i32);
             show("  result", target);
             adapter::delete(target);
 
             {
-                let mp = if cs { adapter::generate_merge_patch_cs(a, b) } else { adapter::generate_merge_patch(a, b) };
+                let mp = if cs {
+                    adapter::generate_merge_patch_cs(a, b)
+                } else {
+                    adapter::generate_merge_patch(a, b)
+                };
                 p!("-- GenerateMergePatch[cs={}]\n", cs as i32);
                 if !mp.is_null() {
                     let t2 = adapter::duplicate(a, true);
                     show("  patch", mp);
-                    let t2 = if cs { adapter::merge_patch_cs(t2, mp) } else { adapter::merge_patch(t2, mp) };
+                    let t2 = if cs {
+                        adapter::merge_patch_cs(t2, mp)
+                    } else {
+                        adapter::merge_patch(t2, mp)
+                    };
                     show("  applied", t2);
                     adapter::delete(t2);
                 } else {
@@ -725,7 +918,13 @@ fn pair_ops(ta: &[u8], tb: &[u8]) {
 // ---- M6: locales ---------------------------------------------------------------------------------------------
 
 fn locale_pass(ta: &[u8]) {
-    let comma: [&CStr; 5] = [c"de_DE.UTF-8", c"fr_FR.UTF-8", c"ru_RU.UTF-8", c"nl_NL.UTF-8", c"de_DE.ISO8859-1"];
+    let comma: [&CStr; 5] = [
+        c"de_DE.UTF-8",
+        c"fr_FR.UTF-8",
+        c"ru_RU.UTF-8",
+        c"nl_NL.UTF-8",
+        c"de_DE.ISO8859-1",
+    ];
     let latin1: [&CStr; 3] = [c"de_DE.ISO8859-1", c"fr_FR.ISO8859-1", c"en_US.ISO8859-15"];
     p!("== locale\n");
     let mut used: Option<&CStr> = None;
@@ -744,13 +943,20 @@ fn locale_pass(ta: &[u8]) {
         }
         Some(u) => {
             let texts: [&[u8]; 5] = [b"1.5", b"[1.5,2.25,-0.5e2]", b"{\"a\":1.5}", b"1,5", ta];
-            p!("numeric-locale {} decimal_point={}\n", u.to_string_lossy(), decimal_point());
+            p!(
+                "numeric-locale {} decimal_point={}\n",
+                u.to_string_lossy(),
+                decimal_point()
+            );
             if probe_in_c_locale() {
                 set_locale(LC_NUMERIC, c"C");
             }
             for (i, t) in texts.iter().enumerate() {
                 let r: Parsed = adapter::parse(Some(t));
-                p!("parse[{i}] root={} ", yes_no(!r.item.is_null(), "ok", "NULL"));
+                p!(
+                    "parse[{i}] root={} ",
+                    yes_no(!r.item.is_null(), "ok", "NULL")
+                );
                 put_err(r.err);
                 if !r.item.is_null() {
                     show("  print", r.item);
@@ -758,7 +964,11 @@ fn locale_pass(ta: &[u8]) {
                 }
                 adapter::delete(r.item);
             }
-            for (label, v) in [("create(1.5)", 1.5), ("create(0.1)", 0.1), ("create(123456.789012345678)", 123456.789012345678)] {
+            for (label, v) in [
+                ("create(1.5)", 1.5),
+                ("create(0.1)", 0.1),
+                ("create(123456.789012345678)", 123456.789012345678),
+            ] {
                 let n = adapter::create_number(v);
                 show(label, n);
                 adapter::delete(n);
@@ -782,7 +992,11 @@ fn locale_pass(ta: &[u8]) {
             p!("ctype-locale none (no Latin-1 locale available)\n");
         }
         Some(u) => {
-            let objs: [&[u8]; 3] = [b"{\"\xC9t\xE9\":1,\"b\":2,\"\xE9t\xC9\":3,\"B\":4}", b"{\"\xC9\":1}", b"{\"\xE9\":1}"];
+            let objs: [&[u8]; 3] = [
+                b"{\"\xC9t\xE9\":1,\"b\":2,\"\xE9t\xC9\":3,\"B\":4}",
+                b"{\"\xC9\":1}",
+                b"{\"\xE9\":1}",
+            ];
             p!(
                 "ctype-locale {} tolower(0xC9)={} tolower(0xDF)={} tolower(0xE9)={}\n",
                 u.to_string_lossy(),
@@ -794,7 +1008,15 @@ fn locale_pass(ta: &[u8]) {
                 set_locale(LC_CTYPE, c"C");
             }
             let o = adapter::parse(Some(objs[0])).item;
-            let keys: [&[u8]; 7] = [b"\xC9t\xE9", b"\xE9t\xE9", b"\xE9t\xC9", b"\xC9T\xC9", b"b", b"B", b"\xE9"];
+            let keys: [&[u8]; 7] = [
+                b"\xC9t\xE9",
+                b"\xE9t\xE9",
+                b"\xE9t\xC9",
+                b"\xC9T\xC9",
+                b"b",
+                b"B",
+                b"\xE9",
+            ];
             for k in keys {
                 let f = adapter::object_item(o, Some(k));
                 let g = adapter::object_item_cs(o, Some(k));
@@ -822,9 +1044,16 @@ fn locale_pass(ta: &[u8]) {
             }
             let a = adapter::parse(Some(objs[1])).item;
             let b = adapter::parse(Some(objs[2])).item;
-            p!("compare ci={} cs={}\n", adapter::compare(a, b, false) as i32, adapter::compare(a, b, true) as i32);
+            p!(
+                "compare ci={} cs={}\n",
+                adapter::compare(a, b, false) as i32,
+                adapter::compare(a, b, true) as i32
+            );
             {
-                let s = adapter::parse(Some(b"{\"\xE9\":1,\"\xC9\":2,\"z\":3,\"A\":4,\"\xC0\":5,\"\xE0\":6}")).item;
+                let s = adapter::parse(Some(
+                    b"{\"\xE9\":1,\"\xC9\":2,\"z\":3,\"A\":4,\"\xC0\":5,\"\xE0\":6}",
+                ))
+                .item;
                 adapter::sort_object(s);
                 show("sorted-ci", s);
                 adapter::delete(s);
@@ -836,7 +1065,14 @@ fn locale_pass(ta: &[u8]) {
                         let fl = flip_case(&k);
                         p!("input-key lookup ");
                         put_str(Some(&fl));
-                        p!(" ci={}\n", yes_no(!adapter::object_item(d, Some(&fl)).is_null(), "found", "NULL"));
+                        p!(
+                            " ci={}\n",
+                            yes_no(
+                                !adapter::object_item(d, Some(&fl)).is_null(),
+                                "found",
+                                "NULL"
+                            )
+                        );
                     }
                 }
                 adapter::delete(d);
@@ -884,7 +1120,11 @@ fn constructors() {
     p!("== constructors\n");
     for (i, v) in nums.iter().enumerate() {
         let n = adapter::create_number(*v);
-        p!("number[{i}] vi={} vd={} ", adapter::value_int(n), g17(adapter::value_double(n)));
+        p!(
+            "number[{i}] vi={} vd={} ",
+            adapter::value_int(n),
+            g17(adapter::value_double(n))
+        );
         show("print", n);
         adapter::delete(n);
     }
@@ -892,9 +1132,16 @@ fn constructors() {
     let n = adapter::create_number(nan_v);
     p!("NaN vi={} ", adapter::value_int(n));
     show("print", n);
-    p!("NaN getnumber isnan={}\n", adapter::get_number_value(n).is_nan() as i32);
+    p!(
+        "NaN getnumber isnan={}\n",
+        adapter::get_number_value(n).is_nan() as i32
+    );
     let r = adapter::set_number_helper(n, nan_v);
-    p!("SetNumberHelper(NaN)={} vi={}\n", g17(r), adapter::value_int(n));
+    p!(
+        "SetNumberHelper(NaN)={} vi={}\n",
+        g17(r),
+        adapter::value_int(n)
+    );
     adapter::delete(n);
     let n = adapter::create_number(inf_v);
     p!("Inf vi={} ", adapter::value_int(n));
@@ -904,7 +1151,10 @@ fn constructors() {
     p!("-Inf vi={} ", adapter::value_int(n));
     show("print", n);
     adapter::delete(n);
-    p!("GetNumberValue(NULL) isnan={}\n", adapter::get_number_value(NULL).is_nan() as i32);
+    p!(
+        "GetNumberValue(NULL) isnan={}\n",
+        adapter::get_number_value(NULL).is_nan() as i32
+    );
 
     let arr = adapter::create_array();
     adapter::add_item_to_array(arr, adapter::create_string(Some(b"a\"b\\c\n\t\x01\x1f/")));
@@ -933,10 +1183,26 @@ fn constructors() {
     out_bytes(b"\n");
     adapter::delete(arr);
     let n = adapter::create_null();
-    p!("PrintBuffered(NULL item)={}\n", yes_no(adapter::print_buffered(NULL, 0, false).is_some(), "ok", "NULL"));
-    p!("Print(NULL)={}\n", yes_no(adapter::print(NULL).is_some(), "ok", "NULL"));
-    p!("AddItemToArray(NULL,NULL)={}\n", adapter::add_item_to_array(NULL, NULL) as i32);
-    p!("InsertItemInArray(self)={}\n", adapter::insert_item_in_array(n, 0, n) as i32);
+    p!(
+        "PrintBuffered(NULL item)={}\n",
+        yes_no(
+            adapter::print_buffered(NULL, 0, false).is_some(),
+            "ok",
+            "NULL"
+        )
+    );
+    p!(
+        "Print(NULL)={}\n",
+        yes_no(adapter::print(NULL).is_some(), "ok", "NULL")
+    );
+    p!(
+        "AddItemToArray(NULL,NULL)={}\n",
+        adapter::add_item_to_array(NULL, NULL) as i32
+    );
+    p!(
+        "InsertItemInArray(self)={}\n",
+        adapter::insert_item_in_array(n, 0, n) as i32
+    );
     adapter::delete(n);
 
     // D21: writes through the char * that GetStringValue, SetValuestring and the print functions return
@@ -946,14 +1212,23 @@ fn constructors() {
         v[0] = b'X';
         v[3] = 0;
     });
-    put_line("view GetStringValue", adapter::get_string_value(n).as_deref());
+    put_line(
+        "view GetStringValue",
+        adapter::get_string_value(n).as_deref(),
+    );
     show("view print", n);
     adapter::set_valuestring(n, Some(b"xyz")); // 3 <= strlen 3: copied in place
-    p!("view SetValuestring(xyz) same-buffer={}\n", (adapter::value_string_addr(n) == first) as i32);
+    p!(
+        "view SetValuestring(xyz) same-buffer={}\n",
+        (adapter::value_string_addr(n) == first) as i32
+    );
     adapter::with_string_value_mut(n, |v| v[1] = b'Y');
     put_line("view after write", adapter::get_string_value(n).as_deref());
     adapter::set_valuestring(n, Some(b"long1")); // longer: new buffer, allocated before the old one is freed
-    p!("view SetValuestring(long1) same-buffer={}\n", (adapter::value_string_addr(n) == first) as i32);
+    p!(
+        "view SetValuestring(long1) same-buffer={}\n",
+        (adapter::value_string_addr(n) == first) as i32
+    );
     if let Some(mut out) = adapter::print_unformatted(n) {
         out.bytes_mut()[1] = b'Q';
         out.bytes_mut()[4] = 0;
@@ -970,7 +1245,11 @@ fn constructors() {
     show("field vd=3", n);
     adapter::set_value_int(n, 100);
     show("field vi=100", n);
-    p!("field getnumber={} vi={}\n", g17(adapter::get_number_value(n)), adapter::value_int(n));
+    p!(
+        "field getnumber={} vi={}\n",
+        g17(adapter::get_number_value(n)),
+        adapter::value_int(n)
+    );
     adapter::delete(n);
 }
 
@@ -1070,7 +1349,14 @@ fn utils_once(op: usize, a: Item, b: Item, fail: i64, label: &str) -> i64 {
 }
 
 fn utils_hooks_pass(ta: &[u8], tb: &[u8]) {
-    const NAMES: [&str; 6] = ["apply-ci", "apply-cs", "merge", "genmerge", "genpatches", "findptr"];
+    const NAMES: [&str; 6] = [
+        "apply-ci",
+        "apply-cs",
+        "merge",
+        "genmerge",
+        "genpatches",
+        "findptr",
+    ];
     let a = adapter::parse(Some(ta)).item;
     let b = adapter::parse(Some(tb)).item;
     p!("== utils-hooks\n");
@@ -1090,7 +1376,11 @@ fn utils_hooks_pass(ta: &[u8], tb: &[u8]) {
             let tgt = adapter::child(adapter::child(a));
             adapter::hooks_on(1);
             let pp = adapter::find_pointer_from_object_to(a, tgt);
-            p!("probe findptr[fail 1] {} live={}\n", yes_no(pp.is_some(), "ok", "NULL"), live_now());
+            p!(
+                "probe findptr[fail 1] {} live={}\n",
+                yes_no(pp.is_some(), "ok", "NULL"),
+                live_now()
+            );
             adapter::hooks_off();
             adapter::hooks_on(0);
             adapter::trace_start();
@@ -1101,7 +1391,11 @@ fn utils_hooks_pass(ta: &[u8], tb: &[u8]) {
             adapter::delete(g);
             adapter::hooks_on(2);
             let g = adapter::generate_patches(e, one);
-            p!("probe genpatches[fail 2] {} live={}\n", yes_no(!g.is_null(), "ok", "NULL"), live_now());
+            p!(
+                "probe genpatches[fail 2] {} live={}\n",
+                yes_no(!g.is_null(), "ok", "NULL"),
+                live_now()
+            );
             adapter::hooks_off();
             if g.is_null() {
                 p!("  result=NULL\n");
@@ -1119,11 +1413,19 @@ fn utils_hooks_pass(ta: &[u8], tb: &[u8]) {
 
 fn main() {
     // A Stage 1 debug build uses a few KiB of stack per nesting level; the C driver gets 8 MiB at -O0.
-    std::thread::Builder::new().stack_size(512 << 20).spawn(real_main).unwrap().join().unwrap();
+    std::thread::Builder::new()
+        .stack_size(512 << 20)
+        .spawn(real_main)
+        .unwrap()
+        .join()
+        .unwrap();
 }
 
 fn real_main() {
-    let Some(path) = std::env::args_os().next_back().filter(|_| std::env::args_os().count() >= 2) else {
+    let Some(path) = std::env::args_os()
+        .next_back()
+        .filter(|_| std::env::args_os().count() >= 2)
+    else {
         std::process::exit(2);
     };
     let Ok(mut buf) = std::fs::read(&path) else {
@@ -1132,14 +1434,21 @@ fn real_main() {
     buf.truncate(1 << 20);
     let len = buf.len();
 
-    let sep = if len >= 5 { find(&buf, b"\n===\n") } else { None };
+    let sep = if len >= 5 {
+        find(&buf, b"\n===\n")
+    } else {
+        None
+    };
     let (a, b): (Vec<u8>, Vec<u8>) = match sep {
         Some(s) => (buf[..s].to_vec(), buf[s + 5..].to_vec()),
         None => (buf.clone(), buf.clone()),
     };
     let (la, lb) = (a.len(), b.len());
 
-    p!("input len={len} a={la} b={lb} separator={}\n", sep.is_some() as i32);
+    p!(
+        "input len={len} a={la} b={lb} separator={}\n",
+        sep.is_some() as i32
+    );
     run_document("A", &a, la);
     if sep.is_some() {
         run_document("B", &b, lb);
@@ -1152,7 +1461,10 @@ fn real_main() {
             .unwrap_or_default();
         let subset = base.starts_with(b"patch-") || base.starts_with(b"judge-");
         UTILS_SUBSET.store(subset, std::sync::atomic::Ordering::SeqCst);
-        UTILS_PROBE.store(base.starts_with(b"judge-utils-oom"), std::sync::atomic::Ordering::SeqCst);
+        UTILS_PROBE.store(
+            base.starts_with(b"judge-utils-oom"),
+            std::sync::atomic::Ordering::SeqCst,
+        );
         if subset {
             utils_hooks_pass(&a[..la], &b[..lb]);
         }

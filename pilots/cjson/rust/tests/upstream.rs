@@ -31,7 +31,9 @@ fn lock() -> MutexGuard<'static, ()> {
 }
 
 fn data(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/tests").join(rel)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../src/tests")
+        .join(rel)
 }
 
 /// `read_file` of common.h.
@@ -76,14 +78,28 @@ fn assert_double(expected: f64, actual: f64) {
 
 /// common.h `assert_not_in_list`.
 fn assert_not_in_list(i: Item) {
-    assert!(a::next(i).is_null(), "Linked list next pointer is not NULL.");
-    assert!(a::prev(i).is_null(), "Linked list previous pointer is not NULL.");
+    assert!(
+        a::next(i).is_null(),
+        "Linked list next pointer is not NULL."
+    );
+    assert!(
+        a::prev(i).is_null(),
+        "Linked list previous pointer is not NULL."
+    );
 }
 fn assert_has_no_reference(i: Item) {
-    assert_eq!(a::type_flags(i) & a::IS_REFERENCE, 0, "Item should not have a string as reference.");
+    assert_eq!(
+        a::type_flags(i) & a::IS_REFERENCE,
+        0,
+        "Item should not have a string as reference."
+    );
 }
 fn assert_has_no_const_string(i: Item) {
-    assert_eq!(a::type_flags(i) & a::STRING_IS_CONST, 0, "Item should not have a const string.");
+    assert_eq!(
+        a::type_flags(i) & a::STRING_IS_CONST,
+        0,
+        "Item should not have a const string."
+    );
 }
 fn assert_has_no_valuestring(i: Item) {
     assert!(a::value_string(i).is_none(), "Valuestring is not NULL.");
@@ -103,7 +119,12 @@ fn assert_has_child(i: Item) {
 /// thread). Panics propagate.
 fn on_big_stack(f: impl FnOnce() + Send) {
     std::thread::scope(|s| {
-        std::thread::Builder::new().stack_size(256 << 20).spawn_scoped(s, f).unwrap().join().unwrap();
+        std::thread::Builder::new()
+            .stack_size(256 << 20)
+            .spawn_scoped(s, f)
+            .unwrap()
+            .join()
+            .unwrap();
     });
 }
 
@@ -147,7 +168,10 @@ fn do_test(name: &str) {
     let tree = a::parse(Some(&content)).item;
     assert!(!tree.is_null(), "Failed to read of parse test.");
     let actual = a::print(tree).expect("Failed to print tree back to JSON.");
-    assert_eq!(String::from_utf8_lossy(&expected), String::from_utf8_lossy(actual.bytes()));
+    assert_eq!(
+        String::from_utf8_lossy(&expected),
+        String::from_utf8_lossy(actual.bytes())
+    );
     drop(actual);
     a::delete(tree);
 }
@@ -219,7 +243,11 @@ fn test12_should_not_be_parsed() {
     let test12 = "{ \"name\": ";
     let r = a::parse(Some(test12.as_bytes()));
     assert!(r.item.is_null(), "Should fail to parse incomplete JSON.");
-    assert_eq!(r.err, ErrPos::At(test12.len()), "Error pointer is incorrect.");
+    assert_eq!(
+        r.err,
+        ErrPos::At(test12.len()),
+        "Error pointer is incorrect."
+    );
 }
 
 const TEST_13: &str = concat!(
@@ -251,7 +279,10 @@ fn test13_should_be_parsed_without_null_termination() {
 fn test14_should_not_be_parsed() {
     let _g = lock();
     let tree = a::parse_with_length(Some(TEST_13.as_bytes()), TEST_13.len() - 1).item;
-    assert!(tree.is_null(), "Should not continue after buffer_length is reached.");
+    assert!(
+        tree.is_null(),
+        "Should not continue after buffer_length is reached."
+    );
 }
 
 /// Address Sanitizer regression test; here: it must not crash.
@@ -368,7 +399,11 @@ fn parse_escape(digits: &str, second: Option<&str>) -> Option<Vec<u8>> {
 
 fn utf8(cp: u32) -> Vec<u8> {
     let mut b = [0u8; 4];
-    char::from_u32(cp).expect("scalar value").encode_utf8(&mut b).as_bytes().to_vec()
+    char::from_u32(cp)
+        .expect("scalar value")
+        .encode_utf8(&mut b)
+        .as_bytes()
+        .to_vec()
 }
 
 #[test]
@@ -380,17 +415,45 @@ fn parse_hex4_should_parse_all_combinations() {
         if (0xD800..=0xDBFF).contains(&number) {
             // a high surrogate: paired with U+DC00 it gives 0x10000 + ((number - 0xD800) << 10)
             let expected = utf8(0x10000 + ((number - 0xD800) << 10));
-            assert_eq!(parse_escape(&lower, Some("dc00")), Some(expected.clone()), "Failed to parse lowercase digits.");
-            assert_eq!(parse_escape(&upper, Some("DC00")), Some(expected), "Failed to parse uppercase digits.");
+            assert_eq!(
+                parse_escape(&lower, Some("dc00")),
+                Some(expected.clone()),
+                "Failed to parse lowercase digits."
+            );
+            assert_eq!(
+                parse_escape(&upper, Some("DC00")),
+                Some(expected),
+                "Failed to parse uppercase digits."
+            );
         } else if (0xDC00..=0xDFFF).contains(&number) {
             // a low surrogate as the second half of a pair with U+D800
             let expected = utf8(0x10000 + (number - 0xDC00));
-            assert_eq!(parse_escape("d800", Some(&lower)), Some(expected.clone()), "Failed to parse lowercase digits.");
-            assert_eq!(parse_escape("D800", Some(&upper)), Some(expected), "Failed to parse uppercase digits.");
+            assert_eq!(
+                parse_escape("d800", Some(&lower)),
+                Some(expected.clone()),
+                "Failed to parse lowercase digits."
+            );
+            assert_eq!(
+                parse_escape("D800", Some(&upper)),
+                Some(expected),
+                "Failed to parse uppercase digits."
+            );
         } else {
-            let expected = if number == 0 { Vec::new() } else { utf8(number) };
-            assert_eq!(parse_escape(&lower, None), Some(expected.clone()), "Failed to parse lowercase digits.");
-            assert_eq!(parse_escape(&upper, None), Some(expected), "Failed to parse uppercase digits.");
+            let expected = if number == 0 {
+                Vec::new()
+            } else {
+                utf8(number)
+            };
+            assert_eq!(
+                parse_escape(&lower, None),
+                Some(expected.clone()),
+                "Failed to parse lowercase digits."
+            );
+            assert_eq!(
+                parse_escape(&upper, None),
+                Some(expected),
+                "Failed to parse uppercase digits."
+            );
         }
     }
 }
@@ -399,8 +462,8 @@ fn parse_hex4_should_parse_all_combinations() {
 fn parse_hex4_should_parse_mixed_case() {
     let _g = lock();
     for d in [
-        "beef", "beeF", "beEf", "beEF", "bEef", "bEeF", "bEEf", "bEEF", "Beef", "BeeF", "BeEf", "BeEF", "BEef", "BEeF",
-        "BEEf", "BEEF",
+        "beef", "beeF", "beEf", "beEF", "bEef", "bEeF", "bEEf", "bEEF", "Beef", "BeeF", "BeEf",
+        "BeEF", "BEef", "BEeF", "BEEf", "BEEF",
     ] {
         assert_eq!(parse_escape(d, None), Some(utf8(0xBEEF)), "{d}");
     }
@@ -420,13 +483,20 @@ fn assert_parse_string(string: &str, expected: &str) {
     assert_has_no_const_string(item);
     assert!(a::value_string(item).is_some(), "Valuestring is NULL.");
     assert_has_no_string(item);
-    assert_eq!(a::value_string(item).as_deref(), Some(expected.as_bytes()), "The parsed result isn't as expected.");
+    assert_eq!(
+        a::value_string(item).as_deref(),
+        Some(expected.as_bytes()),
+        "The parsed result isn't as expected."
+    );
     a::delete(item);
 }
 
 fn assert_not_parse_string(string: &str) {
     let item = pj(string);
-    assert!(item.is_null() || kind(item) != a::STRING, "Malformed string should not be accepted.");
+    assert!(
+        item.is_null() || kind(item) != a::STRING,
+        "Malformed string should not be accepted."
+    );
     a::delete(item);
 }
 
@@ -438,7 +508,10 @@ fn parse_string_should_parse_strings() {
         "\" !\\\"#$%&'()*+,-./\\/0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_'abcdefghijklmnopqrstuvwxyz{|}~\"",
         " !\"#$%&'()*+,-.//0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~",
     );
-    assert_parse_string("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u20AC\\u732b\"", "\"\\/\x08\x0c\n\r\t€猫");
+    assert_parse_string(
+        "\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u20AC\\u732b\"",
+        "\"\\/\x08\x0c\n\r\t€猫",
+    );
     assert_parse_string("\"\x08\x0c\n\r\t\"", "\x08\x0c\n\r\t");
 }
 
@@ -472,7 +545,10 @@ fn parse_string_should_not_overflow_with_closing_backslash() {
 fn parse_string_should_parse_bug_94() {
     let _g = lock();
     let string = "\"~!@\\\\#$%^&*()\\\\\\\\-\\\\+{}[]:\\\\;\\\\\\\"\\\\<\\\\>?/.,DC=ad,DC=com\"";
-    assert_parse_string(string, "~!@\\#$%^&*()\\\\-\\+{}[]:\\;\\\"\\<\\>?/.,DC=ad,DC=com");
+    assert_parse_string(
+        string,
+        "~!@\\#$%^&*()\\\\-\\+{}[]:\\;\\\"\\<\\>?/.,DC=ad,DC=com",
+    );
 }
 
 // =====================================================================================================================
@@ -491,7 +567,10 @@ fn assert_is_array(i: Item) {
 
 fn assert_not_array(json: &str) {
     let item = pj(json);
-    assert!(item.is_null() || kind(item) != a::ARRAY, "{json:?} must not parse as an array");
+    assert!(
+        item.is_null() || kind(item) != a::ARRAY,
+        "{json:?} must not parse as an array"
+    );
     a::delete(item);
 }
 
@@ -551,7 +630,15 @@ fn parse_array_should_parse_arrays_with_multiple_elements() {
     assert_eq!(kind(a::next(a::next(c))), a::NUMBER);
     a::delete(item);
 
-    let expected_types = [a::NUMBER, a::NULL_T, a::TRUE, a::FALSE, a::ARRAY, a::STRING, a::OBJECT];
+    let expected_types = [
+        a::NUMBER,
+        a::NULL_T,
+        a::TRUE,
+        a::FALSE,
+        a::ARRAY,
+        a::STRING,
+        a::OBJECT,
+    ];
     let item = pj("[1, null, true, false, [], \"hello\", {}]");
     assert_is_array(item);
     let mut node = a::child(item);
@@ -568,7 +655,15 @@ fn parse_array_should_parse_arrays_with_multiple_elements() {
 #[test]
 fn parse_array_should_not_parse_non_arrays() {
     let _g = lock();
-    for j in ["", "[", "]", "{\"hello\":[]}", "42", "3.14", "\"[]hello world!\n\""] {
+    for j in [
+        "",
+        "[",
+        "]",
+        "{\"hello\":[]}",
+        "42",
+        "3.14",
+        "\"[]hello world!\n\"",
+    ] {
         assert_not_array(j);
     }
 }
@@ -590,13 +685,20 @@ fn assert_is_object(i: Item) {
 fn assert_is_child(c: Item, name: &str, ty: i32) {
     assert!(!c.is_null(), "Child item is NULL.");
     assert!(a::key(c).is_some(), "Child item doesn't have a name.");
-    assert_eq!(kstr(c).as_deref(), Some(name), "Child item has the wrong name.");
+    assert_eq!(
+        kstr(c).as_deref(),
+        Some(name),
+        "Child item has the wrong name."
+    );
     assert_eq!(kind(c), ty);
 }
 
 fn assert_not_object(json: &str) {
     let item = pj(json);
-    assert!(item.is_null() || kind(item) != a::OBJECT, "{json:?} must not parse as an object");
+    assert!(
+        item.is_null() || kind(item) != a::OBJECT,
+        "{json:?} must not parse as an object"
+    );
     a::delete(item);
 }
 
@@ -638,7 +740,15 @@ fn parse_object_should_parse_objects_with_multiple_elements() {
     assert_is_child(a::next(a::next(c)), "three", a::NUMBER);
     a::delete(item);
 
-    let expected_types = [a::NUMBER, a::NULL_T, a::TRUE, a::FALSE, a::ARRAY, a::STRING, a::OBJECT];
+    let expected_types = [
+        a::NUMBER,
+        a::NULL_T,
+        a::TRUE,
+        a::FALSE,
+        a::ARRAY,
+        a::STRING,
+        a::OBJECT,
+    ];
     let expected_names = ["one", "NULL", "TRUE", "FALSE", "array", "world", "object"];
     let item = pj(
         "{\"one\":1, \"NULL\":null, \"TRUE\":true, \"FALSE\":false, \"array\":[], \"world\":\"hello\", \"object\":{}}",
@@ -658,7 +768,15 @@ fn parse_object_should_parse_objects_with_multiple_elements() {
 #[test]
 fn parse_object_should_not_parse_non_objects() {
     let _g = lock();
-    for j in ["", "{", "}", "[\"hello\",{}]", "42", "3.14", "\"{}hello world!\n\""] {
+    for j in [
+        "",
+        "{",
+        "}",
+        "[\"hello\",{}]",
+        "42",
+        "3.14",
+        "\"{}hello world!\n\"",
+    ] {
         assert_not_object(j);
     }
 }
@@ -726,7 +844,11 @@ fn assert_print_string(expected: &str, input: Option<&[u8]>) {
         None => a::create_string_reference(None),
     };
     assert!(!item.is_null());
-    assert_eq!(pu(item).as_deref(), Some(expected), "The printed string isn't as expected.");
+    assert_eq!(
+        pu(item).as_deref(),
+        Some(expected),
+        "The printed string isn't as expected."
+    );
     a::delete(item);
 }
 
@@ -762,7 +884,11 @@ fn print_string_should_print_utf8() {
 fn assert_print_number(expected: &str, input: f64) {
     let item = a::create_number(input);
     assert!(!item.is_null());
-    assert_eq!(pu(item).as_deref(), Some(expected), "Printed number is not as expected.");
+    assert_eq!(
+        pu(item).as_deref(),
+        Some(expected),
+        "Printed number is not as expected."
+    );
     a::delete(item);
 }
 
@@ -821,8 +947,16 @@ fn assert_print_array(expected: &str, input: &str) {
     let item = pj(input);
     assert!(!item.is_null(), "Failed to parse array.");
     assert_eq!(kind(item), a::ARRAY);
-    assert_eq!(pu(item).as_deref(), Some(input), "Unformatted array is not correct.");
-    assert_eq!(pf(item).as_deref(), Some(expected), "Formatted array is not correct.");
+    assert_eq!(
+        pu(item).as_deref(),
+        Some(input),
+        "Unformatted array is not correct."
+    );
+    assert_eq!(
+        pf(item).as_deref(),
+        Some(expected),
+        "Formatted array is not correct."
+    );
     a::delete(item);
 }
 
@@ -855,8 +989,16 @@ fn assert_print_object(expected: &str, input: &str) {
     let item = pj(input);
     assert!(!item.is_null(), "Failed to parse object.");
     assert_eq!(kind(item), a::OBJECT);
-    assert_eq!(pu(item).as_deref(), Some(input), "Unformatted object is not correct.");
-    assert_eq!(pf(item).as_deref(), Some(expected), "Formatted object is not correct.");
+    assert_eq!(
+        pu(item).as_deref(),
+        Some(input),
+        "Unformatted object is not correct."
+    );
+    assert_eq!(
+        pf(item).as_deref(),
+        Some(expected),
+        "Formatted object is not correct."
+    );
     a::delete(item);
 }
 
@@ -891,7 +1033,11 @@ fn print_object_should_print_objects_with_multiple_elements() {
 fn assert_print_value(input: &str) {
     let item = pj(input);
     assert!(!item.is_null(), "Failed to parse value.");
-    assert_eq!(pu(item).as_deref(), Some(input), "Printed value is not as expected.");
+    assert_eq!(
+        pu(item).as_deref(),
+        Some(input),
+        "Printed value is not as expected."
+    );
     a::delete(item);
 }
 
@@ -944,7 +1090,10 @@ fn cjson_array_foreach_should_loop_over_arrays() {
     let elements = a::children(array);
     assert_eq!(elements.len(), 10);
     for (i, e) in elements.iter().enumerate() {
-        assert!(*e == a::array_item(array, i as i32), "Not iterating over array properly");
+        assert!(
+            *e == a::array_item(array, i as i32),
+            "Not iterating over array properly"
+        );
     }
     a::delete(array);
 }
@@ -959,8 +1108,14 @@ fn cjson_array_foreach_should_not_dereference_null_pointer() {
 fn cjson_get_object_item_should_get_object_items() {
     let _g = lock();
     let item = pj("{\"one\":1, \"Two\":2, \"tHree\":3}");
-    assert!(a::object_item(NULL, Some(b"test")).is_null(), "Failed to fail on NULL pointer.");
-    assert!(a::object_item(item, None).is_null(), "Failed to fail on NULL string.");
+    assert!(
+        a::object_item(NULL, Some(b"test")).is_null(),
+        "Failed to fail on NULL pointer."
+    );
+    assert!(
+        a::object_item(item, None).is_null(),
+        "Failed to fail on NULL string."
+    );
     let found = a::object_item(item, Some(b"one"));
     assert!(!found.is_null(), "Failed to find first item.");
     assert_double(a::value_double(found), 1.0);
@@ -970,7 +1125,10 @@ fn cjson_get_object_item_should_get_object_items() {
     let found = a::object_item(item, Some(b"three"));
     assert!(!found.is_null(), "Failed to find item.");
     assert_double(a::value_double(found), 3.0);
-    assert!(a::object_item(item, Some(b"four")).is_null(), "Should not find something that isn't there.");
+    assert!(
+        a::object_item(item, Some(b"four")).is_null(),
+        "Should not find something that isn't there."
+    );
     a::delete(item);
 }
 
@@ -978,8 +1136,14 @@ fn cjson_get_object_item_should_get_object_items() {
 fn cjson_get_object_item_case_sensitive_should_get_object_items() {
     let _g = lock();
     let item = pj("{\"one\":1, \"Two\":2, \"tHree\":3}");
-    assert!(a::object_item_cs(NULL, Some(b"test")).is_null(), "Failed to fail on NULL pointer.");
-    assert!(a::object_item_cs(item, None).is_null(), "Failed to fail on NULL string.");
+    assert!(
+        a::object_item_cs(NULL, Some(b"test")).is_null(),
+        "Failed to fail on NULL pointer."
+    );
+    assert!(
+        a::object_item_cs(item, None).is_null(),
+        "Failed to fail on NULL string."
+    );
     let found = a::object_item_cs(item, Some(b"one"));
     assert!(!found.is_null(), "Failed to find first item.");
     assert_double(a::value_double(found), 1.0);
@@ -989,7 +1153,10 @@ fn cjson_get_object_item_case_sensitive_should_get_object_items() {
     let found = a::object_item_cs(item, Some(b"tHree"));
     assert!(!found.is_null(), "Failed to find item.");
     assert_double(a::value_double(found), 3.0);
-    assert!(a::object_item_cs(item, Some(b"One")).is_null(), "Should not find something that isn't there.");
+    assert!(
+        a::object_item_cs(item, Some(b"One")).is_null(),
+        "Should not find something that isn't there."
+    );
     a::delete(item);
 }
 
@@ -1136,34 +1303,51 @@ fn extra_duplicate_should_stop_at_the_circular_limit_without_a_cycle() {
 /// `NESTING_LIMIT` deep, duplicate an array nested `CIRCULAR_LIMIT` deep, delete both. `run.py --stage 2`
 /// runs it with `cargo test --release`; debug builds ignore it (their frames are several times larger).
 #[test]
-#[cfg_attr(debug_assertions, ignore = "release only: run.py --stage 2 runs it with --release (RULEBOOK D10)")]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release only: run.py --stage 2 runs it with --release (RULEBOOK D10)"
+)]
 fn extra_release_build_reaches_the_limits_on_a_2_mib_stack() {
     let _g = lock();
     std::thread::scope(|s| {
-        let t = std::thread::Builder::new().stack_size(2 << 20).spawn_scoped(s, || {
-            let mut text = vec![b'['; a::NESTING_LIMIT];
-            text.extend(vec![b']'; a::NESTING_LIMIT]);
-            let doc = a::parse(Some(&text)).item;
-            assert!(!doc.is_null(), "a document nested NESTING_LIMIT deep must parse");
-            assert_eq!(a::print_unformatted(doc).map(|p| p.bytes().to_vec()), Some(text.clone()));
-            assert!(a::print(doc).is_some());
-            a::delete(doc);
-            let mut deeper = vec![b'['; a::NESTING_LIMIT + 1];
-            deeper.extend(vec![b']'; a::NESTING_LIMIT + 1]);
-            assert!(a::parse(Some(&deeper)).item.is_null(), "one level more must not parse");
+        let t = std::thread::Builder::new()
+            .stack_size(2 << 20)
+            .spawn_scoped(s, || {
+                let mut text = vec![b'['; a::NESTING_LIMIT];
+                text.extend(vec![b']'; a::NESTING_LIMIT]);
+                let doc = a::parse(Some(&text)).item;
+                assert!(
+                    !doc.is_null(),
+                    "a document nested NESTING_LIMIT deep must parse"
+                );
+                assert_eq!(
+                    a::print_unformatted(doc).map(|p| p.bytes().to_vec()),
+                    Some(text.clone())
+                );
+                assert!(a::print(doc).is_some());
+                a::delete(doc);
+                let mut deeper = vec![b'['; a::NESTING_LIMIT + 1];
+                deeper.extend(vec![b']'; a::NESTING_LIMIT + 1]);
+                assert!(
+                    a::parse(Some(&deeper)).item.is_null(),
+                    "one level more must not parse"
+                );
 
-            let root = a::create_array();
-            let mut cur = root;
-            for _ in 1..a::CIRCULAR_LIMIT {
-                let next = a::create_array();
-                assert!(a::add_item_to_array(cur, next));
-                cur = next;
-            }
-            let copy = a::duplicate(root, true);
-            assert!(!copy.is_null(), "an array nested CIRCULAR_LIMIT deep must be duplicated");
-            a::delete(copy);
-            a::delete(root);
-        });
+                let root = a::create_array();
+                let mut cur = root;
+                for _ in 1..a::CIRCULAR_LIMIT {
+                    let next = a::create_array();
+                    assert!(a::add_item_to_array(cur, next));
+                    cur = next;
+                }
+                let copy = a::duplicate(root, true);
+                assert!(
+                    !copy.is_null(),
+                    "an array nested CIRCULAR_LIMIT deep must be duplicated"
+                );
+                a::delete(copy);
+                a::delete(root);
+            });
         t.unwrap().join().unwrap();
     });
 }
@@ -1201,24 +1385,57 @@ fn cjson_detach_item_via_pointer_should_detach_items() {
     }
 
     // detach in the middle (list[1])
-    assert!(a::detach_item_via_pointer(parent, list[1]) == list[1], "Failed to detach in the middle.");
-    assert!(a::prev(list[1]).is_null() && a::next(list[1]).is_null(), "Didn't set pointers of detached item to NULL.");
+    assert!(
+        a::detach_item_via_pointer(parent, list[1]) == list[1],
+        "Failed to detach in the middle."
+    );
+    assert!(
+        a::prev(list[1]).is_null() && a::next(list[1]).is_null(),
+        "Didn't set pointers of detached item to NULL."
+    );
     assert!(a::next(list[0]) == list[2] && a::prev(list[2]) == list[0]);
 
     // detach beginning (list[0])
-    assert!(a::detach_item_via_pointer(parent, list[0]) == list[0], "Failed to detach beginning.");
-    assert!(a::prev(list[0]).is_null() && a::next(list[0]).is_null(), "Didn't set pointers of detached item to NULL.");
-    assert!(a::prev(list[2]) == list[3] && a::child(parent) == list[2], "Didn't set the new beginning.");
+    assert!(
+        a::detach_item_via_pointer(parent, list[0]) == list[0],
+        "Failed to detach beginning."
+    );
+    assert!(
+        a::prev(list[0]).is_null() && a::next(list[0]).is_null(),
+        "Didn't set pointers of detached item to NULL."
+    );
+    assert!(
+        a::prev(list[2]) == list[3] && a::child(parent) == list[2],
+        "Didn't set the new beginning."
+    );
 
     // detach end (list[3])
-    assert!(a::detach_item_via_pointer(parent, list[3]) == list[3], "Failed to detach end.");
-    assert!(a::prev(list[3]).is_null() && a::next(list[3]).is_null(), "Didn't set pointers of detached item to NULL.");
-    assert!(a::next(list[2]).is_null() && a::child(parent) == list[2], "Didn't set the new end");
+    assert!(
+        a::detach_item_via_pointer(parent, list[3]) == list[3],
+        "Failed to detach end."
+    );
+    assert!(
+        a::prev(list[3]).is_null() && a::next(list[3]).is_null(),
+        "Didn't set pointers of detached item to NULL."
+    );
+    assert!(
+        a::next(list[2]).is_null() && a::child(parent) == list[2],
+        "Didn't set the new end"
+    );
 
     // detach single item (list[2])
-    assert!(a::detach_item_via_pointer(parent, list[2]) == list[2], "Failed to detach single item.");
-    assert!(a::prev(list[2]).is_null() && a::next(list[2]).is_null(), "Didn't set pointers of detached item to NULL.");
-    assert!(a::child(parent).is_null(), "Child of the parent wasn't set to NULL.");
+    assert!(
+        a::detach_item_via_pointer(parent, list[2]) == list[2],
+        "Failed to detach single item."
+    );
+    assert!(
+        a::prev(list[2]).is_null() && a::next(list[2]).is_null(),
+        "Didn't set pointers of detached item to NULL."
+    );
+    assert!(
+        a::child(parent).is_null(),
+        "Child of the parent wasn't set to NULL."
+    );
 
     for l in list {
         a::delete(l);
@@ -1259,7 +1476,10 @@ fn cjson_detach_item_via_pointer_should_return_null_if_item_prev_is_null() {
     let stray = a::create_null();
     assert!(a::add_item_to_array(parent, l0));
     assert!(a::prev(stray).is_null());
-    assert!(a::detach_item_via_pointer(parent, stray).is_null(), "a node in no list must not be detached");
+    assert!(
+        a::detach_item_via_pointer(parent, stray).is_null(),
+        "a node in no list must not be detached"
+    );
     assert!(a::child(parent) == l0 && a::prev(l0) == l0 && a::next(l0).is_null());
     a::delete(stray);
     a::delete(parent);
@@ -1275,8 +1495,14 @@ fn cjson_detach_item_via_pointer_should_return_null_if_item_prev_is_null() {
     a::add_item_to_array(parent, l1);
     a::raw_set_prev(l0, NULL);
     a::raw_set_prev(l1, NULL);
-    assert!(a::detach_item_via_pointer(parent, l1).is_null(), "Failed to detach in the middle.");
-    assert!(a::detach_item_via_pointer(parent, l0) == l0, "Failed to detach in the middle.");
+    assert!(
+        a::detach_item_via_pointer(parent, l1).is_null(),
+        "Failed to detach in the middle."
+    );
+    assert!(
+        a::detach_item_via_pointer(parent, l0) == l0,
+        "Failed to detach in the middle."
+    );
     a::delete(l0);
     a::delete(parent);
 }
@@ -1329,7 +1555,10 @@ fn cjson_replace_item_in_object_should_preserve_name() {
     let replacement = a::create_number(2.0);
     assert!(!replacement.is_null());
 
-    assert!(a::add_item_to_object(root, Some(b"child"), child), "add item to object failed");
+    assert!(
+        a::add_item_to_object(root, Some(b"child"), child),
+        "add item to object failed"
+    );
     a::replace_item_in_object(root, Some(b"child"), replacement);
 
     assert!(a::child(root) == replacement);
@@ -1487,8 +1716,15 @@ fn ensure_should_fail_on_failed_realloc() {
     let printed = a::print_buffered(item, 10, false);
     let st = a::hook_stats();
     a::hooks_off();
-    assert!(printed.is_none(), "Ensure didn't fail with failing realloc.");
-    assert_eq!((st.allocs, st.frees, st.bytes), (2, 1, 10), "growth = allocate(new), free(old) on failure");
+    assert!(
+        printed.is_none(),
+        "Ensure didn't fail with failing realloc."
+    );
+    assert_eq!(
+        (st.allocs, st.frees, st.bytes),
+        (2, 1, 10),
+        "growth = allocate(new), free(old) on failure"
+    );
     a::delete(item);
 }
 
@@ -1499,7 +1735,11 @@ fn skip_utf8_bom_should_skip_bom() {
     let r = a::parse_with_opts(Some(b"\xEF\xBB\xBF{}"), false, true);
     assert!(!r.item.is_null());
     assert!(a::is_object(r.item));
-    assert_eq!(r.end, Some(5), "BOM (3 bytes) and the object (2 bytes) are consumed");
+    assert_eq!(
+        r.end,
+        Some(5),
+        "BOM (3 bytes) and the object (2 bytes) are consumed"
+    );
     a::delete(r.item);
 }
 
@@ -1540,7 +1780,11 @@ fn cjson_create_string_reference_should_create_a_string_reference() {
     const S: &std::ffi::CStr = c"I am a string!";
     let r = a::create_string_reference(Some(S));
     assert_eq!(a::value_string(r).as_deref(), Some(S.to_bytes()));
-    assert_eq!(a::value_string_addr(r), S.as_ptr() as usize, "the reference must not copy");
+    assert_eq!(
+        a::value_string_addr(r),
+        S.as_ptr() as usize,
+        "the reference must not copy"
+    );
     assert_eq!(a::IS_REFERENCE | a::STRING, a::type_flags(r));
     a::delete(r);
 }
@@ -1584,8 +1828,14 @@ fn cjson_add_item_to_object_or_array_should_not_add_itself() {
     let _g = lock();
     let object = a::create_object();
     let array = a::create_array();
-    assert!(!a::add_item_to_object(object, Some(b"key"), object), "add an object to itself should fail");
-    assert!(!a::add_item_to_array(array, array), "add an array to itself should fail");
+    assert!(
+        !a::add_item_to_object(object, Some(b"key"), object),
+        "add an object to itself should fail"
+    );
+    assert!(
+        !a::add_item_to_array(array, array),
+        "add an array to itself should fail"
+    );
     a::delete(object);
     a::delete(array);
 }
@@ -1636,7 +1886,8 @@ fn cjson_set_valuestring_to_object_should_not_leak_memory() {
     let stringvalue = "valuestring could be changed safely";
     let reference_valuestring = c"reference item should be freed by yourself";
     let short_valuestring = "shorter valuestring";
-    let long_valuestring = "new valuestring which much longer than previous should be changed safely";
+    let long_valuestring =
+        "new valuestring which much longer than previous should be changed safely";
     let item1 = a::create_string(Some(stringvalue.as_bytes()));
     let item2 = a::create_string_reference(Some(reference_valuestring));
 
@@ -1644,20 +1895,46 @@ fn cjson_set_valuestring_to_object_should_not_leak_memory() {
     a::add_item_to_object(root, Some(b"two"), item2);
 
     let ptr1 = a::value_string_addr(item1);
-    let rv = a::set_valuestring(a::object_item(root, Some(b"one")), Some(short_valuestring.as_bytes()));
+    let rv = a::set_valuestring(
+        a::object_item(root, Some(b"one")),
+        Some(short_valuestring.as_bytes()),
+    );
     assert!(rv.is_some());
-    assert_eq!(ptr1, a::value_string_addr(item1), "new valuestring shorter than old should not reallocate memory");
-    assert_eq!(vstr(a::object_item(root, Some(b"one"))).as_deref(), Some(short_valuestring));
+    assert_eq!(
+        ptr1,
+        a::value_string_addr(item1),
+        "new valuestring shorter than old should not reallocate memory"
+    );
+    assert_eq!(
+        vstr(a::object_item(root, Some(b"one"))).as_deref(),
+        Some(short_valuestring)
+    );
 
     // we needn't to free the original valuestring manually
     let ptr1 = a::value_string_addr(item1);
-    let rv = a::set_valuestring(a::object_item(root, Some(b"one")), Some(long_valuestring.as_bytes()));
+    let rv = a::set_valuestring(
+        a::object_item(root, Some(b"one")),
+        Some(long_valuestring.as_bytes()),
+    );
     assert!(rv.is_some());
-    assert_ne!(ptr1, a::value_string_addr(item1), "new valuestring longer than old should reallocate memory");
-    assert_eq!(vstr(a::object_item(root, Some(b"one"))).as_deref(), Some(long_valuestring));
+    assert_ne!(
+        ptr1,
+        a::value_string_addr(item1),
+        "new valuestring longer than old should reallocate memory"
+    );
+    assert_eq!(
+        vstr(a::object_item(root, Some(b"one"))).as_deref(),
+        Some(long_valuestring)
+    );
 
-    let rv = a::set_valuestring(a::object_item(root, Some(b"two")), Some(long_valuestring.as_bytes()));
-    assert!(rv.is_none(), "valuestring of reference object should not be changed");
+    let rv = a::set_valuestring(
+        a::object_item(root, Some(b"two")),
+        Some(long_valuestring.as_bytes()),
+    );
+    assert!(
+        rv.is_none(),
+        "valuestring of reference object should not be changed"
+    );
     assert_eq!(
         vstr(a::object_item(root, Some(b"two"))).as_deref(),
         Some(reference_valuestring.to_str().unwrap())
@@ -1731,8 +2008,14 @@ fn cjson_parse_big_numbers_should_not_report_error() {
     let invalid2 = "{\"a\": true, \"b\": [ null,99999999999999999999999999999999999999999999999E1234567890e1234567]}";
     assert!(!v1.is_null());
     assert!(!v2.is_null());
-    assert!(pj(invalid1).is_null(), "Invalid big number JSONs should not be parsed.");
-    assert!(pj(invalid2).is_null(), "Invalid big number JSONs should not be parsed.");
+    assert!(
+        pj(invalid1).is_null(),
+        "Invalid big number JSONs should not be parsed."
+    );
+    assert!(
+        pj(invalid2).is_null(),
+        "Invalid big number JSONs should not be parsed."
+    );
     a::delete(v1);
     a::delete(v2);
 }
@@ -1744,11 +2027,17 @@ fn cjson_parse_big_numbers_should_not_report_error() {
 #[test]
 fn parse_with_opts_should_handle_null() {
     let _g = lock();
-    assert!(a::parse_with_opts(None, false, true).item.is_null(), "Failed to handle NULL input.");
+    assert!(
+        a::parse_with_opts(None, false, true).item.is_null(),
+        "Failed to handle NULL input."
+    );
     let item = a::parse_with_opts(Some(b"{}"), false, false).item;
     assert!(!item.is_null(), "Failed to handle NULL error pointer.");
     a::delete(item);
-    assert!(a::parse_with_opts(None, false, false).item.is_null(), "Failed to handle both NULL.");
+    assert!(
+        a::parse_with_opts(None, false, false).item.is_null(),
+        "Failed to handle both NULL."
+    );
     assert!(
         a::parse_with_opts(Some(b"{"), false, false).item.is_null(),
         "Failed to handle NULL error pointer with parse error."
@@ -1919,12 +2208,28 @@ fn cjson_compare_should_compare_arrays() {
     let _g = lock();
     assert!(compare_from_string("[]", "[]", true));
     assert!(compare_from_string("[]", "[]", false));
-    assert!(compare_from_string("[false,true,null,42,\"string\",[],{}]", "[false, true, null, 42, \"string\", [], {}]", true));
-    assert!(compare_from_string("[false,true,null,42,\"string\",[],{}]", "[false, true, null, 42, \"string\", [], {}]", false));
+    assert!(compare_from_string(
+        "[false,true,null,42,\"string\",[],{}]",
+        "[false, true, null, 42, \"string\", [], {}]",
+        true
+    ));
+    assert!(compare_from_string(
+        "[false,true,null,42,\"string\",[],{}]",
+        "[false, true, null, 42, \"string\", [], {}]",
+        false
+    ));
     assert!(compare_from_string("[[[1], 2]]", "[[[1], 2]]", true));
     assert!(compare_from_string("[[[1], 2]]", "[[[1], 2]]", false));
-    assert!(!compare_from_string("[true,null,42,\"string\",[],{}]", "[false, true, null, 42, \"string\", [], {}]", true));
-    assert!(!compare_from_string("[true,null,42,\"string\",[],{}]", "[false, true, null, 42, \"string\", [], {}]", false));
+    assert!(!compare_from_string(
+        "[true,null,42,\"string\",[],{}]",
+        "[false, true, null, 42, \"string\", [], {}]",
+        true
+    ));
+    assert!(!compare_from_string(
+        "[true,null,42,\"string\",[],{}]",
+        "[false, true, null, 42, \"string\", [], {}]",
+        false
+    ));
     // Arrays that are a prefix of another array
     assert!(!compare_from_string("[1,2,3]", "[1,2]", true));
     assert!(!compare_from_string("[1,2,3]", "[1,2]", false));
@@ -1956,8 +2261,16 @@ fn cjson_compare_should_compare_objects() {
         false
     ));
     // test objects that are a subset of each other
-    assert!(!compare_from_string("{\"one\": 1, \"two\": 2}", "{\"one\": 1, \"two\": 2, \"three\": 3}", true));
-    assert!(!compare_from_string("{\"one\": 1, \"two\": 2}", "{\"one\": 1, \"two\": 2, \"three\": 3}", false));
+    assert!(!compare_from_string(
+        "{\"one\": 1, \"two\": 2}",
+        "{\"one\": 1, \"two\": 2, \"three\": 3}",
+        true
+    ));
+    assert!(!compare_from_string(
+        "{\"one\": 1, \"two\": 2}",
+        "{\"one\": 1, \"two\": 2, \"three\": 3}",
+        false
+    ));
 }
 
 // =====================================================================================================================
@@ -2312,7 +2625,10 @@ fn cjson_minify_should_not_overflow_buffer() {
 #[test]
 fn cjson_minify_should_remove_single_line_comments() {
     let _g = lock();
-    assert_eq!("{}", minified(b"{// this is {} \"some kind\" of [] comment /*, don't you see\n}"));
+    assert_eq!(
+        "{}",
+        minified(b"{// this is {} \"some kind\" of [] comment /*, don't you see\n}")
+    );
 }
 
 #[test]
@@ -2324,7 +2640,10 @@ fn cjson_minify_should_remove_spaces() {
 #[test]
 fn cjson_minify_should_remove_multiline_comments() {
     let _g = lock();
-    assert_eq!("{}", minified(b"{/* this is\n a /* multi\n //line \n {comment \"\\\" */}"));
+    assert_eq!(
+        "{}",
+        minified(b"{/* this is\n a /* multi\n //line \n {comment \"\\\" */}")
+    );
 }
 
 #[test]
@@ -2474,7 +2793,9 @@ fn supports_full_hd(monitor: &str) -> bool {
             status = false;
             break;
         }
-        if compare_double(a::value_double(width), 1920.0) && compare_double(a::value_double(height), 1080.0) {
+        if compare_double(a::value_double(width), 1920.0)
+            && compare_double(a::value_double(height), 1080.0)
+        {
             status = true;
             break;
         }
@@ -2545,12 +2866,23 @@ fn test_apply_patch(test: Item) -> bool {
     let successful;
     if !error_element.is_null() {
         // excepting an error
-        assert!(0 != a::apply_patches_cs(object, patch), "Test didn't fail as it's supposed to.");
+        assert!(
+            0 != a::apply_patches_cs(object, patch),
+            "Test didn't fail as it's supposed to."
+        );
         successful = true;
     } else {
         // apply the patch
-        assert_eq!(0, a::apply_patches_cs(object, patch), "Failed to apply patches.");
-        successful = if expected.is_null() { true } else { a::compare(object, expected, true) };
+        assert_eq!(
+            0,
+            a::apply_patches_cs(object, patch),
+            "Failed to apply patches."
+        );
+        successful = if expected.is_null() {
+            true
+        } else {
+            a::compare(object, expected, true)
+        };
     }
     a::delete(object);
     println!("{}", if successful { "OK" } else { "FAILED" });
@@ -2578,11 +2910,22 @@ fn test_generate_test(test: Item) -> bool {
     assert!(!patch.is_null(), "Failed to generate patches.");
     println!("{}", pf(patch).unwrap_or_default());
     // apply the generated patch
-    assert_eq!(0, a::apply_patches_cs(object, patch), "Failed to apply generated patch.");
+    assert_eq!(
+        0,
+        a::apply_patches_cs(object, patch),
+        "Failed to apply generated patch."
+    );
     let successful = a::compare(object, expected, true);
     a::delete(patch);
     a::delete(object);
-    println!("{}", if successful { "generated patch: OK" } else { "generated patch: FAILED" });
+    println!(
+        "{}",
+        if successful {
+            "generated patch: OK"
+        } else {
+            "generated patch: FAILED"
+        }
+    );
     successful
 }
 
@@ -2621,12 +2964,20 @@ fn cjson_utils_should_pass_json_patch_test_cjson_utils_tests() {
 
 const MERGES: [[&str; 3]; 15] = [
     ["{\"a\":\"b\"}", "{\"a\":\"c\"}", "{\"a\":\"c\"}"],
-    ["{\"a\":\"b\"}", "{\"b\":\"c\"}", "{\"a\":\"b\",\"b\":\"c\"}"],
+    [
+        "{\"a\":\"b\"}",
+        "{\"b\":\"c\"}",
+        "{\"a\":\"b\",\"b\":\"c\"}",
+    ],
     ["{\"a\":\"b\"}", "{\"a\":null}", "{}"],
     ["{\"a\":\"b\",\"b\":\"c\"}", "{\"a\":null}", "{\"b\":\"c\"}"],
     ["{\"a\":[\"b\"]}", "{\"a\":\"c\"}", "{\"a\":\"c\"}"],
     ["{\"a\":\"c\"}", "{\"a\":[\"b\"]}", "{\"a\":[\"b\"]}"],
-    ["{\"a\":{\"b\":\"c\"}}", "{\"a\":{\"b\":\"d\",\"c\":null}}", "{\"a\":{\"b\":\"d\"}}"],
+    [
+        "{\"a\":{\"b\":\"c\"}}",
+        "{\"a\":{\"b\":\"d\",\"c\":null}}",
+        "{\"a\":{\"b\":\"d\"}}",
+    ],
     ["{\"a\":[{\"b\":\"c\"}]}", "{\"a\":[1]}", "{\"a\":[1]}"],
     ["[\"a\",\"b\"]", "[\"c\",\"d\"]", "[\"c\",\"d\"]"],
     ["{\"a\":\"b\"}", "[\"c\"]", "[\"c\"]"],
@@ -2634,7 +2985,11 @@ const MERGES: [[&str; 3]; 15] = [
     ["{\"a\":\"foo\"}", "\"bar\"", "\"bar\""],
     ["{\"e\":null}", "{\"a\":1}", "{\"e\":null,\"a\":1}"],
     ["[1,2]", "{\"a\":\"b\",\"c\":null}", "{\"a\":\"b\"}"],
-    ["{}", "{\"a\":{\"bb\":{\"ccc\":null}}}", "{\"a\":{\"bb\":{}}}"],
+    [
+        "{}",
+        "{\"a\":{\"bb\":{\"ccc\":null}}}",
+        "{\"a\":{\"bb\":{}}}",
+    ],
 ];
 
 #[test]
@@ -2835,7 +3190,10 @@ mod locale_probe {
 
     /// Sets the first of `names` the OS accepts; returns its name.
     pub fn set_first(category: c_int, names: &[&'static CStr]) -> Option<&'static CStr> {
-        names.iter().copied().find(|n| !unsafe { setlocale(category, n.as_ptr()) }.is_null())
+        names
+            .iter()
+            .copied()
+            .find(|n| !unsafe { setlocale(category, n.as_ptr()) }.is_null())
     }
 
     pub fn reset(category: c_int) {
@@ -2854,7 +3212,13 @@ fn locale_numeric_comma_locale_still_parses_and_prints_a_dot_d3() {
         skipped("D3 comma-locale check: the Faithful port follows libc (feature `locales`)");
         return;
     }
-    let names = [c"de_DE.UTF-8", c"fr_FR.UTF-8", c"ru_RU.UTF-8", c"nl_NL.UTF-8", c"de_DE.ISO8859-1"];
+    let names = [
+        c"de_DE.UTF-8",
+        c"fr_FR.UTF-8",
+        c"ru_RU.UTF-8",
+        c"nl_NL.UTF-8",
+        c"de_DE.ISO8859-1",
+    ];
     let Some(used) = lp::set_first(lp::LC_NUMERIC, &names) else {
         skipped("D3 comma-locale check: the OS has no comma locale");
         return;
@@ -2869,9 +3233,20 @@ fn locale_numeric_comma_locale_still_parses_and_prints_a_dot_d3() {
     lp::reset(lp::LC_NUMERIC);
     assert!(kind_ok, "parse of 1.5 failed under {used:?}");
     assert_eq!(v, 1.5, "D3: 1.5 must parse to 1.5 under {used:?}");
-    assert_eq!(printed.as_deref(), Some(&b"1.5"[..]), "D3: 1.5 must print as 1.5 under {used:?}");
-    assert_eq!(arr_printed.as_deref(), Some(&b"[1.5,-50]"[..]), "D3: array print under {used:?}");
-    assert!(comma_is_null || a::value_double(comma) == 1.0, "D3: `1,5` is not a number under {used:?}");
+    assert_eq!(
+        printed.as_deref(),
+        Some(&b"1.5"[..]),
+        "D3: 1.5 must print as 1.5 under {used:?}"
+    );
+    assert_eq!(
+        arr_printed.as_deref(),
+        Some(&b"[1.5,-50]"[..]),
+        "D3: array print under {used:?}"
+    );
+    assert!(
+        comma_is_null || a::value_double(comma) == 1.0,
+        "D3: `1,5` is not a number under {used:?}"
+    );
     a::delete(item);
     a::delete(arr);
     a::delete(comma);
@@ -2900,10 +3275,19 @@ fn locale_ctype_latin1_keys_are_not_case_equal_d19() {
     let y = pb(b"{\"\xE9\":1}");
     let eq = a::compare(x, y, false);
     lp::reset(lp::LC_CTYPE);
-    assert!(hit_e9.is_null(), "D19: key \\xE9 must not match \\xC9 under {used:?}");
+    assert!(
+        hit_e9.is_null(),
+        "D19: key \\xE9 must not match \\xC9 under {used:?}"
+    );
     assert!(!hit_c9.is_null(), "exact key must match under {used:?}");
-    assert!(!hit_e.is_null(), "ASCII case-insensitive match must still work under {used:?}");
-    assert!(!eq, "D19: {{\"\\xC9\":1}} and {{\"\\xE9\":1}} must not compare equal under {used:?}");
+    assert!(
+        !hit_e.is_null(),
+        "ASCII case-insensitive match must still work under {used:?}"
+    );
+    assert!(
+        !eq,
+        "D19: {{\"\\xC9\":1}} and {{\"\\xE9\":1}} must not compare equal under {used:?}"
+    );
     a::delete(o);
     a::delete(x);
     a::delete(y);
@@ -2936,8 +3320,14 @@ fn generate_patches_with_a_failing_path_buffer_and_nothing_to_write() {
     a::hooks_on(2);
     let p = a::generate_patches(from, to);
     a::hooks_off();
-    assert!(!p.is_null(), "the array exists (allocation 1); the failed path buffer is never written");
-    assert_eq!(a::print_unformatted(p).unwrap().bytes(), b"[{\"op\":\"add\",\"path\":\"/-\",\"value\":1}]");
+    assert!(
+        !p.is_null(),
+        "the array exists (allocation 1); the failed path buffer is never written"
+    );
+    assert_eq!(
+        a::print_unformatted(p).unwrap().bytes(),
+        b"[{\"op\":\"add\",\"path\":\"/-\",\"value\":1}]"
+    );
     a::delete(p);
     a::delete(from);
     a::delete(to);
@@ -2973,7 +3363,11 @@ fn apply_patches_test_with_null_path_is_status_1() {
 fn apply_patches_copy_with_null_from_is_status_5() {
     let _g = lock();
     let doc = pb(b"{\"a\":1}");
-    let patches = patch_with(&[(b"op", None, Some(b"copy")), (b"path", None, Some(b"/b")), (b"from", None, None)]);
+    let patches = patch_with(&[
+        (b"op", None, Some(b"copy")),
+        (b"path", None, Some(b"/b")),
+        (b"from", None, None),
+    ]);
     assert_eq!(a::apply_patches(doc, patches), 5);
     a::delete(patches);
     a::delete(doc);
