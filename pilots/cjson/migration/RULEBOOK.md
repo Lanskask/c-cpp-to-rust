@@ -225,7 +225,8 @@ pub fn init_hooks(hooks: Option<std::sync::Arc<dyn AllocHooks>>); // process-glo
 ### 6.5 Fields, macros and the rest
 
 - `set_valueint` / `set_valuedouble` write one field each with no coupling (C callers write the public fields; Q3:
-  a `valuedouble` write without `valueint` gets the `%g` path). Writes to `type` and to links are not offered (D14);
+  a `valuedouble` write without `valueint` gets the `%g` path; user accepted 2026-10-11). Writes to `type` and to
+  links are not offered (D14);
   the type changes only through the library and `set_bool_value`.
 - The header macros as in §6.0 item 7; `cJSON_ArrayForEach` is a children iterator.
 - `cJSON_Utils`: patch functions return `Result<(), PatchError>` with `PatchError::code()` (§7); `ApplyPatches`
