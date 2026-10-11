@@ -107,6 +107,21 @@ replacement is written **before** Stage 2 touches `src/`, and validated on the F
 - Commit the adapter, driver and tests in one commit before the Stage 2 implementer starts. From then on
   the deny-rules in `assets/settings.json` protect `tests/upstream.rs` and `examples/`.
 
+## 5a. What the corpus never feeds (Stage 2 review lesson, cJSON)
+
+A corpus of parsed files only reaches states the parser builds. The cJSON Stage 2 review found five BLOCKs on paths
+the Judge never fed (WORK-LOG 39). For every Pilot, list each class below in RUN-NOTES as covered (where) or
+not testable (why), before the Stage 2 implementer starts:
+
+| Class                           | Why the corpus misses it                          | Cover with                                           |
+|---------------------------------|---------------------------------------------------|------------------------------------------------------|
+| Allocation failure              | the driver's allocator never fails                | allocator hooks: counting trace, then fail-the-Nth   |
+| Absent members of built values  | the parser never makes a NULL string or key       | translated tests that build the value through the API |
+| Input without a trailing NUL    | the adapter appends a NUL, so C and Rust both stop | an adapter entry that passes the slice as it is      |
+
+Where C writes through NULL (UB) the abort cannot be compared: record it as a Deviation row and pin only the
+C-defined neighbours. Run the allocator probes on a subset of inputs and time them (§6).
+
 ## 6. Proving a Judge can fail (every new Pilot)
 
 A Judge that passes everything is indistinguishable from a broken one. For each Pilot, write one
@@ -125,6 +140,8 @@ and the translated tests plus incremental cargo about 4 s.
   survived there, and for the final all-sets confirmation. A mutant the upstream/translated tests catch never
   reaches the corpus diff.
 - **Time the first Gate run of a stage** (`time make ...`) and put the number in RUN-NOTES before planning more runs.
+- **A crash is red too.** A translated test that aborts (SIGABRT from an allocator probe) stops the whole test binary,
+  so you see a crash, not a list. Confirm the rest with `cargo test -- --skip <names>`.
 - Do not run the Judge under PyPy: the corpus step is process spawning, and PyPy was slower (76 s against 50 s).
 
 ## 7. Rules for untrusted Pilot code

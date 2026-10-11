@@ -223,6 +223,8 @@ CHAIN = (
                     "`rust/tests/adapter/mod.rs` (the only file that calls the crate), `rust/examples/dump.rs`, "
                     "`rust/tests/upstream.rs` (`references/judge.md` §5)",
                     "`run.py --stage 2` runs `cargo test`, then `harness.py` with the C driver against the Rust one",
+                    "list allocation failure, NULL members and unterminated input as covered or not testable "
+                    "(`references/judge.md` §5a)",
                 ),
             ),
             Task(

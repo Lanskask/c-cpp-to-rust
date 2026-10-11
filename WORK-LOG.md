@@ -646,3 +646,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Spend:** SPEND.md row `E5-patch-review`.
 - **Next:** the Translation session applies revision 2: settle the ledger, `mark 06 todo`, RULEBOOK commit, Judge
   commit, `mark 06 in_progress`, red run (expect SIGABRT on BLOCK 1/2 tests).
+
+## 40. Skill files: lessons of the cJSON Stage 2 review (decision 53)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5, Skill-editing session, on the user's request; no Translation-session file touched
+- **Done:** `judge.md` section 5a (three classes the corpus cannot build) and the "a crash is red" note;
+  `review-prompt.md` check 1; `SKILL.md` step 4.4 (`--allow-lint`) and a rule for a `RULE`/`GAP` mid-fan-out
+  (ledger, `mark todo`, §12 row, Judge commit, red run); ticket 05 how-step in `tickets.py`.
+- **Not done:** the cJSON RULEBOOK/Judge changes of `stage2_review_patch.md` (Translation session).

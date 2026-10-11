@@ -20,7 +20,9 @@ Part: {part_id}   Stage: {stage}
 Check, in order, and report every finding:
 1. Behaviour the Judge cannot see. For each branch of the original C, name the harness input or
    translated test that exercises it, or report it as UNCOVERED with a concrete input (bytes) that would.
-   Byte-class checks and boundaries (< vs <=, off-by-one, empty input, NUL, max length) first.
+   Byte-class checks and boundaries (< vs <=, off-by-one, empty input, NUL, max length) first. Then the states the
+   corpus cannot build (judge.md §5a): a failing allocation at each allocation site, a NULL string or key in a
+   value built through the API, an input without a trailing NUL.
 2. Rulebook conformance: §6 API exactly (Stage 2), §2 overrides, §3 feature guards at the same places
    as the C #ifdefs, §7 guard kinds, §9 quirks kept and marked, §8 deviations implemented as written and
    marked. A deviation or quirk that is in the code but not in the rulebook is a finding.

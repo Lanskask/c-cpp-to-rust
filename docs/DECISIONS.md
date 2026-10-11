@@ -275,3 +275,10 @@ Each entry: decision, reason, who/what it came from. Newest last.
     the LLM was doing; a checkbox title alone told neither of them how. How-steps point to the existing reference
     section instead of repeating it, so SKILL.md and judge.md stay the single source; the brief is a claim for
     orientation, and `parts.tsv`, `gate-passed.tsv` and git stay the resume truth.
+
+53. **Judge section 5a: three input classes the corpus cannot build must be listed as covered or not testable before
+    Stage 2 starts.** Allocation failure, NULL members of API-built values, and input without a trailing NUL. Also: the
+    gate gets `--allow-lint` when the crate root carries a rulebook-approved `#![allow]`, a mid-fan-out `RULE`/`GAP`
+    follows a fixed order (ledger, `mark todo`, RULEBOOK + §12, Judge, red run), and a crash counts as red.
+    _Reason:_ the cJSON Stage 2 review found five BLOCKs on paths the 3881-input corpus never reached, and the first
+    recorded gate runs showed `allow fail` hidden by the baseline (WORK-LOG 39, `stage2_review_patch.md`).

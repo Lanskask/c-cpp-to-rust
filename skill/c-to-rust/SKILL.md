@@ -82,7 +82,9 @@ Done when every row is `done` or `stubbed` and `verify` passes.
    `references/judge.md` §5. The guard allows these writes while ticket 06 is not `in_progress`; commit them on their
    own, then `tickets.py mark 05 done`.
 3. Create `<ws>/migration/parts-stage2.tsv` (copy of `parts.tsv`, all `todo`, attempts 0, no commit).
-4. Run the loop of step 3 with `references/stage2-prompt.md`, gate `--stage 2`.
+4. Run the loop of step 3 with `references/stage2-prompt.md`, gate `--stage 2`. If the crate root carries a rulebook-
+   approved `#![allow(<lint>)]`, pass `--allow-lint <lint>` to every gate call; without it the `allow` check fails and
+   only the baseline hides it.
 
 Done when every Stage 2 row is `done` and the gate passes at Stage 2 for every feature set (PLAN §6).
 
@@ -106,6 +108,9 @@ next step.
   with `<ws>` as cwd still loads untrusted code (judge.md §7).
 - Analysis scripts for a Pilot go to `<ws>/experiments/` (docstring: the question and the answer; commit them). The
   repo-level `experiments/` belongs to the Skill-editing session and is read-only here.
+- A review `RULE` or `GAP` that arrives mid-fan-out: commit or revert the ledger first (`gate-passed.tsv`,
+  `parts*.tsv`; a gate rollback leaves them dirty), then `tickets.py mark 04 todo` (or 06), RULEBOOK commit with a §12
+  row, Judge commit, `mark ... in_progress`, red run on the old crate, then the implementer.
 - Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).
 - The rulebook and the Judge are read-only during a batch. Judge changes (new corpus inputs from a
   review `GAP`) are their own commit: `tickets.py mark 04 todo` (or 06), make and commit the change, mark it
