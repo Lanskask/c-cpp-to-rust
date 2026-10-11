@@ -705,3 +705,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Spend row and ticket 06 closing pending.
 - **Skill gaps:** guard.py blocks `cargo` Bash lines that name the crate's Cargo.toml together with `>` or `2>&1` (the
   implementer could not run its tests); `workqueue mark` / `git add` of parts-stage2.tsv in one line with a write marker.
+
+## 44. tinyjson ticket 01: Mapping, RULEBOOK drafted, waiting for Deviations approval
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor (inventory, depmap, tier, tickets); Opus 5.5 subagent (RULEBOOK, a942025159912bd0f)
+- **Done:** `tickets.py init`; inventory with `--exclude 'test/*' --exclude 'samples/*'` gave 42 symbols, 1 Part
+  (`src/tinyjson`, judgment), 0 cycles. RULEBOOK drafted: C++ rows CPP1-CPP36 (each with header line numbers), §8
+  D1-D16 all `proposed`. Spend row T1-mapping.
+- **Tells us:** the C++ route has template gaps (RUN-NOTES "Skill bugs" 1-4). The subagent's measured claims (GCC 16
+  test pass count, clang failure) are not re-verified.
+- **Next:** user approves or vetoes D1-D16 (D3 and D5 first: they decide what the Differential harness may compare);
+  then ticket 02.

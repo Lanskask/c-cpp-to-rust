@@ -1,0 +1,45 @@
+# engine: regex
+# cmd: inventory.py pilots/tinyjson/src --lang cpp --exclude 'test/*' --exclude 'samples/*' --out pilots/tinyjson/migration/inventory.tsv
+symbol	kind	file	lines	tags
+trim	function	src/tinyjson.h	29-40	
+U32ToU8	function	src/tinyjson.h	42-54	
+U8ToU32	function	src/tinyjson.h	56-68	
+json_t	enum	src/tinyjson.h	70-80	
+json	record	src/tinyjson.h	87-153	long
+json::json	function	src/tinyjson.h	158-158	
+json::json	function	src/tinyjson.h	160-161	malloc
+json::json	function	src/tinyjson.h	163-164	malloc
+json::json	function	src/tinyjson.h	166-167	malloc
+json::json	function	src/tinyjson.h	169-170	malloc
+json::json	function	src/tinyjson.h	172-173	malloc,long
+json::json	function	src/tinyjson.h	175-176	malloc,long
+json::json	function	src/tinyjson.h	178-179	malloc
+json::json	function	src/tinyjson.h	181-182	malloc
+json::json	function	src/tinyjson.h	184-185	malloc
+json::json	function	src/tinyjson.h	187-188	malloc
+json::json	function	src/tinyjson.h	190-191	malloc
+json::type	function	src/tinyjson.h	193-193	
+json::type_name	function	src/tinyjson.h	195-222	
+json::json	function	src/tinyjson.h	227-256	malloc,long
+json::get_string	function	src/tinyjson.h	364-368	
+json::get_integer	function	src/tinyjson.h	370-374	long
+json::get_double	function	src/tinyjson.h	376-380	
+json::get_bool	function	src/tinyjson.h	382-386	
+json::get_object	function	src/tinyjson.h	388-392	
+json::get_array	function	src/tinyjson.h	394-398	
+json::get_null	function	src/tinyjson.h	400-404	
+json::has_member	function	src/tinyjson.h	406-411	
+json::add_member	function	src/tinyjson.h	413-418	
+json::add_element	function	src/tinyjson.h	420-425	
+json::size	function	src/tinyjson.h	427-441	
+json::operator	function	src/tinyjson.h	444-455	
+json::operator	function	src/tinyjson.h	458-469	
+json::~json	function	src/tinyjson.h	472-497	malloc,long
+std::string	function	src/tinyjson.h	500-509	
+double	function	src/tinyjson.h	511-520	
+long	function	src/tinyjson.h	522-531	long
+bool	function	src/tinyjson.h	533-542	
+json::to_string	function	src/tinyjson.h	544-572	
+json::object_to_string	function	src/tinyjson.h	574-596	
+json::array_to_string	function	src/tinyjson.h	598-617	
+parser	record	src/tinyjson.h	622-1077	ctype,long
