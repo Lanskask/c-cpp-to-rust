@@ -264,3 +264,44 @@ arms) are invisible to the Judge.
    agrees") before ticket 04, or accept C1 plus P10?
 4. Should §4 forbid markers outside its list (`DECISION(port)` appeared in A2, B2, C1) and require the exact
    `DEVIATION(port): D<n>` spelling? This is cosmetic only.
+
+## Group C: second run (C2)
+
+Reviewed 2026-10-12. C2 (`pilots/tinyjson/migration/harness/work/stress/C2/src/lib.rs`, reply `STATUS done`,
+`TODOS 0`) against C1, same prompt and rulebook as C1 (before P1-P10). Both fill only `to_string`,
+`object_to_string`, `array_to_string` (h:544-617); outside the group both add the same field
+`_value: *mut std::ffi::c_void` to the stub's `json` (CPP7; the stub declares only `_type`), so that is not a
+difference. Judge column reasoned from the corpus counts of the C-1 row; neither crate was run through the Judge (the
+rest of the crate is `todo!()`).
+
+| #    | Difference                                                       | C1                                                                                                                                                                                                                   | C2                                                                                                                                                                                                  | Faithful (C++)                                                                                                     | Judge observes?                                                                                   | Class     |
+|------|------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|-----------|
+| C2-1 | keys and nested results through `.c_str()` (h:582, 586, 606, Q5) | appended whole; only comments say `BUG(port): Q5` (C-1)                                                                                                                                                              | cut at the first NUL with `split(\|&b\| b == 0).next()` on the key (h:582) and on both nested results (h:586, 606); the top-level string (h:555) keeps it                                           | C2                                                                                                                 | yes: 34 corpus inputs hold a NUL; `build.object_add_member` uses input bytes as keys; §10 Q5 test | BEHAVIOUR |
+| C2-2 | getters inside the arms                                          | `if let Ok(..) .. else Vec::new()`, `unwrap_or_else(\|_\| BTreeMap::new())`                                                                                                                                          | `unwrap_or_else(\|_\| unreachable!())`                                                                                                                                                              | both: the arm fixes the type, the getter cannot fail                                                               | no                                                                                                | COSMETIC  |
+| C2-3 | `std::to_string(double)` (h:561, D9)                             | private helper `format_f64`: NaN, `is_infinite` + sign, then `format!("{:.6}")`                                                                                                                                      | inline in the arm: NaN, `== INFINITY`, `== NEG_INFINITY`, then `format!("{:.6}")`                                                                                                                   | both: the same bytes for every `f64` (same spellings, same `{:.6}`; C-2 measured it against `%f` on 14 values)     | yes (every serialised double), but no difference                                                  | COSMETIC  |
+| C2-4 | separator placement (h:589-592, 610-613, CPP31)                  | `,` before every item but the first (the CPP31 Stage 1 form)                                                                                                                                                         | `,` after every item but the last (`i + 1 < n`, the C++ `std::next(it) != end()` shape)                                                                                                             | both: same bytes; C2 departs from the form CPP31 prescribes                                                        | no                                                                                                | COSMETIC  |
+| C2-5 | `std::to_string(long long)` (h:558)                              | `i.to_string()`                                                                                                                                                                                                      | `format!("{}", ..)`                                                                                                                                                                                 | both                                                                                                               | n/a                                                                                               | COSMETIC  |
+| C2-6 | `invalid` arm (h:569-570)                                        | `unreachable!("invalid json value")`, comment `CPP14: unreachable default arm`                                                                                                                                       | `unreachable!()` with an invariant comment citing §7                                                                                                                                                | both (§7)                                                                                                          | no                                                                                                | COSMETIC  |
+| C2-7 | markers and `PORT STATUS`                                        | `BUG(port): Q4 -` without `QUIRK(port): Q4`; no `DEVIATION(port): D9`; `DECISION(port)`; status `confidence=medium todos=0 deviations=D2,D3,D5,D9` (D2, D3, D5 are outside the group; §11 asks `high` for `todos=0`) | `BUG(port)` and `QUIRK(port)` on two lines at Q4 and Q5, `QUIRK(port): Q6`, `DEVIATION(port): D9`, `DEVIATION(port): D11`, one `DECISION(port)`; status `confidence=high todos=0 deviations=D9,D11` | C2 closer to §4 and §11; neither exact (`DECISION(port)`; §4 asks for "one comment line" but two markers need two) | no                                                                                                | COSMETIC  |
+
+Verdict: C1 and C2 differ on one BEHAVIOUR item, Q5 (C2-1), and C2 is the faithful one. P10 already covers it, so no
+new behaviour rule is needed. Both runs agree on everything else that the Judge sees: `" : "`, separators, unescaped
+strings (Q4), integers, `%f` doubles with the macOS NaN/inf spellings, `true`/`false`/`null`. The marker rows (C-4,
+C2-7) lead to one cosmetic proposal, P11.
+
+### P11. Stacked markers (C-4, C2-7) — §4, amends the markers paragraph
+
+Existing paragraph:
+
+```text
+Markers: `TODO(port):`, `PERF(port):`, `BUG(port):`, `QUIRK(port): Q<n>`, `DEVIATION(port): D<n>`, exact spelling,
+one comment line directly above the site. Until the stress test fixes the exact sites, a marker goes on every source
+site cited in §8 and §9.
+```
+
+Proposed addition:
+
+> A site that needs several markers carries one comment line per marker, all directly above the site, `BUG(port):`
+> first. For Q4, Q5 and Q11 that is `// BUG(port): Q<n> <reason>` followed by `// QUIRK(port): Q<n>`; never one
+> without the other. The marker goes above the statement that reproduces the behaviour (for Q5: the `c_str` call),
+> not above an unrelated line.

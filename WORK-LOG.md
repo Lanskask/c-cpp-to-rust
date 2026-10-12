@@ -853,3 +853,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the C4 row's "explicit chain" wording was read as `match` arms; both A agents invented bodies for helpers
   they were not given (prompt slot gap); D3 and the strtod scanners were missed by both.
 - **Next:** user accepts or edits P1-P10, Opus applies them, a second A/B round, then status `stress-tested`.
+
+## 51. tinyjson ticket 03: P1-P10 applied, C2 reviewed, corpus 5561
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Opus 5.5 subagent (abdb025924418f5cf); C2 run by the user in a separate session
+- **Done:** user accepted P1-P10 and P6 underflow; RULEBOOK has them with §12 rows and a §4 marker rule; Opus added P11
+  (stacked markers, applied pending veto). C1 vs C2: only the Q5 NUL cut differs (C2 faithful, P10 covers it).
+  Corpus 5534 to 5561 (27 `broken_` inputs for P3/P4), twice-run filter 0 unstable, generator byte-identical on re-run
+  (governor re-ran it into a stray `--help/` dir by mistake; identical, deletion pending). Judge change committed apart.
+- **Tells us:** D8 still says the underflow boundary is "to measure" and conflicts with P6; stub `json` lacks `_value`.
+- **Next:** decide P11 and the D8 wording; round 2 (A, B, C once) with the updated rulebook; then `stress-tested`.

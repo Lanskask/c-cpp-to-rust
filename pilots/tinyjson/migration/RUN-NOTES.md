@@ -343,12 +343,17 @@ approximation that no Rust port can reproduce exactly.
 
 ## Rule proposals
 
-Ticket 03 stress test (2026-10-12): groups A (`parser`) and B (`operator==`, copy, destructor) translated twice by Haiku,
-group C once (C2 launch was refused by the auto-mode classifier). Review by Opus:
-`pilots/tinyjson/experiments/stress_test_diff_review.md` (differences, evidence, verdict). Status of every proposal:
-**proposed, not applied** (waiting for the user).
+Ticket 03 stress test (2026-10-12): groups A (`parser`) and B (`operator==`, copy, destructor) translated twice by
+Haiku, group C once at first (C2 launch was refused by the auto-mode classifier). Review by Opus:
+`pilots/tinyjson/experiments/stress_test_diff_review.md` (differences, evidence, verdict). C2 ran later; its review is
+the section "Group C: second run (C2)" of the same file and adds P11. Status: P1-P10 accepted by the user on
+2026-10-12 and applied in the RULEBOOK (each one cited by `(Pn)` at the end of the amended cell or sentence, and listed
+in RULEBOOK §12); P11 applied, the user may veto it. The user also decided: P6 underflow is accepted as written;
+§4 now forbids markers outside its list and requires the exact `DEVIATION(port): D<n>` spelling.
 
 ### P1. `operator==` fallthrough shape (B-1) — §2, amends row C4
+
+Status: accepted 2026-10-12, applied in RULEBOOK §2, row C4 (Override cell replaced).
 
 Existing row:
 
@@ -368,6 +373,8 @@ Proposed text (replaces the Override cell):
 
 ### P2. Code-point strings stay `u32` until `U32ToU8` (A-2) — §2.1, amends row CPP26
 
+Status: accepted 2026-10-12, applied in RULEBOOK §2.1, row CPP26 (Stage 1 cell extended; status column `accepted`).
+
 Existing row:
 
 ```text
@@ -381,6 +388,8 @@ Proposed addition to the Stage 1 cell:
 > to `u8` (`c as u8`): it drops the UTF-8 encoding and the `U32ToU8` error.
 
 ### P3. `tolower` on a code point (A-3) — §2, amends row L4, L5, L6
+
+Status: accepted 2026-10-12, applied in RULEBOOK §2, row L4, L5, L6 (Override cell extended).
 
 Existing row:
 
@@ -397,6 +406,8 @@ Proposed addition to the Override cell:
 
 ### P4. `to_bool` lowercases again (A-4) — §2.1, amends row CPP30
 
+Status: accepted 2026-10-12, applied in RULEBOOK §2.1, row CPP30 (trap cell extended; status column `accepted`).
+
 Existing row:
 
 ```text
@@ -409,6 +420,8 @@ Proposed addition to the trap cell:
 > lowercased its token. A statement that looks redundant in its only internal caller is still ported.
 
 ### P5. `stoll` scanner (A-5) — §2, amends row I9
+
+Status: accepted 2026-10-12, applied in RULEBOOK §2, row I9 (Override cell replaced).
 
 Existing row:
 
@@ -427,6 +440,9 @@ Proposed text (replaces the Override cell):
 > InvalidArgument, `99999999999999999999` → OutOfRange, `"\v5"` → 5, i64 min → OK.
 
 ### P6. `stod` scanner (A-6) — §2, amends row I8
+
+Status: accepted 2026-10-12, applied in RULEBOOK §2, row I8 (Override cell replaced; the underflow rule accepted as
+written).
 
 Existing row:
 
@@ -448,6 +464,8 @@ Proposed text (replaces the Override cell):
 
 ### P7. Stub signatures are binding (A-7) — §5, amends the second bullet
 
+Status: accepted 2026-10-12, applied in RULEBOOK §5, second bullet (sentence inserted before the table lead-in).
+
 Existing bullet:
 
 ```text
@@ -463,6 +481,8 @@ Proposed sentence appended to the bullet:
 > site instead.
 
 ### P8. D5 carries the measured window rule (A-1) — §8, amends row D5
+
+Status: accepted 2026-10-12, applied in RULEBOOK §8, row D5 (Rust-behaviour cell replaced).
 
 Existing row:
 
@@ -483,6 +503,8 @@ Proposed text (replaces the Rust-behaviour cell):
 
 ### P9. `U8ToU32` / `U32ToU8` error texts (A-8, S-2) — §2.1, amends row CPP28
 
+Status: accepted 2026-10-12, applied in RULEBOOK §2.1, row CPP28 (Stage 1 cell replaced; status column `accepted`).
+
 Existing row:
 
 ```text
@@ -499,6 +521,8 @@ Proposed text (replaces the Stage 1 cell):
 
 ### P10. Q5 is code, not a comment (C-1) — §9, amends row Q5
 
+Status: accepted 2026-10-12, applied in RULEBOOK §9, row Q5 (Behaviour cell extended).
+
 Existing row:
 
 ```text
@@ -510,3 +534,25 @@ Proposed addition to the Behaviour cell:
 > Stage 1 code: a helper `fn c_str(s: &[u8]) -> &[u8]` (the bytes before the first NUL) applied to the key at h:582
 > and to the nested `to_string()` result at h:586 and h:606, not to the top-level string at h:555. A `BUG(port)` or
 > `QUIRK(port)` marker never replaces reproducing the behaviour.
+
+### P11. Stacked markers (C-4, C2-7) — §4, amends the markers paragraph
+
+Status: applied 2026-10-12 in RULEBOOK §4 (second paragraph after the marker list); cosmetic; the user may veto it.
+Full text in `pilots/tinyjson/experiments/stress_test_diff_review.md`, section "Group C: second run (C2)".
+
+## Stress test round 2 plan
+
+State on 2026-10-12: RULEBOOK amended (P1-P11 and the §4 marker rule, §12); stub fixed (`json` derives `Debug` only,
+`impl Clone for json` is a hand-written `todo!()` per CPP14; `run.py --skip-tests --limit 50` builds and is RED by
+diff, 50 of 50); corpus extended for P3 and P4 (27 new `broken_` inputs `broken_0149`-`broken_0175`, 5561 inputs, the
+twice-run filter `harness.py --repeat 2` on the C++ driver: 5561 same, 0 unstable, 0 dropped, every exit code 0).
+
+1. Group prompts give the **signatures only** of the stub functions outside the group; their bodies stay `todo!()`
+   and the agent must not fill them (answer to open question 1 of the review).
+2. Round 2 reruns A, B and C once each: three Haiku runs (A3, B3, C3) against the amended RULEBOOK, same group
+   slices as round 1, one run at a time.
+3. Review each round 2 run against its round 1 pair (A1 or A2, B1 or B2, C1 or C2) with the same table as
+   `stress_test_diff_review.md`.
+4. Success: no pair differs on any BEHAVIOUR item, or every remaining difference is classified (BEHAVIOUR with a
+   rule proposal, DEVIATION-RELATED, or COSMETIC). Success closes the ticket 03 acceptance item "a same-model rerun
+   agrees", and the RULEBOOK status line can then become `stress-tested`.
