@@ -1,1 +1,3 @@
 src/tinyjson
+samples/main
+test/tinyjsonTests

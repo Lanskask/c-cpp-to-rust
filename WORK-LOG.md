@@ -762,3 +762,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Parts attempt counters undercount: `workqueue.py mark in_progress` is the only thing that increments them, and
   cJSON Stage 2 attempts 2-3 ran with the Part already `in_progress` (cJSON: 1, cJSON_Utils: 0, WORK-LOG: 3).
 - **Next:** tinyjson Translation session re-runs `inventory.py` and `depmap.py`; user decides on the attempts counter.
+
+## 46. tinyjson: inventory re-run with the AST engine, facts.tsv compared with the CPP rows
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor
+- **Done:** `inventory.py --lang cpp` and `depmap.py` without `--exclude`: 92 symbols, 187 edges, 2 dead candidates;
+  `facts.tsv` 65 rows. `--cxx-flag=-std=c++11` fails in the Skill (argparse rejects the forwarded value), run
+  through a `--cxx` wrapper instead. Comparison against the 36 CPP rows in RUN-NOTES: CPP8 29 of 30, CPP21 22 of 32,
+  CPP19 0 of 3, no missing construct.
+- **Tells us:** the hand-written rows are complete except one throw line (1022) and one hidden facet `new`; the AST
+  facts confirm what the rows cite.
+- **Next:** user answers the D1, D2, D4, D6-D16 question; CPP21 gets line 1022.

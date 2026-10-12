@@ -50,3 +50,33 @@ instead.
 - D4 interaction: with D3 giving U+0000, `\u` escapes never produce surrogates in the Reference, so D4 is not
   reachable through `\u` input.
 - Skill-change requests sent to session `skill-editing-w-C2RustXW-PtrTrans-ORBIT` (7 items).
+
+## Re-run with the AST engine (2026-10-11)
+
+Skill bugs 1-3 above were fixed by the Skill session (`ast_facts.py` is new; test and sample symbols are roots for
+`dead.txt`). Re-ran `inventory.py --lang cpp` and `depmap.py` without `--exclude`: 92 symbols, engine `clang-ast+regex`,
+187 edges, 0 cycles, 2 dead-code candidates (`U8ToU32`, `json::has_member`), 3 Parts in `order.txt`. New files:
+`facts.tsv` (65 rows: 32 throw, 24 new, 6 delete, 3 conversion), `calls.tsv`, `ast-symbols.tsv`. `parts.tsv` is
+unchanged (tier.py not re-run).
+
+**Skill bug 5:** `inventory.py --cxx-flag=-std=c++11` does not work, in either spelling. `inventory.py` line 525 passes
+`["--cxx-flag", fl]` to `ast_facts.py`, and argparse refuses a value that starts with `-`; the error is swallowed
+and the run falls back to the regex pass (`69 symbols, engine=regex`, no `facts.tsv`). Fix: `f"--cxx-flag={fl}"`.
+Workaround used (documented option `--cxx`): a wrapper `clang++ "$@" -std=c++11` in the session scratchpad. The
+default of `ast_facts.py` is `-std=c++17` when no `-std=` is given; the wrapper's later flag wins in clang.
+
+### facts.tsv against the RULEBOOK §2.1 rows
+
+The RULEBOOK has **36** CPP rows, not 29. Method: each fact carries the enclosing function's line range; a fact is
+"covered" when a line cited by the matching row falls inside that range (script run once in the session, not saved).
+
+| Row   | facts | covered | finding                                                                                          |
+|-------|-------|---------|--------------------------------------------------------------------------------------------------|
+| CPP8  | 30    | 29      | 1 new: `parser::parse` (626-658) `new std::codecvt_utf8<char32_t>` owned by `wbuffer_convert`    |
+| CPP21 | 32    | 22      | 10 throws are `CHECK_TYPE_MISMATCH` expansions (364-425, macro of CPP5); line 1022 is missing    |
+| CPP19 | 3     | 0       | the 3 `conversion` facts are `const char*` to `std::string`, not the user conversion operators   |
+
+- CPP10 and CPP14 list 12 constructors plus the copy constructor; `ast-symbols.tsv` has 13 `json::json`. Matches.
+- No construct in `facts.tsv` is missing from the CPP rows, apart from the three items above.
+- Proposed edits (not applied; RULEBOOK is for the user's review): CPP21 add `1022` and "10 more via
+  `CHECK_TYPE_MISMATCH` use sites 365-424"; CPP27 note the facet `new` inside `wbuffer_convert`.

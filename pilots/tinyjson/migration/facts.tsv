@@ -1,0 +1,66 @@
+symbol	lines	fact	detail	count
+trim@src/tinyjson.h	29-40	conversion	basic_string (void (const char *))	1
+U32ToU8@src/tinyjson.h	42-54	throw	std::runtime_error	1
+U8ToU32@src/tinyjson.h	56-68	throw	std::runtime_error	1
+json::json@src/tinyjson.h	160-161	new	std::string *	1
+json::json@src/tinyjson.h	163-164	new	std::string *	1
+json::json@src/tinyjson.h	166-167	new	std::string *	1
+json::json@src/tinyjson.h	169-170	new	double *	1
+json::json@src/tinyjson.h	172-173	new	long long *	1
+json::json@src/tinyjson.h	175-176	new	long long *	1
+json::json@src/tinyjson.h	178-179	new	bool *	1
+json::json@src/tinyjson.h	181-182	new	json_array *	1
+json::json@src/tinyjson.h	184-185	new	json_array *	1
+json::json@src/tinyjson.h	187-188	new	json_object *	1
+json::json@src/tinyjson.h	190-191	new	json_object *	1
+json::type_name@src/tinyjson.h	195-222	conversion	basic_string (void (const char *))	7
+json::json@src/tinyjson.h	227-256	new	bool *	1
+json::json@src/tinyjson.h	227-256	new	double *	1
+json::json@src/tinyjson.h	227-256	new	json_array *	1
+json::json@src/tinyjson.h	227-256	new	json_object *	1
+json::json@src/tinyjson.h	227-256	new	long long *	1
+json::json@src/tinyjson.h	227-256	new	std::string *	1
+json::json@src/tinyjson.h	227-256	throw	std::runtime_error	1
+json::operator=@src/tinyjson.h	261-291	new	bool *	1
+json::operator=@src/tinyjson.h	261-291	new	double *	1
+json::operator=@src/tinyjson.h	261-291	new	json_array *	1
+json::operator=@src/tinyjson.h	261-291	new	json_object *	1
+json::operator=@src/tinyjson.h	261-291	new	long long *	1
+json::operator=@src/tinyjson.h	261-291	new	std::string *	1
+json::operator=@src/tinyjson.h	261-291	throw	std::runtime_error	1
+json::get_string@src/tinyjson.h	364-368	throw	std::runtime_error	1
+json::get_integer@src/tinyjson.h	370-374	throw	std::runtime_error	1
+json::get_double@src/tinyjson.h	376-380	throw	std::runtime_error	1
+json::get_bool@src/tinyjson.h	382-386	throw	std::runtime_error	1
+json::get_object@src/tinyjson.h	388-392	throw	std::runtime_error	1
+json::get_array@src/tinyjson.h	394-398	throw	std::runtime_error	1
+json::get_null@src/tinyjson.h	400-404	throw	std::runtime_error	1
+json::has_member@src/tinyjson.h	406-411	throw	std::runtime_error	1
+json::add_member@src/tinyjson.h	413-418	throw	std::runtime_error	1
+json::add_element@src/tinyjson.h	420-425	throw	std::runtime_error	1
+json::size@src/tinyjson.h	427-441	throw	std::runtime_error	1
+json::operator[]@src/tinyjson.h	444-455	throw	std::runtime_error	2
+json::operator[]@src/tinyjson.h	458-469	throw	std::runtime_error	2
+json::~json@src/tinyjson.h	472-497	delete	bool *	1
+json::~json@src/tinyjson.h	472-497	delete	double *	1
+json::~json@src/tinyjson.h	472-497	delete	json_array *	1
+json::~json@src/tinyjson.h	472-497	delete	json_object *	1
+json::~json@src/tinyjson.h	472-497	delete	long long *	1
+json::~json@src/tinyjson.h	472-497	delete	std::string *	1
+json::operator basic_string@src/tinyjson.h	500-509	throw	std::runtime_error	1
+json::operator const double@src/tinyjson.h	511-520	throw	std::runtime_error	1
+json::operator const long long@src/tinyjson.h	522-531	throw	std::runtime_error	1
+json::operator const bool@src/tinyjson.h	533-542	throw	std::runtime_error	1
+json::to_string@src/tinyjson.h	544-572	conversion	basic_string (void (const char *))	2
+json::to_string@src/tinyjson.h	544-572	throw	std::runtime_error	1
+parser::parse@src/tinyjson.h	626-658	new	std::codecvt_utf8<char32_t> *	1
+parser::parse@src/tinyjson.h	626-658	throw	std::runtime_error	2
+parser::parse_value@src/tinyjson.h	660-700	throw	std::runtime_error	1
+parser::parse_object@src/tinyjson.h	702-740	throw	std::runtime_error	1
+parser::parse_null@src/tinyjson.h	829-851	throw	std::runtime_error	1
+parser::to_bool@src/tinyjson.h	911-927	throw	std::runtime_error	1
+parser::to_integer@src/tinyjson.h	929-941	throw	std::runtime_error	1
+parser::to_double@src/tinyjson.h	943-954	throw	std::runtime_error	1
+parser::escape_char@src/tinyjson.h	956-1005	throw	std::runtime_error	1
+parser::skip_char@src/tinyjson.h	1019-1039	throw	std::runtime_error	1
+parser::parse_hex@src/tinyjson.h	1051-1075	throw	std::runtime_error	1
