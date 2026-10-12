@@ -50,3 +50,5 @@ date	phase	model	input	output	cache_create	cache_read	messages
 2026-10-12 22:36	E4-tinyjson-s1-review	claude-sonnet-5-5	172	50210	222976	12119159	85
 2026-10-12 23:14	E5-tinyjson-s2-a1	claude-haiku-4-5-20251001	190	36	136837	1082390	22
 2026-10-12 23:14	E5-tinyjson-s2-a1	claude-sonnet-5-5	88	29386	80162	9883417	42
+2026-10-12 23:22	E5-tinyjson-s2-review	claude-sonnet-5-5	106	27598	198180	10185405	51
+2026-10-12 23:22	E5-tinyjson-s2-judge	claude-sonnet-5-5	158	51275	253956	12425662	76

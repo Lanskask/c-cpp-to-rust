@@ -1040,3 +1040,12 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   (3) the gate's `fmt` check formats the Judge files too: format the harness sources when the Judge is built.
   (4) `get_key`/`get_index` (const forms) are in §6 but not in the adapter: unexercised.
 - **Next:** commit the Part, mark done, close ticket 06.
+
+## 64. tinyjson ticket 07: report
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor
+- **Done:** `pilots/tinyjson/migration/REPORT.md` written; spend rows E5-tinyjson-s2-judge and E5-tinyjson-s2-review
+  logged (a first row without `--until` overlapped the attempt-1 row and was replaced).
+- **Tells us:** WORK-LOG numbers 62 and 63 were used twice (this session and the Skill session wrote concurrently);
+  entries 62/63 above and the Skill ones keep their titles, so they stay distinguishable.
+- **Next:** the Skill changes sent to the Skill-editing session.
