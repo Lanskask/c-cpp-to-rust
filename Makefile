@@ -62,9 +62,9 @@ pilot-tinyjson-snapshot:  ## record HEAD + baseline before editing the tinyjson 
 	  --parts pilots/tinyjson/migration/parts.tsv --snapshot --also rust/tests/adapter --features "" \
 	  --harness-cmd "python3 -I pilots/tinyjson/migration/harness/run.py --crate pilots/tinyjson/rust"
 
-pilot-tinyjson-test:  ## full cargo test + harness output for the tinyjson Part (the gate prints only a one-line detail)
+pilot-tinyjson-test:  ## full cargo test + harness output for the tinyjson Part; STAGE=2 judges the section 6 API
 	-cargo test --manifest-path pilots/tinyjson/rust/Cargo.toml --test upstream 2>&1 | grep -v '^warning' | tail -80
-	-python3 -I pilots/tinyjson/migration/harness/run.py --crate pilots/tinyjson/rust 2>&1 | tail -80
+	-python3 -I pilots/tinyjson/migration/harness/run.py --stage $(STAGE) --crate pilots/tinyjson/rust 2>&1 | tail -80
 
 pilot-jsmn-snapshot:  ## record HEAD + baseline before editing the Part
 	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \

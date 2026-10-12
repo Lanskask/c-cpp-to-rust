@@ -592,3 +592,23 @@ point instead of once at the end (D4); markers spelled `MARKER: Id` on their own
 - CPP26: the buffer field is `buf` and the position `_pos` (the rulebook says `pos`); amend the row to the field names
   the Judge adapter and the skeleton use.
 - Q2, Q6-Q10, Q12-Q20 and D6, D7, D10-D16 have no marker in the file: they describe behaviour with no single statement.
+
+## Stage 2 Judge validation (ticket 05, 2026-10-12)
+- Adapter `harness/rust/adapter_stage2.rs` calls the RULEBOOK §6 API; `harness/rust/stage2_shim.rs` implements §6 over
+  the Faithful port for validation only (both `mod stage2_shim; use stage2_shim as tj;` lines become
+  `use tinyjson as tj;` when the Stage 2 crate lands; the shim is then deleted). `run.py --stage 2`.
+- Faithful port, STAGE=2: 22/22 translated tests, corpus 0 DIFF of 5755, JUDGE GREEN (about 65 s). STAGE=1 still GREEN.
+- Mutant: `WINDOW: usize = 29` -> `30` in `wbuffer_convert_decode` (D5): translated tests 22/22 (they do not see it),
+  corpus 13 DIFF of 5755 (`utf8_0207`, `utf8_0278`, ...), JUDGE RED; restored, `git diff` clean.
+- Shim cost: a deep input (nesting about 400, `deep_0019`) timed out with a fully converting shim, so the shim converts
+  one level for scalar getters; the Stage 2 crate has no such cost.
+
+### §5a: what the corpus never feeds
+| Class                         | Status        | Where / why                                                                        |
+|-------------------------------|---------------|------------------------------------------------------------------------------------|
+| Allocation failure            | not testable  | D14: Rust aborts on OOM, there is no recoverable path to compare                   |
+| Absent members of built values| not applicable| no NULL string or key exists in the §6 API (`&[u8]`, `Vec<u8>`); D12 covers C++ UB  |
+| Input without a trailing NUL  | covered       | `Parser::parse(&[u8])` takes the slice as is; the NUL is part of the input (Q10), `broken_` NUL inputs |
+| Surrogate / > U+10FFFF stream | covered       | `streams.wide` probes (Judge commit b9d53af)                                        |
+| Code point above U+00FF at a dispatch | covered | `broken_` P2/P3 inputs (Judge commit b9d53af)                                     |
+| Deep nesting                  | partly        | `deep_` up to 200; D11 (100000 deliberately absent)                                |

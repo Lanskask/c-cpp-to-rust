@@ -982,3 +982,15 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** finding 1 is a design tension, not a bug: the Stage 1 baseline exists for half-translated crates.
   Rule 10 is untested: whether it cuts fix rounds needs a Haiku run with and without it.
 - **Next:** tinyjson governor adds `--strict-judge` to the final Stage 1 gate of each Part.
+
+## 62. tinyjson ticket 05: §6 filled, Stage 2 Judge built and validated
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (ad1b2c60576d6022a) wrote the shim, adapter and `run.py --stage 2`
+- **Done:** RULEBOOK §6 filled with binding signatures (193569d plus the `tellg` follow-up; I first wrote that `tellg`
+  was not part of the API, and the driver reads it for Q13, so it is). Stage 2 adapter over a §6 shim on the Faithful
+  port: STAGE=2 GREEN (22/22, 0/5755), STAGE=1 GREEN. Mutant D5 window 29 -> 30: 22/22 tests, 13 corpus diffs, RED;
+  restored. `parts-stage2.tsv` created. RUN-NOTES has the §5a coverage list.
+- **Tells us:** a Stage 2 Judge for a rewrite needs a §6 shim over the Stage 1 port; the Skill's judge.md §5 assumes a
+  C ABI adapter and says nothing about validating a §6-API adapter before the Stage 2 crate exists. The translated
+  tests did not see the mutant; only the corpus did.
+- **Next:** commit the Judge, then ticket 06 (Stage 2 implementer, Haiku, up to 5 attempts, `--stage 2` gate).

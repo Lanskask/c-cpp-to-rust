@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Stage 1 Judge for the tinyjson Pilot (C++ route, judge.md sections 4, 4a, 5, 8). Exit 0 = pass.
 
-Usage: python3 -I run.py [--crate DIR] [--skip-tests] [--limit N] [--jobs N]
+Usage: python3 -I run.py [--stage 1|2] [--crate DIR] [--skip-tests] [--limit N] [--jobs N]
        --crate DIR     crate to judge: a directory with Cargo.toml whose library is named `tinyjson` and offers the
                        API the adapter calls (default: pilots/tinyjson/experiments/scratch-crate, the STUB of
                        ticket 02; ticket 04's crate is pilots/tinyjson/rust)
+       --stage N       1 (default): the Stage 1 adapter (C++ names, RULEBOOK section 5); 2: adapter_stage2.rs
+                       (RULEBOOK section 6 API), installed together with stage2_shim.rs, a shim of the section 6 API
+                       over the Stage 1 crate (validation scaffolding, deleted when the Stage 2 crate exists)
        --skip-tests    skip `cargo test` (translated tests), run the Differential harness only
        --limit N       judge about N inputs, taken at an even stride over the sorted corpus (default: all)
        --jobs N        parallel inputs for harness.py (default: CPU count)
@@ -70,12 +73,18 @@ def runner_error(msg: str) -> int:
 # step 3: install the Rust side into the crate
 # ---------------------------------------------------------------------------------------------------------------
 
-def install(crate: Path) -> None:
+def install(crate: Path, stage: int = 1) -> None:
+    adapter = RUST_SRC / ("adapter_stage2.rs" if stage == 2 else "adapter.rs")
     pairs = [
-        (RUST_SRC / "adapter.rs", crate / "tests" / "adapter" / "mod.rs"),
+        (adapter, crate / "tests" / "adapter" / "mod.rs"),
         (RUST_SRC / "dump.rs", crate / "examples" / "dump.rs"),
         (RUST_SRC / "upstream.rs", crate / "tests" / "upstream.rs"),
     ]
+    shim_dst = crate / "tests" / "adapter" / "stage2_shim.rs"
+    if stage == 2:
+        pairs.append((RUST_SRC / "stage2_shim.rs", shim_dst))
+    elif shim_dst.exists():
+        shim_dst.unlink()  # a Stage 1 adapter does not declare the shim
     for src, dst in pairs:
         dst.parent.mkdir(parents=True, exist_ok=True)
         data = src.read_bytes()
@@ -176,6 +185,7 @@ def sample_inputs(limit: int) -> Path:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--stage", type=int, choices=(1, 2), default=1)
     ap.add_argument("--crate", type=Path, default=DEFAULT_CRATE)
     ap.add_argument("--skip-tests", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
@@ -190,6 +200,7 @@ def main() -> int:
     say(f"reference compiler: {v.stdout.splitlines()[0] if v.returncode == 0 and v.stdout else CXX + ' NOT FOUND'}")
     say("reference flags : -std=c++17 -include locale -O0 -w (ref/build_ref.sh), libstdc++")
     say(f"crate           : {crate}")
+    say(f"stage           : {args.stage}")
     if v.returncode:
         return runner_error(f"{CXX} not found")
     if not (crate / "Cargo.toml").is_file():
@@ -211,7 +222,7 @@ def main() -> int:
     cpp_dump = WORK / "dump"
 
     # 3. Rust side
-    install(crate)
+    install(crate, args.stage)
     tdir = WORK / f"cargo-{crate.parent.name}-{crate.name}"
     t = time.time()
     r = sh(["cargo", "build", "-q", "--example", "dump", "--manifest-path", str(crate / "Cargo.toml"),
