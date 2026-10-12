@@ -996,3 +996,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   C ABI adapter and says nothing about validating a §6-API adapter before the Stage 2 crate exists. The translated
   tests did not see the mutant; only the corpus did.
 - **Next:** commit the Judge, then ticket 06 (Stage 2 implementer, Haiku, up to 5 attempts, `--stage 2` gate).
+
+## 64. Skill: Agent allow rule in assets/settings.json
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (file edited by the user, commit 47742b3)
+- **Done:** `permissions.allow` = `Agent(model:haiku)`, `Agent(model:sonnet)`, `Agent(model:opus)` before `deny`.
+- **Tells us:** untested: whether the classifier skips a launch that matches. First tinyjson Sonnet launch with
+  `--settings` shows it.
+- **Next:** tinyjson-translation restarts with `claude --name tinyjson-translation --settings skill/c-to-rust/assets/settings.json`.

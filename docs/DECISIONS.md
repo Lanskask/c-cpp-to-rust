@@ -348,3 +348,9 @@ Each entry: decision, reason, who/what it came from. Newest last.
     Judge checks (WORK-LOG 59). Default Stage 1 still excuses them: a half-translated crate may not compile while
     other Parts are `todo` (decision 29). Not done: refusing `mark done` when a Judge check was excused; the governor
     runs the last Stage 1 gate with `--strict-judge`.
+
+61. **`assets/settings.json` allows `Agent(model:haiku|sonnet|opus)`; the user applied it.** _Reason:_ the auto-mode
+    classifier denied implementer subagent launches (tinyjson WORK-LOG 58: "Sonnet launch denied again"); allow rules
+    are evaluated before it (Claude Code docs, via the claude-code-guide agent, not yet seen working). The edit was
+    refused twice for this session ([Auto-Mode Bypass], [Self-Modification]) and was not worked around. A session must
+    start with `--settings skill/c-to-rust/assets/settings.json` to get it. Open: whether the classifier honours it.
