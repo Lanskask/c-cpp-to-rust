@@ -43,7 +43,7 @@ pub type json_object = BTreeMap<Vec<u8>, json>;
 pub type json_array = Vec<json>;
 
 /// `class json`.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct json {
     _type: json_t,
 }
@@ -174,6 +174,13 @@ impl json {
 impl Default for json {
     fn default() -> json {
         json::new()
+    }
+}
+
+/// copy constructor (`tinyjson.h:227-256`), hand-written as CPP14 asks; the adapter's `copy` calls it.
+impl Clone for json {
+    fn clone(&self) -> json {
+        todo!()
     }
 }
 

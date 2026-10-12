@@ -148,6 +148,21 @@ for data, desc in [
     (b'\x1b[1]', "ESC first"),
 ]:
     add("broken", data, desc)
+# ticket 03 (P3, P4): appended after the list above so that existing names stay, and in broken_ (not valid_) so
+# that the mutation bases, and with them every mut_ input, stay unchanged.
+# P4: the whole input is a mixed-case literal, so `streams.to_bool(data)` sees it unlowercased (h:913-918)
+for tok in [b"TRUE", b"True", b"tRuE", b"FALSE", b"False", b"fAlSe", b"NULL", b"Null", b"nUlL", b" True ",
+            b"FALSE\n"]:
+    add("broken", tok, f"mixed-case literal {tok!r} as the whole input (P4, to_bool)")
+add("broken", b'{"a":False,"b":nUlL,"c":TRUE}', "mixed-case literals as member values (Q8, P4)")
+# P3: a code point above U+00FF inside a bool/null token whose low byte is the expected letter: `c as u8`
+# truncation would read `true`/`false`/`null`, C++ tolower leaves the code point and fails (D10)
+for tok, desc in [("truť", "U+0165 (low byte 'e') ends true"), ("falsť", "U+0165 (low byte 'e') ends false"),
+                  ("nulŬ", "U+016C (low byte 'l') ends null"), ("TRUŅ", "U+0145 (low byte 'E') ends TRUE"),
+                  ("tŲue", "U+0172 (low byte 'r') inside true")]:
+    add("broken", b"[" + tok.encode() + b"]", f"{desc}, in array (P3)")
+    add("broken", b'{"a":' + tok.encode() + b"}", f"{desc}, as member value (P3)")
+    add("broken", tok.encode(), f"{desc}, as the whole input (P3, stream probes)")
 
 # --------------------------------------------------------------------------------------------------- numbers
 for tok in ["0", "-0", "+1", "1", "-1", "00", "007", "1e5", "1E5", "1e+5", "1e-5", "1.", ".1", "-.1", "1.5e3",
