@@ -569,3 +569,26 @@ therefore classified as agent-tier, not a rule gap: the user decided (2026-10-12
 scanners to Sonnet (RULEBOOK §0 tier bullet, §12), and the subnormal and `nan(` facts measured in R2c-A3 were written
 into I8 and D8. This closes the plan's success criterion (item 4, second form); the RULEBOOK status is now
 `stress-tested (2026-10-12)`. Evidence: `pilots/tinyjson/experiments/stress_test_diff_review.md`, section "Round 2".
+
+## Review of 7115bf6 (ticket 04, Sonnet reviewer a6f12a13c115b598e) - triage, 2026-10-12
+Fixed in attempt 5: `parse_value` cast the code point to `u8` (P2); `assign` leaked the old payload (D13);
+`index_key` looked up the full slice instead of `std::string(key)` (Q5); the five `U32ToU8` sites encoded per code
+point instead of once at the end (D4); markers spelled `MARKER: Id` on their own line above the site, trailer
+`deviations=` now equals the DEVIATION ids in the file (D1,D2,D3,D4,D5,D8,D9,D13).
+
+### Corpus gaps (Judge change, own commit, not done: ticket 04 stays `in_progress` for the Part)
+- `[` + `C4 A2` + `]` and `EF BD 9B` (U+FF5B), `C5 94`, `C5 AE`: a code point whose low byte is a value start char.
+- `utf8_edge_*`: `["` + 26x`a` + `C3 A9` + `"]`; `["` + 26x`a` + `FF 22 5D`; `["` + 27x`a` + `FF 22 5D`;
+  `["` + 25x`a` + `F0 9F 98 80` + `"]`; `["` + 25x`a` + `F0 9F 28 22 5D`.
+- `%f` ties: `[0.0078125]` (`0.007812`), `[0.0000005]`, `[-0.0000001]`, `[1e22]`, `[4.35]`.
+- driver: `index_key` with an embedded NUL key; `parse_string` on the hand-built stream `[0x22, 0xD800, 0x22]`
+  (C++ `invalid utf32 string: wstring_convert::to_bytes`).
+
+## Rule proposals
+- RULEBOOK §4: "Until the stress test fixes the exact sites, a marker goes on every source site cited in §8 and §9"
+  is not decidable by `gate.py`. Proposed: "A marker goes on every statement where the Rust code reproduces a QUIRK or
+  implements a DEVIATION. The PORT STATUS `deviations=` field is the set of D ids with at least one
+  `DEVIATION(port): D<n>` line in the file."
+- CPP26: the buffer field is `buf` and the position `_pos` (the rulebook says `pos`); amend the row to the field names
+  the Judge adapter and the skeleton use.
+- Q2, Q6-Q10, Q12-Q20 and D6, D7, D10-D16 have no marker in the file: they describe behaviour with no single statement.

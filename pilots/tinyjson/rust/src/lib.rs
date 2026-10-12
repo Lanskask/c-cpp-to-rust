@@ -124,10 +124,11 @@ impl json {
         }
     }
 
-    /// `operator=`
+    /// `operator=`: D13 leaks the old payload in C++; Rust drops it
     pub fn assign(&mut self, other: &json) {
-        // Drop the current value
-        let _ = self.clone_and_cleanup();
+        // D13: the old value is dropped (Drop frees the payload)
+        // DEVIATION(port): D13
+        drop(std::mem::replace(self, json::new()));
 
         // Copy the other's value
         match other._type {
@@ -168,19 +169,11 @@ impl json {
         self._type = other._type;
     }
 
-    fn clone_and_cleanup(&mut self) {
-        // Get the clone to clean up
-        let _ = self.clone();
-        // Reset to null
-        self._type = json_t::null;
-        self._value = std::ptr::null_mut();
-    }
-
     /// `operator==` - the C++ switch fallthrough as an explicit chain over `(self._type, o._type)` (RULEBOOK C4, D1, D2).
     /// A case whose right type matches returns its payload comparison at once (true or false); no match falls to the
     /// next case in order `array, object, null, string, boolean, number_integer, number_double, default`.
     pub fn eq(&self, o: &json) -> bool {
-        // QUIRK(port): Q1 - container vs null is true (the fallthrough reaches the null case), null vs container false
+        // Q1: a container compared with null is true (the fallthrough reaches the null case), null vs container false
         if self._type == json_t::array && o._type == json_t::array {
             let a = unsafe { &*(self._value as *const json_array) };
             let b = unsafe { &*(o._value as *const json_array) };
@@ -193,6 +186,7 @@ impl json {
             || self._type == json_t::null)
             && o._type == json_t::null
         {
+            // QUIRK(port): Q1
             return true;
         } else if self._type == json_t::string && o._type == json_t::string {
             let a = unsafe { &*(self._value as *const Vec<u8>) };
@@ -207,7 +201,8 @@ impl json {
             let b = unsafe { &*(o._value as *const i64) };
             return a == b;
         } else if self._type == json_t::number_integer && o._type == json_t::number_double {
-            // DEVIATION(port): D2 - left integer, right double: the integer bit pattern is compared as a double
+            // D2: left integer, right double: the integer bit pattern is compared as a double
+            // DEVIATION(port): D2
             let a = unsafe { &*(self._value as *const i64) };
             let b = unsafe { &*(o._value as *const f64) };
             return f64::from_bits(*a as u64) == *b;
@@ -216,7 +211,8 @@ impl json {
             let b = unsafe { &*(o._value as *const f64) };
             return a == b;
         }
-        // default: (and every UB pair of D1) -> false
+        // default: every UB pair of D1 is false in both stages
+        // DEVIATION(port): D1
         false
     }
 
@@ -302,12 +298,15 @@ impl json {
     /// `operator[](const char*)`: `key` is the C string without its NUL.
     pub fn index_key(&mut self, key: &[u8]) -> Result<&mut json> {
         check_type_mismatch(self._type, json_t::object)?;
+        // BUG(port): Q5 `std::string(const char*)` stops at the first NUL
+        // QUIRK(port): Q5
+        let key = c_str(key);
         let o = unsafe { &mut *(self._value as *mut json_object) };
         if !o.contains_key(key) {
             return Err(Error {
                 kind: ErrorKind::RuntimeError,
                 // "key " + std::string(key) + " not found.": `std::string(const char*)` stops at the first NUL
-                what: [b"key ".as_slice(), c_str(key), b" not found.".as_slice()].concat(),
+                what: [b"key ".as_slice(), key, b" not found.".as_slice()].concat(),
             });
         }
         Ok(o.get_mut(key).unwrap())
@@ -403,6 +402,8 @@ impl json {
                 let mut result = Vec::new();
                 result.push(b'\"');
                 let s = self.get_string().unwrap();
+                // BUG(port): Q4 the string is written raw, quotes and control bytes are not escaped
+                // QUIRK(port): Q4
                 result.extend_from_slice(&s);
                 result.push(b'\"');
                 result
@@ -580,6 +581,8 @@ fn check_type_mismatch(t1: json_t, t2: json_t) -> Result<()> {
     if t1 != t2 {
         Err(Error {
             kind: ErrorKind::RuntimeError,
+            // the arguments are swapped and print enum integers, as the C++ does
+            // QUIRK(port): Q3
             what: format!(
                 "expect type {}, but found type {}",
                 t1 as i32,
@@ -593,6 +596,8 @@ fn check_type_mismatch(t1: json_t, t2: json_t) -> Result<()> {
 }
 
 /// `trim(const std::string&&)` with the default whitespace `" \t\r\n"`.
+// BUG(port): Q11 token trim removes only space, \t, \r and \n
+// QUIRK(port): Q11
 pub fn trim(s: &[u8]) -> Vec<u8> {
     const TRIM_WHITESPACE: &[u8] = b" \t\r\n";
     trim_impl(s, TRIM_WHITESPACE)
@@ -626,6 +631,7 @@ pub fn U32ToU8(u32_str: &[u32]) -> Result<Vec<u8>> {
             }
             None => {
                 // C++: catch(range_error) -> throw runtime_error("invalid utf32 string: " + ex.what())
+                // DEVIATION(port): D4
                 return Err(Error {
                     kind: ErrorKind::RuntimeError,
                     what: b"invalid utf32 string: wstring_convert::to_bytes".to_vec(),
@@ -663,7 +669,7 @@ pub fn U8ToU32(u8_str: &[u8]) -> Result<Vec<u32>> {
     Ok(result)
 }
 
-/// DEVIATION(port): D5 - emulates the libstdc++ `wbuffer_convert<codecvt_utf8<char32_t>>` input window rule.
+/// D5: emulates the libstdc++ `wbuffer_convert<codecvt_utf8<char32_t>>` input window rule.
 /// Bytes are decoded in windows of at most 29 bytes. An ill-formed byte drops its whole window and ends the stream
 /// without an error; a valid but incomplete sequence at the window end starts the next window; an incomplete sequence
 /// at the very end of the input is dropped.
@@ -702,6 +708,7 @@ fn wbuffer_convert_decode(input: &[u8]) -> Vec<u32> {
 /// Format a double using %f format (6 decimals)
 fn format_double(n: f64) -> String {
     // D9: NaN prints `nan` for both signs, then `inf` / `-inf`; the digits come from `{:.6}`
+    // DEVIATION(port): D9
     if n.is_nan() {
         return "nan".to_string();
     }
@@ -720,6 +727,7 @@ fn c_str(s: &[u8]) -> &[u8] {
 }
 
 /// Object to string
+// PERF(port): get_object() deep-copies the container, as the C++ does
 fn object_to_string(obj: &json) -> Vec<u8> {
     let mut result = Vec::new();
     result.push(b'{');
@@ -733,10 +741,15 @@ fn object_to_string(obj: &json) -> Vec<u8> {
         first = false;
 
         result.push(b'"');
-        result.extend_from_slice(c_str(k)); // QUIRK(port): Q5 - `.c_str()` stops at the first NUL
+        // `.c_str()` stops at the first NUL
+        // BUG(port): Q5 key printed through c_str
+        // QUIRK(port): Q5
+        result.extend_from_slice(c_str(k));
         result.push(b'"');
         result.extend_from_slice(b" : ");
-        result.extend_from_slice(c_str(&v.to_string())); // QUIRK(port): Q5
+        // BUG(port): Q5 nested result printed through c_str
+        // QUIRK(port): Q5
+        result.extend_from_slice(c_str(&v.to_string()));
     }
 
     result.push(b'}');
@@ -744,13 +757,16 @@ fn object_to_string(obj: &json) -> Vec<u8> {
 }
 
 /// Array to string
+// PERF(port): get_array() deep-copies the container, as the C++ does
 fn array_to_string(arr: &json) -> Vec<u8> {
     let mut result = Vec::new();
     result.push(b'[');
 
     let jarray = arr.get_array().unwrap();
     for (i, item) in jarray.iter().enumerate() {
-        result.extend_from_slice(c_str(&item.to_string())); // QUIRK(port): Q5
+        // BUG(port): Q5 nested result printed through c_str
+        // QUIRK(port): Q5
+        result.extend_from_slice(c_str(&item.to_string()));
         if i < jarray.len() - 1 {
             result.push(b',');
         }
@@ -924,6 +940,7 @@ fn scan_hex_value(digits: &[u8], n_frac: usize, exp: i64) -> std::result::Result
 }
 
 /// `std::stoll(str, &pos)` (`tinyjson.h:929-941`, RULEBOOK section 2 I9): the value and `pos`. Sonnet task.
+// DEVIATION(port): D8
 fn stoll(s: &[u8]) -> Result<(i64, usize)> {
     let mut i = 0;
     while i < s.len() && scan_isspace(s[i]) {
@@ -954,6 +971,7 @@ fn stoll(s: &[u8]) -> Result<(i64, usize)> {
 }
 
 /// `std::stod(str, &pos)` (`tinyjson.h:943-954`, RULEBOOK section 2 I8): the value and `pos`. Sonnet task.
+// DEVIATION(port): D8
 fn stod(s: &[u8]) -> Result<(f64, usize)> {
     let n = s.len();
     let mut i = 0;
@@ -1109,7 +1127,8 @@ impl parser {
             s
         };
 
-        // DEVIATION(port): D5 - wbuffer_convert window decoder, not U8ToU32
+        // wbuffer_convert window decoder, not U8ToU32
+        // DEVIATION(port): D5
         let u32_str = wbuffer_convert_decode(input);
         let mut strm = u32_sstream::new(&u32_str);
 
@@ -1139,13 +1158,14 @@ impl parser {
 
     pub fn parse_value(strm: &mut u32_istream) -> Result<json> {
         let c = parser::peek_next_non_space(strm);
-        match c as u8 {
-            b'"' => parser::parse_string(strm),
-            b'[' => parser::parse_array(strm),
-            b'0' | b'1' | b'2' | b'3' | b'4' | b'5' | b'6' | b'7' | b'8' | b'9' | b'-' | b'.' => parser::parse_number(strm),
-            b'{' => parser::parse_object(strm),
-            b'T' | b't' | b'F' | b'f' => parser::parse_bool(strm),
-            b'n' | b'N' => parser::parse_null(strm),
+        // P2: `c` is a code point (or -1 for EOF), compared whole: never cast it to u8
+        match c {
+            0x22 => parser::parse_string(strm),
+            0x5B => parser::parse_array(strm),
+            0x30..=0x39 | 0x2D | 0x2E => parser::parse_number(strm),
+            0x7B => parser::parse_object(strm),
+            0x54 | 0x74 | 0x46 | 0x66 => parser::parse_bool(strm),
+            0x6E | 0x4E => parser::parse_null(strm),
             _ => Err(Error {
                 kind: ErrorKind::RuntimeError,
                 what: b"unexpected character".to_vec(),
@@ -1193,18 +1213,10 @@ impl parser {
         while c != u32::MAX && c != b'"' as u32 {
             if c == b'\\' as u32 {
                 let ch = parser::escape_char(strm)?;
-                if let Some(ch_char) = std::char::from_u32(ch) {
-                    let mut buf = [0u8; 4];
-                    let len = ch_char.encode_utf8(&mut buf).len();
-                    returnVal.extend_from_slice(&buf[..len]);
-                }
+                returnVal.push(ch); // C++ keeps a u32string; U32ToU8 runs once at the end
             } else {
                 let ch = strm.get();
-                if let Some(ch_char) = std::char::from_u32(ch) {
-                    let mut buf = [0u8; 4];
-                    let len = ch_char.encode_utf8(&mut buf).len();
-                    returnVal.extend_from_slice(&buf[..len]);
-                }
+                returnVal.push(ch); // C++ keeps a u32string; U32ToU8 runs once at the end
             }
             c = strm.peek();
         }
@@ -1212,7 +1224,7 @@ impl parser {
         // go past the closing double quote
         parser::skip_char(strm, b'"' as u32)?;
 
-        Ok(returnVal)
+        U32ToU8(&returnVal)
     }
 
     pub fn parse_array(strm: &mut u32_istream) -> Result<json> {
@@ -1255,15 +1267,11 @@ impl parser {
         while c != u32::MAX && c != b',' as u32 && c != b'}' as u32 && c != b']' as u32 {
             c = strm.get();
             let lower = tolower32(c);
-            if let Some(ch) = std::char::from_u32(lower) {
-                let mut buf = [0u8; 4];
-                let len = ch.encode_utf8(&mut buf).len();
-                val_str.extend_from_slice(&buf[..len]);
-            }
+            val_str.push(lower); // C++ keeps a u32string; U32ToU8 runs once at the end
             c = strm.peek();
         }
 
-        let bool_str = trim(&val_str);
+        let bool_str = trim(&U32ToU8(&val_str)?);
         let val_bool = parser::to_bool(&bool_str)?;
         Ok(json::from_bool(val_bool))
     }
@@ -1275,15 +1283,11 @@ impl parser {
         while c != u32::MAX && c != b',' as u32 && c != b'}' as u32 && c != b']' as u32 {
             c = strm.get();
             let lower = tolower32(c);
-            if let Some(ch) = std::char::from_u32(lower) {
-                let mut buf = [0u8; 4];
-                let len = ch.encode_utf8(&mut buf).len();
-                val_str.extend_from_slice(&buf[..len]);
-            }
+            val_str.push(lower); // C++ keeps a u32string; U32ToU8 runs once at the end
             c = strm.peek();
         }
 
-        let null_str = trim(&val_str);
+        let null_str = trim(&U32ToU8(&val_str)?);
 
         if null_str == b"null" {
             Ok(json::new())
@@ -1306,18 +1310,10 @@ impl parser {
         while c != u32::MAX && c != b'"' as u32 {
             if c == b'\\' as u32 {
                 let ch = parser::escape_char(strm)?;
-                if let Some(ch_char) = std::char::from_u32(ch) {
-                    let mut buf = [0u8; 4];
-                    let len = ch_char.encode_utf8(&mut buf).len();
-                    string_val.extend_from_slice(&buf[..len]);
-                }
+                string_val.push(ch); // C++ keeps a u32string; U32ToU8 runs once at the end
             } else {
                 let ch = strm.get();
-                if let Some(ch_char) = std::char::from_u32(ch) {
-                    let mut buf = [0u8; 4];
-                    let len = ch_char.encode_utf8(&mut buf).len();
-                    string_val.extend_from_slice(&buf[..len]);
-                }
+                string_val.push(ch); // C++ keeps a u32string; U32ToU8 runs once at the end
             }
             c = strm.peek();
         }
@@ -1325,7 +1321,7 @@ impl parser {
         // skip the closing double quote
         parser::skip_char(strm, b'"' as u32)?;
 
-        Ok(json::from_string(&string_val))
+        Ok(json::from_string(&U32ToU8(&string_val)?))
     }
 
     pub fn parse_number(strm: &mut u32_istream) -> Result<json> {
@@ -1334,15 +1330,11 @@ impl parser {
         let mut c = strm.peek();
         while c != u32::MAX && c != b',' as u32 && c != b']' as u32 && c != b'}' as u32 {
             c = strm.get();
-            if let Some(ch) = std::char::from_u32(c) {
-                let mut buf = [0u8; 4];
-                let len = ch.encode_utf8(&mut buf).len();
-                num_str.extend_from_slice(&buf[..len]);
-            }
+            num_str.push(c); // C++ keeps a u32string; U32ToU8 runs once at the end
             c = strm.peek();
         }
 
-        let nums = trim(&num_str);
+        let nums = trim(&U32ToU8(&num_str)?);
 
         // try integer first, if not then double
         let is_integer = !nums.iter().any(|&b| {
@@ -1488,4 +1480,4 @@ impl parser {
     }
 }
 
-// PORT STATUS: stage=1 confidence=high todos=0 deviations=D2,D3,D4,D5,D9
+// PORT STATUS: stage=1 confidence=high todos=0 deviations=D1,D2,D3,D4,D5,D8,D9,D13

@@ -8,7 +8,7 @@
 
 ## Tasks
 
-- [ ] Protect the Rulebook and the Judge, then start the fan-out
+- [x] Protect the Rulebook and the Judge, then start the fan-out
   - session started with `claude --settings skill/c-to-rust/assets/settings.json` (SKILL.md step 3.1)
   - `tickets.py mark 04 in_progress`, then an `Edit` of RULEBOOK.md must be refused; if not, stop
   - write `rust/src/lib.rs` (`pub mod <stem>;` per Part) and the cargo features of rulebook §3
@@ -17,7 +17,7 @@
   - per Part: `gate.py --snapshot` -> implementer (`references/stage1-prompt.md`) -> `gate.py` -> review
     (`references/review-prompt.md`) -> commit -> `workqueue.py mark`
   - up to 5 attempts, then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry)
-- [ ] Log every batch
+- [x] Log every batch
   - `make spend PHASE=<phase> SINCE=<timestamp> NOTE=...` and one WORK-LOG entry per batch
 
 ## Acceptance

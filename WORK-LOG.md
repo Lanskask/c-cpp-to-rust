@@ -947,3 +947,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   rulebook; the prompt carried the rows but they were not applied. (3) The guard blocks even reading the harness work
   files via Bash; a make target that prints them is the way.
 - **Next:** review, commit the Part, `workqueue mark done`, tick ticket 04.
+
+## 60. tinyjson ticket 04: independent review of 7115bf6 and attempt 5
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 reviewer subagent (a6f12a13c115b598e); Sonnet 5.5 governor wrote the fixes
+- **Done:** review verdict `fix`: 4 behaviour BLOCKs the Judge could not see (`c as u8` in `parse_value`, `assign`
+  leak, `index_key` NUL, `U32ToU8` at five sites) plus marker and trailer findings. All fixed; `make pilot-tinyjson`
+  PASS, 22/22 tests, 0/5561 corpus diffs. Corpus GAPs and RULE proposals are in RUN-NOTES.
+- **Tells us:** the corpus did not contain code points > U+00FF with a start-char low byte, so a faithful Haiku body
+  passed 5561 inputs with a P2 violation: the review found what the Judge could not. The reviewer's three marker
+  BLOCKs show §4 is not mechanically checkable (RULE proposal). Attempts used: 5 of 5.
+- **Next:** add the corpus GAP inputs (Judge commit), re-gate; Opus applies the RULE proposals to RULEBOOK §12.
