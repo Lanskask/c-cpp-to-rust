@@ -1,2 +1,2 @@
 part_id	kind	source_paths	target_path	tier	deps	state	attempts	model	last_error	commit	updated
-src/tinyjson	file	src/tinyjson.h	rust/src/lib.rs	judgment		in_progress	1				2026-10-12T23:03:16+00:00
+src/tinyjson	file	src/tinyjson.h	rust/src/lib.rs	judgment		done	1			aa15689	2026-10-12T23:20:28+00:00
