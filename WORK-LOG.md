@@ -820,3 +820,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the install target is the plugin cache of version 1.3.1 only (the marketplace clone is a git
   checkout of upstream and was left alone); a plugin update drops the change until the installer is run again.
 - **Next:** try it on a real breakdown: `/mattpocock-skills:to-tickets` then check `make status` in the new folder.
+
+## 48. tinyjson ticket 02 part 1: reference build, C++ driver, corpus, D5 rule
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (a34e52b48cd016cc3, cut by a rate limit, resumed)
+- **Done:** reference build GCC 16.1 + libstdc++, `-std=c++17 -include locale -O0` (Apple clang and g++-11 fail,
+  texts in RUN-NOTES). Upstream tests: 22 cases, 17 passed, 5 failed, re-run by the governor. `dump.cpp`, corpus 5534
+  inputs (seed 20261012), twice-run filter 0 unstable. D5 chunk rule: windows of at most 29 bytes, model agrees on
+  20160 of 20160 inputs. Governor probe: unpinned `\u` is U+0001 in 72 of 100 processes, never U+0000, so D3 was
+  corrected (RULEBOOK §12).
+- **Tells us:** a per-process uninitialised read makes the twice-run filter flaky; the driver pins it by re-exec.
+- **Next:** part 2: Rust driver, stub crate, translated tests, run.py, mutant proof.

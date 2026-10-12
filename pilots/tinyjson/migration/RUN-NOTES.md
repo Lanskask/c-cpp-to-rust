@@ -80,3 +80,134 @@ The RULEBOOK has **36** CPP rows, not 29. Method: each fact carries the enclosin
 - No construct in `facts.tsv` is missing from the CPP rows, apart from the three items above.
 - Proposed edits (not applied; RULEBOOK is for the user's review): CPP21 add `1022` and "10 more via
   `CHECK_TYPE_MISMATCH` use sites 365-424"; CPP27 note the facet `new` inside `wbuffer_convert`.
+
+## Reference build
+
+Ticket 02, part 1 (C++ side), 2026-10-11. Everything below was run in this session; commands are in
+`harness/ref/build_ref.sh`.
+
+### Candidates tried (judge.md section 8)
+
+| Compiler            | Std library      | -std         | Flags                              | Result                                                                                                                           |
+|---------------------|------------------|--------------|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| g++-16 (GCC 16.1.0) | libstdc++ 16.1.0 | c++11, c++17 | none                               | fails: `'wstring_convert' is not a member of 'std'` (needs `<locale>`)                                                           |
+| g++-16 (GCC 16.1.0) | libstdc++ 16.1.0 | c++11, c++17 | `-include locale`                  | **builds and runs** (only deprecation warnings)                                                                                  |
+| g++-11 (GCC 11.5.0) | libstdc++ 11     | c++11, c++17 | with and without `-isysroot`       | fails before the header: `wchar.h: No such file` / `stdio.h: 'FILE' does not name a type` (fixincludes against the macOS 26 SDK) |
+| Apple clang 17.0.0  | libc++           | c++11, c++17 | with and without `-include locale` | fails: `implicit instantiation of undefined template 'std::ctype<char32_t>'` (D16)                                               |
+
+### Reference row
+
+| Item                | Value                                                                              |
+|---------------------|------------------------------------------------------------------------------------|
+| Compiler            | `/opt/homebrew/bin/g++-16`, Homebrew GCC 16.1.0                                    |
+| Standard library    | libstdc++ 16.1.0 (Homebrew), macOS arm64                                           |
+| -std                | `c++17` (`c++11` gives the same 17 of 22; checked)                                 |
+| Extra flags         | `-include locale -w -I <src/src> -I <src/test>`                                    |
+| Driver optimisation | `-O0` (D3: the uninitialised value differs with the optimisation level)            |
+| Test patch 1        | `tests:5` `#include "..\src\tinyjson.h"` to `#include "tinyjson.h"` (Windows path) |
+| Test patch 2        | `tests:70` `9876543210` to `9876543210LL` (ambiguous `long` argument, D7)          |
+
+No expected value is changed (`harness/ref/tinyjsonTests.patch` is the whole diff). Unpatched, GCC 16 stops at
+`tinyjsonTests.cpp:5: fatal error: ..\src\tinyjson.h: No such file or directory`; with only patch 1 it stops at
+`:70: conversion from 'long int' to 'tinyjson::json' is ambiguous`.
+
+### Upstream tests on the reference build (measured)
+
+Command (any cwd): `bash pilots/tinyjson/migration/harness/ref/build_ref.sh`, then
+`pilots/tinyjson/migration/harness/work/ref/tinyjsonTests` (exit code 5, same result 10 runs in a row, and with
+`-std=c++11`):
+
+```text
+test cases:  22 |  17 passed | 5 failed
+assertions: 189 | 184 passed | 5 failed
+```
+
+The earlier claim "17 of 22, 5 failures from D3" is **confirmed**. The failing cases are `Tiny Json Hex Parsing`
+(line 115), `Tiny Json Escape Parsing` (125), `Tiny Json Hex Char Parsing` (210: `U'$' == h1` printed
+`36 == 1`), `Tiny Json Member Parsing` (331) and `SimpleJson Serialization` (382); each asserts the decoding of
+a `\uXXXX` escape.
+
+### D3 correction: the value is not U+0000 and not constant (measured)
+
+RULEBOOK D3 says the Reference at `-O0` decodes every `\uXXXX` to U+0000. Measured: `["A"]` parsed by the
+`-O0` driver gives **U+0001 in 71 of 100 processes** and U+0007 (5), U+0008 (4), U+0009 (6), U+000A (5), U+000B (7),
+U+000C (2) in the others. Inside one process the value is the same for every `\u` (12 in one string, nested keys and
+values); between processes it changes; filling the stack with a pattern before the call does not change it. U+0000
+was never seen. Consequences: D3 needs a new value (modal U+0001) and a user decision; and the twice-run filter of
+judge.md section 3.5 would drop `\u` inputs at random (first corpus run: 24 of 5521 inputs differed between two runs
+of the same binary, all with `\u`). `dump.cpp` therefore pins the process: at start it decodes `A` and, when
+the value is not U+0001, re-executes itself (counter in `TINYJSON_DUMP_TRY`, at most 60 times). With the pin, 200
+runs of one `\u` input gave one md5. This pin is a driver-only measure; the Rust driver needs no port of it.
+
+## Judge, C++ side (ticket 02, part 1)
+
+Files (all under `pilots/tinyjson/migration/harness/` unless stated): `dump.cpp` (driver), `make_inputs.py`
+(corpus), `ref/build_ref.sh`, `ref/tinyjsonTests.cpp` (patched copy), `ref/tinyjsonTests.patch`, `.gitignore`
+(`work/`, `inputs/`, `inputs.manifest.tsv`; checked with `git check-ignore -v`), and
+`pilots/tinyjson/experiments/e1_tinyjson_d5_chunk_rule.py`.
+
+### Driver sections
+
+Output records are `label = value` or `label ! class "what"`. Doubles print as IEEE bit patterns (NaN as `nan`);
+text printed by the library (`to_string`) is printed as is. Sections: `parse`, `node` (every node: type, 7 getters,
+size, 4 conversions, `to_string`, `has_member`, `operator[]` probes, copy, mutators on the copy, children),
+`roundtrip`, `copy`/`assign`, `streams` (`U8ToU32`, `U32ToU8`, every public `parser::` function on a u32 stream
+made from the UTF-8 decode and from the bytes as Latin-1, with the stream position after), `build` (values built by
+constructors, `add_member`, `add_element`, mutation through `operator[]`), `matrix` (fixed values, all ordered
+pairs).
+
+`operator==` is only called on pairs whose C++ result is defined (`eq_safe`: D1 pairs print `skip`; int against
+double is kept, D2). The Rust driver must port `eq_safe` line for line.
+
+### Corpus
+
+`make_inputs.py` (seed 20261012, reproducible: two runs, `diff -r` empty) writes 5534 inputs (64 byte-identical
+duplicates skipped): valid 45, broken 147, num 129, pos 4078 (16 syntactic positions x 256 bytes), utf8 633 (incl.
+offset sweeps of 6 invalid sequences over 0..70 filler bytes), deep 20 (depth up to 200), mut 482.
+
+### Determinism filter and crashes
+
+Command: `python3 -I skill/c-to-rust/scripts/harness.py --orig work/dump --rust work/dump --inputs inputs
+--repeat 2 --jobs 8`.
+
+| Run                   | Inputs | Same | Unstable                         | Exit code not 0 | Timeouts |
+|-----------------------|--------|------|----------------------------------|-----------------|----------|
+| first, without D3 pin | 5521   | 5511 | 14 (+10 differ between two runs) | 0               | 0        |
+| with D3 pin (final)   | 5534   | 5534 | 0                                | 0               | 0        |
+
+Dropped inputs after the pin: none. Crashing or hanging inputs: none (every exit code 0, no timeout). The 24
+inputs that differed without the pin were all `\u` inputs (`valid_0020-0022`, `valid_0044`, `pos_16xx`,
+`mut_xxxx`).
+
+### Timing
+
+One pass of the driver over the corpus: 349 s serial, 37 s with 8 parallel jobs (`xargs -P8`). One harness run
+with `--repeat 2` (three driver runs per input), 8 jobs: about 115 s. The depth-200 inputs dominate the per-input
+cost (1.3 s each: the dump is quadratic in depth).
+
+### D5 chunk rule (experiment e1)
+
+Exact, measured with the driver at the reference build. The input is delivered in windows of at most 29 bytes
+(`_M_get_buf` is 32-3 bytes); a window may end in a valid but incomplete UTF-8 sequence, and the next window then
+starts at those bytes. A window that holds an invalid byte (Unicode well-formed table, also for a sequence cut by
+the window end) gives EOF at the **start of that window**: its characters are lost and nothing after is read.
+ASCII prefix, FF at offset p: the surviving prefix is `29 * floor(p / 29)` bytes (123 offsets, 0 mismatches).
+Model against driver on 20160 inputs (12 invalid sequences x 4 character widths x 0..5 chars x 70 offsets): 20160
+agree. Not covered: chains of 5 or more windows each ending in a split character.
+
+### Skill notes (C++ side)
+
+1. judge.md section 3.5 (drop inputs whose output differs between runs) assumes nondeterminism is a property of the
+   input. Here it is a property of the process (an uninitialised read), so the filter drops inputs at random and
+   the corpus is flaky. judge.md needs a "pin or re-exec the original driver" step for C++ originals.
+2. `harness.py` treats every regular file in `inputs/` as an input, so a manifest must live outside it.
+3. `json(std::string&)` with an lvalue is ambiguous in tinyjson (`json(std::string&)` against
+   `json(std::string)`): the lvalue constructor can never be called; not in the RULEBOOK.
+
+## Correction to D3 (2026-10-12)
+
+The "Decisions by the user" entry above says a `\uXXXX` yields U+0000 at `-O0`. That was my reading and it is wrong:
+the governor re-measured with a 7-line probe (`["A"]`, GCC 16, `-O0`, 100 processes): U+0001 in 72, U+0007 to
+U+000C in 28, U+0000 never. RULEBOOK §8 D3 and §12 now say U+0001 (modal, pinned by the driver's re-exec). The
+reference build and the upstream result (22 cases, 17 passed, 5 failed; 189 assertions, 184 passed) were also
+re-run by the governor and match the subagent's numbers.

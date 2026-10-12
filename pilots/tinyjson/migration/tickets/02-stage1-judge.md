@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 Mapping (Stage 0)
 
-**Status:** todo
+**Status:** in_progress
 
 ## Tasks
 
