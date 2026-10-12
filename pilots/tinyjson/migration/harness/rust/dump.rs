@@ -18,7 +18,7 @@
 mod adapter;
 
 use adapter as a;
-use adapter::{AErr, Arr, Obj, R, S, J};
+use adapter::{AErr, Arr, Obj, J, R, S};
 use std::io::Write;
 use std::sync::Mutex;
 
@@ -210,7 +210,12 @@ fn eq_line(label: &str, x: &J, y: &J) {
     let ne = a::ne(x, y);
     line(
         label,
-        &format!("ab={} ba={} ne={}", num(ab as i64), num(ba as i64), num(ne as i64)),
+        &format!(
+            "ab={} ba={} ne={}",
+            num(ab as i64),
+            num(ba as i64),
+            num(ne as i64)
+        ),
     );
 }
 
@@ -247,7 +252,9 @@ fn dump_node(n: &mut J, p: &str) {
 
     attempt(&cat(p, ".conv_string"), || Ok(q(&a::conv_string(n)?)));
     attempt(&cat(p, ".conv_double"), || Ok(dbl(a::conv_double(n)?)));
-    attempt(&cat(p, ".conv_long_long"), || Ok(num(a::conv_long_long(n)?)));
+    attempt(&cat(p, ".conv_long_long"), || {
+        Ok(num(a::conv_long_long(n)?))
+    });
     attempt(&cat(p, ".conv_bool"), || Ok(num(a::conv_bool(n)? as i64)));
 
     attempt(&cat(p, ".to_string"), || Ok(q(&a::to_string(n))));
@@ -256,23 +263,35 @@ fn dump_node(n: &mut J, p: &str) {
     attempt(&cat(p, ".has_member(absent)"), || {
         Ok(num(a::has_member(n, b"\x01 absent")? as i64))
     });
-    attempt(&cat(p, ".has_member(empty)"), || Ok(num(a::has_member(n, b"")? as i64)));
-    attempt(&cat(p, ".op[absent]"), || Ok(kind(a::index_key(n, b"\x01 absent")?)));
+    attempt(&cat(p, ".has_member(empty)"), || {
+        Ok(num(a::has_member(n, b"")? as i64))
+    });
+    attempt(&cat(p, ".op[absent]"), || {
+        Ok(kind(a::index_key(n, b"\x01 absent")?))
+    });
     attempt(&cat(p, ".op[-1]"), || Ok(kind(a::index(n, -1)?)));
     attempt(&cat(p, ".op[0]"), || Ok(kind(a::index(n, 0)?)));
     attempt(&cat(p, ".op[1]"), || Ok(kind(a::index(n, 1)?)));
     if a::type_code(n) == a::T_ARRAY {
         let sz = a::size(n).expect("type checked") as i64;
-        attempt(&cat(p, ".op[size-1]"), || Ok(kind(a::index(n, (sz - 1) as i32)?)));
+        attempt(&cat(p, ".op[size-1]"), || {
+            Ok(kind(a::index(n, (sz - 1) as i32)?))
+        });
         attempt(&cat(p, ".op[size]"), || Ok(kind(a::index(n, sz as i32)?)));
-        attempt(&cat(p, ".op[size+1]"), || Ok(kind(a::index(n, (sz + 1) as i32)?)));
+        attempt(&cat(p, ".op[size+1]"), || {
+            Ok(kind(a::index(n, (sz + 1) as i32)?))
+        });
     }
     if a::type_code(n) == a::T_OBJECT {
         let m: Obj = a::get_object(n).expect("type checked");
         for (key, _) in m.iter() {
             let kp = path_key(p, key);
-            attempt(&cat(&kp, ".has_member"), || Ok(num(a::has_member(n, key)? as i64)));
-            attempt(&cat(&kp, ".op[c_str]"), || Ok(kind(a::index_key(n, c_str(key))?)));
+            attempt(&cat(&kp, ".has_member"), || {
+                Ok(num(a::has_member(n, key)? as i64))
+            });
+            attempt(&cat(&kp, ".op[c_str]"), || {
+                Ok(kind(a::index_key(n, c_str(key))?))
+            });
         }
     }
 
@@ -401,7 +420,11 @@ fn stream_probes(tag: &str, src: &[u32]) {
     probe_char(&cat(tag, ".escape_char"), src, a::escape_char);
     probe_char(&cat(tag, ".parse_hex"), src, a::parse_hex);
     probe_char_plain(&cat(tag, ".get_next_non_space"), src, a::get_next_non_space);
-    probe_int(&cat(tag, ".peek_next_non_space"), src, a::peek_next_non_space);
+    probe_int(
+        &cat(tag, ".peek_next_non_space"),
+        src,
+        a::peek_next_non_space,
+    );
     probe_void(&cat(tag, ".skip_space"), src, skip_space_void);
     probe_void(&cat(tag, ".skip_char(quote)"), src, skip_quote);
     probe_void(&cat(tag, ".skip_char(colon)"), src, skip_colon);
@@ -543,7 +566,11 @@ fn section_build(data: &[u8]) {
         Ok(q(&a::to_string(&doc)))
     });
     attempt("build.nested.obj_add", || {
-        a::add_member(a::index_key(&mut doc, b"obj")?, data, a::j_int(data.len() as i32))?;
+        a::add_member(
+            a::index_key(&mut doc, b"obj")?,
+            data,
+            a::j_int(data.len() as i32),
+        )?;
         Ok(q(&a::to_string(&doc)))
     });
     attempt("build.nested.index", || {

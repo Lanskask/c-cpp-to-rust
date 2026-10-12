@@ -51,7 +51,10 @@ fn err(e: tj::Error) -> AErr {
         tj::ErrorKind::InvalidArgument => "invalid_argument",
         tj::ErrorKind::OutOfRange => "out_of_range",
     };
-    AErr { class, what: e.what }
+    AErr {
+        class,
+        what: e.what,
+    }
 }
 
 fn r<T>(v: tj::Result<T>) -> R<T> {

@@ -82,7 +82,9 @@ fn to_tj(j: &Json) -> tj::json {
         Json::Double(d) => tj::json::from_double(*d),
         Json::Array(a) => tj::json::from_array(a.iter().map(to_tj).collect()),
         Json::Boolean(b) => tj::json::from_bool(*b),
-        Json::Object(o) => tj::json::from_object(o.iter().map(|(k, v)| (k.clone(), to_tj(v))).collect()),
+        Json::Object(o) => {
+            tj::json::from_object(o.iter().map(|(k, v)| (k.clone(), to_tj(v))).collect())
+        }
         Json::Null => tj::json::new(),
     }
 }
@@ -92,7 +94,9 @@ fn to_tj(j: &Json) -> tj::json {
 fn shallow(j: &Json) -> tj::json {
     match j {
         Json::Array(a) => tj::json::from_array(a.iter().map(|_| tj::json::new()).collect()),
-        Json::Object(o) => tj::json::from_object(o.keys().map(|k| (k.clone(), tj::json::new())).collect()),
+        Json::Object(o) => {
+            tj::json::from_object(o.keys().map(|k| (k.clone(), tj::json::new())).collect())
+        }
         other => to_tj(other),
     }
 }
@@ -105,7 +109,13 @@ fn from_tj(t: &tj::json) -> Json {
         2 => Json::Double(t.get_double().expect("double")),
         3 => Json::Array(t.get_array().expect("array").iter().map(from_tj).collect()),
         4 => Json::Boolean(t.get_bool().expect("bool")),
-        5 => Json::Object(t.get_object().expect("object").iter().map(|(k, v)| (k.clone(), from_tj(v))).collect()),
+        5 => Json::Object(
+            t.get_object()
+                .expect("object")
+                .iter()
+                .map(|(k, v)| (k.clone(), from_tj(v)))
+                .collect(),
+        ),
         6 => Json::Null,
         n => panic!("shim: Stage 1 value of type {n}"),
     }
