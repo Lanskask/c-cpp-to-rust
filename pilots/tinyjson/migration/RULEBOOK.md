@@ -186,7 +186,9 @@ unrelated line (P11).
 
 ## 6. Stage 2 public API
 
-Status: filled 2026-10-12 (governor, on the user's instruction; the user reviews it with the Stage 2 Judge, ticket 05).
+Status: filled and checked 2026-10-12 (governor, on the user's instruction: every public item of `tinyjson.h:90-150` and
+every `parser` function `626-1077` has its §6 name; the user delegated the review, the Stage 2 Judge is validated
+against it, ticket 05).
 The names and signatures below are binding for the Stage 2 adapter (`rust/tests/adapter/mod.rs` is the only file
 that calls the crate) and for the Stage 2 implementer: never change a parameter type, return type, name or
 visibility. The Stage 2 crate is the same `rust/src/lib.rs`; Stage 1 names (§5) disappear. Stage 2 has zero `unsafe`.
@@ -408,3 +410,4 @@ Accepted rule changes, applied between batches from `RUN-NOTES.md` `## Rule prop
 | 2026-10-12 | ticket 04 review      | §4            | markers: a marker goes on every statement that reproduces a QUIRK or implements a DEVIATION; `deviations=` in PORT STATUS equals the D ids marked in the file (review of 7115bf6, user approved)
 | 2026-10-12 | ticket 04 review      | §2.1 CPP26    | `u32_sstream` fields are `buf` and `_pos` (the skeleton and the Judge adapter use `_pos`; user approved)
 | 2026-10-12 | user (ticket 05)      | §6            | Stage 2 public API filled with binding signatures (names, types, errors); user review with the Stage 2 Judge |
+| 2026-10-12 | user (ticket 06)      | §6            | §6 checked against `tinyjson.h:90-150`, `626-1077` by the governor at the user's request: nothing missing |
