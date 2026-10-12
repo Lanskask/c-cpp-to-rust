@@ -315,3 +315,9 @@ Each entry: decision, reason, who/what it came from. Newest last.
     35 throws, 24 `new`, 6 `delete`, 13 `json::json` overloads told apart) and tinyxml2 (regex 205 functions, AST
     416). Also five more idiom rows (X30-X34, tinyjson constructs no row covered) and a fix for the cJSON inventory
     naming 97 functions `CJSON_PUBLIC` (a macro wrapping the return type).
+
+57. **`workqueue.py mark <part> done` refuses `attempts 0`; every implementer run is preceded by `mark in_progress`.**
+    `--no-attempt` allows it for a Part accepted before the counter existed. _Reason:_ the counter only moves on
+    `mark in_progress`, and cJSON Stage 2 ended with attempts 1 (cJSON) and 0 (cJSON_Utils) after three implementer
+    runs, so the 5-attempt limit could never fire (WORK-LOG 48). Not done: counting runs in `gate.py` (it cannot tell
+    an implementer run from a re-gate of the same attempt).

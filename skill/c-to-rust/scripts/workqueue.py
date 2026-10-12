@@ -74,12 +74,26 @@ def next_parts(rows: list[Row], batch: int) -> list[Row]:
     return (resume + ready)[:batch]
 
 
-def mark(rows: list[Row], part: str, state: str, commit: str | None, error: str | None) -> Row:
+def mark(
+    rows: list[Row],
+    part: str,
+    state: str,
+    commit: str | None,
+    error: str | None,
+    allow_unattempted: bool = False,
+) -> Row:
     row = next((r for r in rows if r["part_id"] == part), None)
     if row is None:
         raise ValueError(f"unknown part {part!r}")
     if state == "in_progress":
         row["attempts"] = str(int(row["attempts"] or "0") + 1)
+    if state == "done" and int(row["attempts"] or "0") == 0 and not allow_unattempted:
+        # the counter is the only record of implementer runs (the 5-attempt limit reads it); cJSON Stage 2 ended
+        # with attempts 1 and 0 after three runs because later runs never re-marked the Part in_progress
+        raise ValueError(
+            f"{part}: attempts is 0, so no implementer run was recorded; `mark {part} in_progress` before each run "
+            "(or --no-attempt for a Part accepted before the counter existed)"
+        )
     if state == "failed" and int(row["attempts"] or "0") >= MAX_ATTEMPTS:
         state = "stubbed"
     row["state"] = state
@@ -190,6 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("state", choices=STATES)
     m.add_argument("--commit")
     m.add_argument("--error")
+    m.add_argument(
+        "--no-attempt", action="store_true", help="with `done`: allow attempts 0 (Part accepted before the counter)"
+    )
     v = sub.add_parser("verify")
     v.add_argument(
         "--no-gate-record", action="store_true", help="do not require migration/gate-passed.tsv (legacy Parts)"
@@ -213,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{r['part_id']}\t{r['state']}\t{r['tier']}\t{r['source_paths']}\t{r['target_path']}")
             print(f"workqueue: {len(chosen)} part(s) ready", file=sys.stderr)
         elif args.cmd == "mark":
-            row = mark(rows, args.part, args.state, args.commit, args.error)
+            row = mark(rows, args.part, args.state, args.commit, args.error, args.no_attempt)
             write_parts(path, rows)
             print(f"workqueue: {row['part_id']} -> {row['state']} (attempts {row['attempts']})", file=sys.stderr)
         elif args.cmd == "verify":

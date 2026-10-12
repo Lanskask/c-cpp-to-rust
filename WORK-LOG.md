@@ -783,3 +783,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   tinyjson with `--cxx-flag=-std=c++11`: 92 symbols, engine `clang-ast+regex`, 65 fact rows.
 - **Tells us:** my own tests used no dash-leading flag, so the bug shipped (decision 56). The test now covers it.
 - **Next:** tinyjson session can drop its `clang++` wrapper script and use `--cxx-flag=-std=c++11`.
+
+## 50. Skill: attempt counter rule (user decision)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `mark done` refuses `attempts 0` (`--no-attempt` overrides), SKILL.md rule "every implementer run is
+  preceded by `mark in_progress`", two tests (decision 57). `make test` 117 passed, 1 skipped; lint clean.
+- **Tells us:** the existing cJSON ledgers (attempts 1 and 0) stay as they are; the rule applies to new runs.
+- **Next:** none for the Skill; the tinyjson session follows the rule from its next Part.

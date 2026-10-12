@@ -115,6 +115,9 @@ next step.
 - A review `RULE` or `GAP` that arrives mid-fan-out: commit or revert the ledger first (`gate-passed.tsv`,
   `parts*.tsv`; a gate rollback leaves them dirty), then `tickets.py mark 04 todo` (or 06), RULEBOOK commit with a §12
   row, Judge commit, `mark ... in_progress`, red run on the old crate, then the implementer.
+- **Every implementer run is preceded by `workqueue.py mark <part> in_progress`**, also when the Part is already
+  `in_progress` (a retry after a review, a Judge change or a `RULE`): the counter is the only record of attempts and
+  the limit below reads it. `mark done` refuses `attempts 0`.
 - Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).
 - The rulebook and the Judge are read-only during a batch. Judge changes (new corpus inputs from a
   review `GAP`) are their own commit: `tickets.py mark 04 todo` (or 06), make and commit the change, mark it

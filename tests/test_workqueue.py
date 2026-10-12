@@ -60,3 +60,18 @@ def test_verify_checks_output_and_commit(tmp_path: Path) -> None:
     problems = wq.verify(rows, tmp_path, require_gate_record=False)
     assert len(problems) == 3  # b empty, c missing file, c missing commit
     assert not any(p.startswith("a:") for p in problems)
+
+
+def test_done_without_a_recorded_attempt_is_refused() -> None:
+    rows = [row("a")]
+    with pytest.raises(ValueError, match="attempts is 0"):
+        wq.mark(rows, "a", "done", "abc", None)
+    wq.mark(rows, "a", "done", "abc", None, allow_unattempted=True)
+    assert rows[0]["state"] == "done"
+
+
+def test_retry_while_in_progress_counts_again() -> None:
+    rows = [row("a")]
+    wq.mark(rows, "a", "in_progress", None, None)
+    wq.mark(rows, "a", "in_progress", None, None)
+    assert wq.mark(rows, "a", "done", "abc", None)["attempts"] == "2"
