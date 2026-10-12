@@ -958,3 +958,16 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   passed 5561 inputs with a P2 violation: the review found what the Judge could not. The reviewer's three marker
   BLOCKs show §4 is not mechanically checkable (RULE proposal). Attempts used: 5 of 5.
 - **Next:** add the corpus GAP inputs (Judge commit), re-gate; Opus applies the RULE proposals to RULEBOOK §12.
+
+## 61. tinyjson ticket 04: Judge gaps closed, rulebook amendments, ticket 04 closed
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor (user approved the §4 marker wording and the Judge changes)
+- **Done:** RULEBOOK commit 619b412 (§4 marker rule: every statement that reproduces a QUIRK or implements a
+  DEVIATION; `deviations=` equals the marked D ids; CPP26 fields `buf`/`_pos`; two §12 rows). Judge commit b9d53af:
+  corpus 5561 -> 5755 inputs (P2 value-start code points, D5 window-edge sequences and restarts, `%f` ties) and
+  `stream_probes` on the `wide` stream in both drivers. Ticket 04 `todo` -> `in_progress` cycle, re-gate PASS with
+  baseline 0 failures (check, test, harness), 22/22 tests, 0/5755 corpus diffs.
+- **Tells us:** the red run of the stronger Judge on the pre-review Part (7115bf6) was not done: the permission
+  classifier denied both a file swap and a scratch-crate copy, so the new inputs are proven green on the fixed Part
+  but not shown to fail on the P2 bug. A new Part-level fix therefore rests on the reviewer's reading.
+- **Next:** ticket 05 (Stage 2 Judge).

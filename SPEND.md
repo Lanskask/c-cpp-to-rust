@@ -40,3 +40,4 @@ Written by `spend.py` from Claude Code transcripts (decision 16).
 | 2026-10-12 20:32 | E4-tinyjson-s1-scanners | - | 58 | 8296 | 157222 | 3277542 | 27 | claude-sonnet-5-5:8296 | ticket 04 attempt 1: Sonnet stoll/stod scanner subagent |
 | 2026-10-12 20:40 | E4-tinyjson-s1-a2 | - | 400 | 4916 | 83489 | 4094442 | 54 | claude-haiku-4-5-20251001:74, claude-sonnet-5-5:4842 | ticket 04 attempt 2: Haiku 5.5 Part body (+ governor fix of u32_sstream skeleton) |
 | 2026-10-12 22:16 | E4-tinyjson-s1-attempts3-4 | - | 1288 | 37307 | 446052 | 16300028 | 214 | <synthetic>:0, claude-haiku-4-5-20251001:266, claude-sonnet-5-5:37041 | ticket 04 attempts 3-4: Haiku fix run (interrupted by rate limit), governor fixes eq/U32ToU8/D5/Q5/to_bool/%f; Judge GREEN |
+| 2026-10-12 22:36 | E4-tinyjson-s1-review | - | 172 | 50210 | 222976 | 12119159 | 85 | claude-sonnet-5-5:50210 | ticket 04: review of 7115bf6, fixes, Judge gaps, rulebook amendments |

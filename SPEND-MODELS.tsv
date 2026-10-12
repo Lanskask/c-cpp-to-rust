@@ -47,3 +47,4 @@ date	phase	model	input	output	cache_create	cache_read	messages
 2026-10-12 22:16	E4-tinyjson-s1-attempts3-4	<synthetic>	0	0	0	0	2
 2026-10-12 22:16	E4-tinyjson-s1-attempts3-4	claude-haiku-4-5-20251001	1140	266	189861	8343226	141
 2026-10-12 22:16	E4-tinyjson-s1-attempts3-4	claude-sonnet-5-5	148	37041	256191	7956802	71
+2026-10-12 22:36	E4-tinyjson-s1-review	claude-sonnet-5-5	172	50210	222976	12119159	85
