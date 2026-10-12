@@ -427,6 +427,8 @@ static void section_streams(const std::string& data)
     }
     line("streams.wide", u32_text(wide));
     attempt("streams.U32ToU8(wide)", [&] { return q(U32ToU8(wide)); });
+    // ticket 04 review: the parser functions on a stream that holds surrogates and values above 0x10FFFF (D4)
+    stream_probes("streams.wide", wide);
 
     // scalar helpers on the whole input (they take std::string by value)
     attempt("streams.to_bool", [&] { return num(parser::to_bool(data)); });

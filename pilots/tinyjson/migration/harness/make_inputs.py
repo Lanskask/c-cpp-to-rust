@@ -163,6 +163,18 @@ for tok, desc in [("truť", "U+0165 (low byte 'e') ends true"), ("falsť", "U+01
     add("broken", b"[" + tok.encode() + b"]", f"{desc}, in array (P3)")
     add("broken", b'{"a":' + tok.encode() + b"}", f"{desc}, as member value (P3)")
     add("broken", tok.encode(), f"{desc}, as the whole input (P3, stream probes)")
+# ticket 04 review (P2): a code point above U+00FF whose low byte is a value-start character: `c as u8` in
+# parse_value would dispatch on that byte, C++ switches on the whole code point and throws `unexpected character`
+for ch, desc in [("\u0122", "U+0122 (low byte '\"')"), ("\u015b", "U+015B (low byte '[')"),
+                 ("\u017b", "U+017B (low byte '{')"), ("\u0130", "U+0130 (low byte '0')"),
+                 ("\u012d", "U+012D (low byte '-')"), ("\u012e", "U+012E (low byte '.')"),
+                 ("\u0154", "U+0154 (low byte 'T')"), ("\u0174", "U+0174 (low byte 't')"),
+                 ("\u0146", "U+0146 (low byte 'F')"), ("\u0166", "U+0166 (low byte 'f')"),
+                 ("\u016e", "U+016E (low byte 'n')"), ("\u014e", "U+014E (low byte 'N')"),
+                 ("\uff5b", "U+FF5B (low byte '[')"), ("\U0001f622", "U+1F622 (low byte '\"')")]:
+    add("broken", b"[" + ch.encode() + b"]", f"{desc} as an array value (P2)")
+    add("broken", b'{"a":' + ch.encode() + b"}", f"{desc} as a member value (P2)")
+    add("broken", ch.encode() + b"]", f"{desc} as the first character (P2)")
 
 # --------------------------------------------------------------------------------------------------- numbers
 for tok in ["0", "-0", "+1", "1", "-1", "00", "007", "1e5", "1E5", "1e+5", "1e-5", "1.", ".1", "-.1", "1.5e3",
@@ -174,6 +186,11 @@ for tok in ["0", "-0", "+1", "1", "-1", "00", "007", "1e5", "1E5", "1e+5", "1e-5
             "-e5", "1.7976931348623157e308", "123456789012345678901234567890", "0.000000000000000000001"]:
     add("num", b"[" + tok.encode() + b"]", f"number token {tok!r} in array")
     add("num", b'{"n":' + tok.encode() + b"}", f"number token {tok!r} in object")
+# ticket 04 review (D9): `%f` rounding at the 7th decimal (exact binary ties and near-ties), large exact expansions
+for tok in ["0.0078125", "0.0000005", "-0.0000001", "1e22", "4.35", "0.5", "2.5e-7", "1.0000005", "0.1234565",
+            "123456789.0000005", "1e15", "1.5e300", "0.0000015", "0.0000025", "-0.0", "0.00000049999999999999994"]:
+    add("num", b"[" + tok.encode() + b"]", f"%f probe {tok!r} in array")
+    add("num", b'{"n":' + tok.encode() + b"}", f"%f probe {tok!r} in object")
 
 # --------------------------------------------------------------------------------------------------- byte x position
 POS: list[tuple[str, bytes, bytes]] = [
@@ -248,6 +265,15 @@ for k in range(0, 24):
     add("utf8", b'["' + b"a" * k + b"\xe4\xb8\x96" + b"b" * 3 + b'\xff"]', f"sweep FF after {k} a + CJK + bbb")
 for k in range(0, 24):
     add("utf8", b'["' + b"a" * k + b'\xff' + b'a' * 60 + b'"]', f"sweep FF after {k} a, then 60 a")
+# ticket 04 review (D5): sequences cut by the 29-byte window edge, a window restart, an ill-formed continuation at
+# the edge; the lead byte is placed at every offset 22..31 so each cut (1, 2 or 3 bytes in) is hit
+for k in range(22, 32):
+    for sq_name, sq in [("2-byte", b"\xc3\xa9"), ("3-byte", b"\xe4\xb8\x96"), ("4-byte", b"\xf0\x9f\x98\x80"),
+                        ("ill-formed after C3", b"\xc3\x28"), ("ill-formed after E4 B8", b"\xe4\xb8\x28"),
+                        ("ill-formed after F0 9F", b"\xf0\x9f\x28")]:
+        add("utf8", b'["' + b"a" * k + sq + b'"]', f"{sq_name} after {k} filler bytes (window edge)")
+        add("utf8", b'["' + b"a" * k + sq + b"b" * 30 + sq + b'"]', f"{sq_name} twice, {k} filler then 30 b (restart)")
+
 
 # --------------------------------------------------------------------------------------------------- depth
 for d in (1, 2, 3, 5, 10, 20, 50, 100, 150, 200):
