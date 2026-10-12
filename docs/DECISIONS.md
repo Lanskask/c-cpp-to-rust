@@ -405,3 +405,8 @@ Each entry: decision, reason, who/what it came from. Newest last.
     row that is not `approved`, including `approved (policy)`; `policy` accepts those rows and the user reviews them
     afterwards. SKILL.md allows policy status only when the user chose it. _Reason:_ decision 65 changed decision 11 on
     a peer's relay; the user asked for a flag to choose (this session). Default is the conservative one.
+
+68. **run.py prints one flushed line per step: `[h:mm:ss] Part i/N [k/N finished, p%]`, attempt, snapshot,
+    implementer, gate, review verdict, ACCEPTED.** Each model or script step prints its start and its duration.
+    _Reason:_ the user's first real run showed a silent driver; a headless stage runs for hours and needs a visible
+    heartbeat. Progress counts Parts of the whole queue, not tokens.

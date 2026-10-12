@@ -25,6 +25,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -368,6 +369,31 @@ def plan(cfg: Config) -> list[str]:
     ]
 
 
+_T0 = time.monotonic()
+
+
+def say(msg: str) -> None:
+    """One progress line, flushed at once: `[mm:ss] msg` (elapsed since the driver started)."""
+    m, s = divmod(int(time.monotonic() - _T0), 60)
+    print(f"[{m // 60:d}:{m % 60:02d}:{s:02d}] {msg}", flush=True)
+
+
+def progress(rows: list[wq.Row], pid: str) -> str:
+    """`Part 3/12 (25% done)`: position of `pid` among all Parts and the share already done or stubbed."""
+    finished = sum(1 for r in rows if r["state"] in ("done", "stubbed"))
+    ids = [r["part_id"] for r in rows]
+    return f"Part {ids.index(pid) + 1}/{len(rows)} [{finished}/{len(rows)} finished, {100 * finished // len(rows)}%]"
+
+
+def timed(fn: object, label: str, *args: object) -> tuple[int, str]:
+    """Run a step `fn(*args)` -> (code, output) and print its start and its duration."""
+    say(f"  {label} ...")
+    t = time.monotonic()
+    code, out = fn(*args)  # ty: ignore[call-non-callable]
+    say(f"  {label}: exit {code} in {time.monotonic() - t:.0f}s")
+    return code, out
+
+
 def run(cfg: Config) -> int:
     problems = preconditions(cfg)
     if problems:
@@ -393,34 +419,55 @@ def run(cfg: Config) -> int:
             break
         part = ready[0]
         pid = part["part_id"]
+        say(f"{progress(rows, pid)} {pid} -> {part['target_path']} (tier {part['tier']})")
         previous = part["last_error"] if part["state"] == "failed" else ""
         while True:
             rows = wq.read_parts(cfg.parts)
             row = next(r for r in rows if r["part_id"] == pid)
+            say(f"{pid}: attempt {int(row['attempts'] or '0') + 1}/{cfg.max_attempts}")
             if int(row["attempts"] or "0") >= cfg.max_attempts:
                 workqueue(cfg, "mark", pid, "failed", "--error", previous or "attempt limit")
                 return stop(cfg, done, notes, f"{pid} is stubbed after {cfg.max_attempts} attempts: write the stub")
             if cfg.budget and spend_output(cfg, started) >= 0.7 * cfg.budget:
                 return stop(cfg, done, notes, f"output-token budget passed 70% of {cfg.budget}")
             workqueue(cfg, "mark", pid, "in_progress")
-            code, out = sh(cfg, cfg.snapshot_cmd, pid)
+            code, out = timed(sh, "snapshot", cfg, cfg.snapshot_cmd, pid)
             if code != 0:
                 return stop(cfg, done, notes, f"snapshot failed: {out.strip()[-200:]}", 1)
             head = git(cfg, "rev-parse", "HEAD")
-            code, report = run_claude(cfg, cfg.model, IMPLEMENTER_TOOLS, implementer_prompt(cfg, part, rows, previous))
+            code, report = timed(
+                run_claude,
+                f"implementer ({cfg.model})",
+                cfg,
+                cfg.model,
+                IMPLEMENTER_TOOLS,
+                implementer_prompt(cfg, part, rows, previous),
+            )
             if code != 0:
+                say(f"  implementer failed: {report.strip()[-200:]}")
                 previous = f"implementer run failed (exit {code}): {report.strip()[-300:]}"
                 workqueue(cfg, "mark", pid, "failed", "--error", previous)
                 continue
-            code, gate_out = sh(cfg, cfg.gate_cmd, pid)  # `STATUS: done` in `report` is a claim; the gate decides
+            code, gate_out = timed(
+                sh, "gate", cfg, cfg.gate_cmd, pid
+            )  # `STATUS: done` in `report` is a claim; the gate decides
+            say("  gate: " + (gate_out.strip().splitlines() or ["(no output)"])[-1])
             if code != 0:
                 previous = "gate: " + " ".join(gate_out.strip().splitlines()[-1:])
                 workqueue(cfg, "mark", pid, "failed", "--error", previous)
                 continue
-            rcode, review = run_claude(
-                cfg, cfg.reviewer_model, REVIEWER_TOOLS, review_prompt(cfg, part, head, gate_out)
+            rcode, review = timed(
+                run_claude,
+                f"review ({cfg.reviewer_model})",
+                cfg,
+                cfg.reviewer_model,
+                REVIEWER_TOOLS,
+                review_prompt(cfg, part, head, gate_out),
             )
             blocks, others, verdict = parse_review(review)
+            say(f"  review: verdict {verdict}, {len(blocks)} BLOCK, {len(others)} GAP/RULE")
+            for ln in blocks:
+                say(f"    {ln[:160]}")
             if others:
                 needs_governor = True
                 notes += [f"{pid}: {ln}" for ln in others]
@@ -439,6 +486,7 @@ def run(cfg: Config) -> int:
             if workqueue(cfg, "mark", pid, "done", "--commit", git(cfg, "rev-parse", "HEAD")) != 0:
                 return stop(cfg, done, notes, f"{pid}: mark done refused (see above); governor decides")
             done.append(pid)
+            say(f"{pid}: ACCEPTED, committed {git(cfg, 'rev-parse', '--short', 'HEAD')}")
             break
         if needs_governor:
             return stop(
@@ -452,6 +500,7 @@ def stop(cfg: Config, done: list[str], notes: list[str], reason: str, code: int 
     if reason:
         summary.append(f"STOPPED: {reason}")
     log_work(cfg, summary)
+    say("summary")
     print("run.py summary:\n  " + "\n  ".join(summary))
     return code
 

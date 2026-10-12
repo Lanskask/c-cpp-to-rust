@@ -1073,3 +1073,9 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Who:** Sonnet 5.5, Skill-editing session (user request)
 - **Done:** flag in `run.py` (default `ask`), SKILL.md and run-loop.md wording, one test (8 in the file).
 - **Next:** none.
+
+## 70. Skill: run.py progress output
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- `say()`, `progress()`, `timed()` in scripts/run.py: per-step lines with elapsed time, Part i/N and % finished.
+- Test run (fake claude) prints 13 lines for one Part; make test unchanged, ruff and ty clean. Decision 68.
