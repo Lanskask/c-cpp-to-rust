@@ -1,5 +1,10 @@
 {
   "permissions": {
+    "allow": [
+      "Agent(model:haiku)",
+      "Agent(model:sonnet)",
+      "Agent(model:opus)"
+    ],
     "deny": [
       "Bash(git reset:*)",
       "Bash(git stash:*)",

@@ -5,4 +5,13 @@ settlers_to_rust.egg-info/SOURCES.txt
 settlers_to_rust.egg-info/dependency_links.txt
 settlers_to_rust.egg-info/top_level.txt
 tests/test_cli.py
+tests/test_gaps_g12.py
+tests/test_gaps_g14_g15.py
+tests/test_gaps_g5_g11.py
+tests/test_gaps_g8_g9.py
+tests/test_gate.py
+tests/test_harness.py
+tests/test_jsmn_run.py
+tests/test_pipeline.py
 tests/test_spend.py
+tests/test_workqueue.py

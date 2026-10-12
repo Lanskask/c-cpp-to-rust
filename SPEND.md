@@ -32,3 +32,7 @@ Written by `spend.py` from Claude Code transcripts (decision 16).
 | 2026-10-12 03:43 | T2-judge-rust-side | - | 364 | 49920 | 800901 | 27195158 | 181 | <synthetic>:0, claude-sonnet-5-5:49920 | tinyjson ticket 02 part 2: Sonnet subagent built Rust adapter/driver/tests, stub crate, run.py, 11 mutants; governor re-ran stub run and mutants |
 | 2026-10-12 17:29 | T3-stress-test | - | 1048 | 30604 | 785679 | 13114343 | 164 | claude-haiku-4-5-20251001:1641, claude-haiku-5-5:6625, claude-opus-5-5:239, claude-sonnet-5-5:22099 | tinyjson ticket 03: 5 Haiku translations (A1,A2,B1,B2,C1), Opus diff review; C2 launch refused by classifier |
 | 2026-10-12 17:49 | T3-apply-rules | - | 1165 | 54372 | 1066317 | 19573931 | 221 | claude-haiku-4-5-20251001:1770, claude-haiku-5-5:20636, claude-opus-5-5:1770, claude-sonnet-5-5:30196 | tinyjson ticket 03: Opus applied P1-P11 to RULEBOOK, C1/C2 review, corpus +27 |
+| 2026-10-12 19:41 | T3-round2-runs | - | 558 | 93659 | 850691 | 14425107 | 118 | claude-haiku-4-5-20251001:126, claude-haiku-5-5:59149, claude-opus-5-5:14, claude-sonnet-5-5:34370 | round 2 A3, C3 (earlier) and B3 Haiku runs |
+| 2026-10-12 19:50 | T3-round2-review | - | 6 | 1060 | 2512 | 236719 | 2 | claude-opus-5-5:2, claude-sonnet-5-5:1058 | Opus review of A3,B3,C3 |
+| 2026-10-12 19:55 | T3-round2b-A | - | 0 | 0 | 0 | 0 | 0 |  | A3b Haiku rerun |
+| 2026-10-12 20:02 | T3-round2c-close | - | 0 | 0 | 0 | 0 | 0 |  | R2c-A3 Sonnet scanner, Opus rulebook close-out |
