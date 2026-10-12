@@ -101,7 +101,8 @@ next step.
 
 - Opus: rulebook, Deviations, Stage 2 API, stress-test diff review, first review per Pilot.
 - Sonnet: governing (this file: the governor session), Judge building, reviews, escalated retries.
-- Haiku: Part bodies and fixes (the implementer prompts).
+- Haiku: Part bodies and fixes (the implementer prompts). The default Haiku is Haiku 5.5 (`claude-haiku-5-5`); an Agent
+  launch says `model: haiku` and gets it.
 - Scripts: everything mechanical. If a step repeats by hand twice, it belongs in a script.
 
 ## Rules that hold in every branch
