@@ -42,7 +42,8 @@ to.
 ### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
 1. `make spend-now`; note the timestamp.
 2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] [--exclude GLOB]... --out <ws>/migration/inventory.tsv`
-   (vendored directories such as `fuzzing/`, `unity/`, `vendor/`, `third_party/` are skipped; add `--exclude` globs for
+   (C++ without a compile database: clang's AST gives exact overloads, `calls.tsv` and `facts.tsv`, falling back to the
+   regex pass per file; `--cxx-flag` passes `-std=` or `-include`, `--no-ast` forces regex. Vendored directories such as `fuzzing/`, `unity/`, `vendor/`, `third_party/` are skipped; add `--exclude` globs for
    anything else that is not library code. Test and example files are never Parts.)
 3. `depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`
 4. `tier.py <ws>/migration/inventory.tsv <ws>/migration/order.txt --out <ws>/migration/parts.tsv`

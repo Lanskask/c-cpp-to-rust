@@ -749,3 +749,16 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   evidence. The tinyjson ticket files were written before `--lang cpp`; the Translation session can re-render them
   with `tickets.py init --lang cpp --force` only if it has ticked nothing, otherwise add the two tasks by hand.
 - **Next:** read the verification report on the five literature ideas before building any of them.
+
+## 48. Skill: ast_facts.py, CJSON_PUBLIC fix, five idiom rows (Skill-editing session)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session; verification of the literature ideas by an Opus subagent (read-only)
+- **Done:** `scripts/ast_facts.py` (`ast-symbols.tsv`, `calls.tsv`, `facts.tsv`), wired into `inventory.py` (`--cxx`,
+  `--cxx-flag`, `--no-ast`) and `depmap.py` (clang call edges, `main` files are dead-code roots);
+  `declarator_prefix` fixes the cJSON `CJSON_PUBLIC` naming (97 rows); idiom rows X30-X34; `tests/test_ast_facts.py`.
+  `make test` 114 passed, 1 skipped; `make lint` clean (decision 56).
+- **Tells us:** the committed `pilots/cjson/migration/inventory.tsv` still has 97 `CJSON_PUBLIC` function rows (a
+  Translation-owned file; Parts are file-based so the Parts are unaffected, `edges.tsv` and `dead.txt` are not).
+  Parts attempt counters undercount: `workqueue.py mark in_progress` is the only thing that increments them, and
+  cJSON Stage 2 attempts 2-3 ran with the Part already `in_progress` (cJSON: 1, cJSON_Utils: 0, WORK-LOG: 3).
+- **Next:** tinyjson Translation session re-runs `inventory.py` and `depmap.py`; user decides on the attempts counter.

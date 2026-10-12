@@ -9,6 +9,8 @@ Input: inventory.tsv (from inventory.py) and the source root. Outputs in --out-d
   dead.txt    candidate dead code: functions not reachable from tests or from any non-static library function
               that tests reach; examples and unused helpers show up here
 A Part is a group of files sharing directory and stem (jsmn.h + jsmn.c = Part `jsmn`).
+With `calls.tsv` and `ast-symbols.tsv` next to the inventory (written by `inventory.py --lang cpp` through
+ast_facts.py), the call edges of every function clang parsed come from clang's resolved references, not from names.
 Roots for dead-code analysis are symbols in test files (path has a test/tests component or a name starting
 with `test`) and in example/sample/demo directories. Do not --exclude test/ or samples/ in inventory.py: without
 their symbols a header-only library has no caller of its public API and every function is reported dead.
@@ -85,7 +87,31 @@ def include_edges(root: Path, files: set[str]) -> list[tuple[str, str, str]]:
     return edges
 
 
-def symbol_edges(root: Path, syms: list[Sym]) -> list[tuple[str, str, str]]:
+def read_ast_calls(ast_dir: Path) -> tuple[set[str], list[tuple[str, str, str]]] | None:
+    """Clang-resolved call edges from ast_facts.py (`calls.tsv`) and the functions clang parsed (`ast-symbols.tsv`).
+
+    None when either file is missing. A caller clang parsed takes its edges from here, not from names.
+    """
+    calls, syms = ast_dir / "calls.tsv", ast_dir / "ast-symbols.tsv"
+    if not calls.is_file() or not syms.is_file():
+        return None
+    parsed: set[str] = set()
+    for ln in syms.read_text().splitlines():
+        if ln.startswith("#") or ln.startswith("symbol\t"):
+            continue
+        name, kind, file, *_ = ln.split("\t")
+        if kind == "function":
+            parsed.add(f"{name}@{file}")
+    edges: list[tuple[str, str, str]] = []
+    for ln in calls.read_text().splitlines()[1:]:
+        caller, callee, *_ = ln.split("\t")
+        edges.append((caller, callee, "call"))
+    return parsed, edges
+
+
+def symbol_edges(
+    root: Path, syms: list[Sym], ast: tuple[set[str], list[tuple[str, str, str]]] | None = None
+) -> list[tuple[str, str, str]]:
     funcs: dict[str, list[Sym]] = defaultdict(list)
     types: dict[str, list[Sym]] = defaultdict(list)
     for s in syms:
@@ -116,7 +142,7 @@ def symbol_edges(root: Path, syms: list[Sym]) -> list[tuple[str, str, str]]:
         body = "\n".join(lines_of(s[2])[s[3] - 1 : s[4]])
         for name in sorted(set(CALL.findall(body)) - {s[0].rsplit("::", 1)[-1]}):
             t = resolve(funcs.get(name, []), s[2])
-            if t:
+            if t and not (ast and ref(s) in ast[0]):
                 edges.append((ref(s), ref(t), "call"))
         for name in sorted(set(IDENT.findall(body))):
             t = resolve(types.get(name, []), s[2]) if name in types else None
@@ -130,6 +156,8 @@ def symbol_edges(root: Path, syms: list[Sym]) -> list[tuple[str, str, str]]:
                     t = resolve(types[b], f)
                     if d and t:
                         edges.append((ref(d), ref(t), "inherit"))
+    if ast:
+        edges += ast[1]
     return edges
 
 
@@ -186,7 +214,8 @@ def dead_candidates(syms: list[Sym], edges: list[tuple[str, str, str]]) -> list[
         if k != "include":
             adj[a].add(b)
     seen: set[str] = set()
-    todo = [ref(s) for s in syms if is_root_file(s[2])]
+    drivers = {s[2] for s in syms if s[1] == "function" and s[0] == "main"}  # xmltest.cpp: a driver, whatever its name
+    todo = [ref(s) for s in syms if is_root_file(s[2]) or s[2] in drivers]
     while todo:
         v = todo.pop()
         if v in seen:
@@ -196,11 +225,17 @@ def dead_candidates(syms: list[Sym], edges: list[tuple[str, str, str]]) -> list[
     return sorted(
         ref(s)
         for s in syms
-        if s[1] == "function" and ref(s) not in seen and not is_root_file(s[2]) and not implicit_callee(s[0])
+        if s[1] == "function"
+        and ref(s) not in seen
+        and not is_root_file(s[2])
+        and s[2] not in drivers
+        and not implicit_callee(s[0])
     )
 
 
-def build(root: Path, syms: list[Sym]) -> tuple[list[tuple[str, str, str]], list[list[str]], list[str]]:
+def build(
+    root: Path, syms: list[Sym], ast_dir: Path | None = None
+) -> tuple[list[tuple[str, str, str]], list[list[str]], list[str]]:
     files = {s[2] for s in syms} | {
         str(p.relative_to(root))
         for p in root.rglob("*")
@@ -208,7 +243,8 @@ def build(root: Path, syms: list[Sym]) -> tuple[list[tuple[str, str, str]], list
         and p.is_file()
         and not (VENDORED_DIRS & set(p.relative_to(root).parts))
     }
-    edges = include_edges(root, files) + symbol_edges(root, syms)
+    ast = read_ast_calls(ast_dir) if ast_dir else None
+    edges = include_edges(root, files) + symbol_edges(root, syms, ast)
     parts = {part_of(f) for f in {s[2] for s in syms}}
     graph: dict[str, set[str]] = {p: set() for p in parts}
     for a, b, k in edges:
@@ -223,6 +259,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("inventory")
     p.add_argument("--source-root", required=True)
     p.add_argument("--out-dir", default="migration")
+    p.add_argument(
+        "--ast-dir",
+        help="directory with calls.tsv and ast-symbols.tsv from ast_facts.py (default: the inventory's directory)",
+    )
     return p
 
 
@@ -233,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
         print("depmap: need an inventory file and a source root", file=sys.stderr)
         return 1
     syms = read_inventory(inv)
-    edges, sccs, dead = build(root, syms)
+    ast_dir = Path(args.ast_dir) if args.ast_dir else inv.parent
+    edges, sccs, dead = build(root, syms, ast_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "edges.tsv").write_text("src\tdst\tkind\n" + "".join(f"{a}\t{b}\t{k}\n" for a, b, k in sorted(set(edges))))
     cycles = [c for c in sccs if len(c) > 1]

@@ -303,3 +303,15 @@ Each entry: decision, reason, who/what it came from. Newest last.
     _Reason:_ tinyjson tickets 01 requests 4-7, the user's rule "Rust result must match the C++ origin as closely as
     possible", and the user's approval of requests 4-7 (2026-10-11). Not done: the clang AST front end, `mapping.tsv`
     and the semantic failure packet; they wait for the verification of their claims (WORK-LOG 47).
+
+56. **`ast_facts.py`: for `--lang cpp` without a compile database, clang's JSON AST is the inventory engine; the regex
+    pass is the per-file fallback.** `inventory.py` runs it as a subprocess over the library files (tests and
+    examples stay regex), and `depmap.py` reads its `calls.tsv` for every function clang parsed instead of matching
+    call names. The dump is filtered by namespace (`-ast-dump-filter`) because an unfiltered dump of a unit that
+    includes libc++ was 489 MB on tinyjson (measured); a project with no namespace is capped at 150 MB and falls back.
+    `inventory.py` also deletes a stale `calls.tsv` before a regex run. Not done: tests and examples through the AST
+    (their global functions fall outside the namespace filter), constructor calls as edges, templates.
+    _Reason:_ measured on tinyjson (regex 45 symbols and 25 call edges, AST 61 function bodies and 61 call edges,
+    35 throws, 24 `new`, 6 `delete`, 13 `json::json` overloads told apart) and tinyxml2 (regex 205 functions, AST
+    416). Also five more idiom rows (X30-X34, tinyjson constructs no row covered) and a fix for the cJSON inventory
+    naming 97 functions `CJSON_PUBLIC` (a macro wrapping the return type).

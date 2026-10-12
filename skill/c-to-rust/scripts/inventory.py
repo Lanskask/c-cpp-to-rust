@@ -8,6 +8,11 @@ Tags: virtual template goto union setjmp varargs macro-fn static-global errno ma
 Risky-construct tags (G15): fnptr bitfield float-format strtod qsort ctype long asm signal thread.
 `new`/`delete` count as `malloc` only with `--lang cpp`.
 
+Engine, C++ without `--compile-commands`: `ast_facts.py` builds the library files itself and clang's AST names
+every overload, method and operator exactly; it also writes `calls.tsv` (resolved call edges, read by depmap.py),
+`facts.tsv` (throws, new/delete, user conversions) and `ast-symbols.tsv` next to the output. Test and example
+files, and every file clang could not handle, use the regex pass. `--no-ast` forces the regex pass.
+
 Engine: with `--compile-commands` and `clang` on PATH, `clang -Xclang -ast-dump=json` gives exact
 declarations; otherwise (or if clang fails on a file) a regex pass over comment-stripped text is used.
 The regex pass also always runs on files parsed by clang: its `config-macro`/`macro-fn` tags are merged
@@ -23,6 +28,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import re
 import shlex
 import shutil
@@ -499,7 +505,60 @@ def merge_regex(clang_syms: list[Symbol], rx: list[Symbol]) -> list[Symbol]:
     return macros + sorted([*clang_syms, *extra], key=lambda s: (s.start, s.end))
 
 
-def inventory(root: Path, lang: str, db: Path | None, exclude: tuple[str, ...] = ()) -> tuple[list[Symbol], str]:
+TEST_LIKE_DIRS = {"test", "tests", "unittest", "unittests", "example", "examples", "sample", "samples", "demo", "bench"}
+AST_OUTPUTS = ("ast-symbols.tsv", "calls.tsv", "facts.tsv")
+
+
+def run_ast_facts(
+    root: Path, files: list[str], ast_dir: Path, cxx: str, flags: tuple[str, ...]
+) -> dict[str, list[tuple[str, str, int, int]]] | None:
+    """Run ast_facts.py as a subprocess (scripts stay self-contained); {file: [(name, kind, start, end)]} or None."""
+    for n in AST_OUTPUTS:
+        (ast_dir / n).unlink(missing_ok=True)  # never leave a stale clang result beside a regex inventory
+    if not files or shutil.which(cxx) is None:
+        return None
+    cmd = [sys.executable, "-I", str(Path(__file__).with_name("ast_facts.py")), str(root), "--out-dir", str(ast_dir)]
+    cmd += ["--cxx", cxx]
+    for f in files:
+        cmd += ["--file", f]
+    for fl in flags:
+        cmd += ["--cxx-flag", fl]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    sys.stderr.write(r.stderr)
+    out = ast_dir / "ast-symbols.tsv"
+    if r.returncode != 0 or not out.is_file():
+        return None
+    got: dict[str, list[tuple[str, str, int, int]]] = {}
+    for ln in out.read_text().splitlines():
+        if ln.startswith("#") or ln.startswith("symbol\t"):
+            continue
+        name, kind, file, lines = ln.split("\t")
+        a, b = lines.split("-")
+        got.setdefault(file, []).append((name, kind, int(a), int(b)))
+    return got
+
+
+def ast_symbols(root: Path, rel: str, rows: list[tuple[str, str, int, int]], lang: str) -> list[Symbol]:
+    text = (root / rel).read_text(errors="replace").split("\n")
+    syms: list[Symbol] = []
+    for name, kind, a, b in rows:
+        span = "\n".join(text[a - 1 : b])
+        tags = collect_tags(
+            strip_comments_and_strings(span), kind, [], lang, strip_comments_and_strings(span, keep_strings=True)
+        )
+        syms.append(Symbol(name, kind, rel, a, b, tags))
+    return syms
+
+
+def inventory(
+    root: Path,
+    lang: str,
+    db: Path | None,
+    exclude: tuple[str, ...] = (),
+    ast_dir: Path | None = None,
+    cxx: str = "clang++",
+    cxx_flags: tuple[str, ...] = (),
+) -> tuple[list[Symbol], str]:
     syms: list[Symbol] = []
     engine = "regex"
     entries: dict[str, dict[str, object]] = {}
@@ -507,7 +566,20 @@ def inventory(root: Path, lang: str, db: Path | None, exclude: tuple[str, ...] =
         for e in json.loads(db.read_text()):
             entries[str(Path(str(e["directory"])) / str(e["file"]))] = e
     used_clang = False
-    for f in source_files(root, lang, exclude):
+    files = source_files(root, lang, exclude)
+    ast_rows: dict[str, list[tuple[str, str, int, int]]] = {}
+    if lang == "cpp" and ast_dir is not None:
+        lib = [
+            str(f.relative_to(root))
+            for f in files
+            if not (TEST_LIKE_DIRS & set(f.relative_to(root).parts[:-1]))
+            and not f.stem.lower().startswith("test")
+            and str(f.resolve()) not in entries
+            and str(f) not in entries
+        ]
+        ast_rows = run_ast_facts(root, lib, ast_dir, cxx, cxx_flags) or {}
+    used_ast = False
+    for f in files:
         rel = str(f.relative_to(root))
         entry = entries.get(str(f.resolve())) or entries.get(str(f))
         got = scan_clang(entry, root, lang) if entry else None
@@ -516,10 +588,15 @@ def inventory(root: Path, lang: str, db: Path | None, exclude: tuple[str, ...] =
         if got is not None:
             used_clang = True
             syms += merge_regex([s for s in got if s.file == rel], rx)
+        elif rel in ast_rows:
+            used_ast = True
+            syms += merge_regex(ast_symbols(root, rel, ast_rows[rel], lang), rx)
         else:
             syms += rx
     if used_clang:
         engine = "clang-ast+regex-fallback" if entries else "clang-ast"
+    elif used_ast:
+        engine = "clang-ast+regex"
     return syms, engine
 
 
@@ -537,6 +614,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="source-root-relative glob to leave out (repeatable); vendored dirs like fuzzing/ and unity/ are "
         "always skipped",
     )
+    p.add_argument(
+        "--cxx", default=os.environ.get("CXX", "clang++"), help="C++ compiler for the AST engine (--lang cpp)"
+    )
+    p.add_argument(
+        "--cxx-flag",
+        action="append",
+        default=[],
+        metavar="FLAG",
+        help="extra flag for the AST engine, repeatable (for example -std=c++11, -include, locale)",
+    )
+    p.add_argument("--no-ast", action="store_true", help="--lang cpp: use the regex pass only")
     return p
 
 
@@ -548,11 +636,17 @@ def main(argv: list[str] | None = None) -> int:
     if not root.is_dir():
         print(f"inventory: {root} is not a directory", file=sys.stderr)
         return 1
-    syms, engine = inventory(
-        root, args.lang, Path(args.compile_commands) if args.compile_commands else None, tuple(args.exclude)
-    )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    syms, engine = inventory(
+        root,
+        args.lang,
+        Path(args.compile_commands) if args.compile_commands else None,
+        tuple(args.exclude),
+        None if args.no_ast else out.parent,
+        args.cxx,
+        tuple(args.cxx_flag),
+    )
     rows = [f"{s.name}\t{s.kind}\t{s.file}\t{s.start}-{s.end}\t{','.join(dict.fromkeys(s.tags))}" for s in syms]
     out.write_text(f"# engine: {engine}\n# cmd: {cmd}\nsymbol\tkind\tfile\tlines\ttags\n" + "\n".join(rows) + "\n")
     print(f"inventory: {len(syms)} symbols, engine={engine} -> {out}", file=sys.stderr)
