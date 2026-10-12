@@ -248,6 +248,7 @@ impl U32Stream {
     pub fn new(s: &[u32]) -> U32Stream;
     pub fn peek(&mut self) -> u32;
     pub fn get(&mut self) -> u32;
+    pub fn tellg(&self) -> usize;                          // position, read by the Judge driver (Q13)
 }
 
 pub struct Parser;                                         // CPP29: associated functions, no state
@@ -280,7 +281,7 @@ pub fn u8_to_u32(s: &[u8]) -> Result<Vec<u32>>;            // U8ToU32
 - The parser functions stay public and keep their stream semantics, including the position left after an error (Q13).
 - `JsonType::Invalid` stays (it is part of the type's value set and `type_name` maps it), though no `Json` has it.
 - `get_string`, `get_object` and `get_array` return borrows where C++ returned copies: not observable (Q19, CPP20).
-- The Stage 1 `tellg` helper of the stream is not part of the API.
+- `tellg` is part of the API: the driver compares the stream position after every parser call (Q13).
 
 ## 7. Error model
 
