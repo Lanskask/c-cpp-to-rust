@@ -831,3 +831,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   corrected (RULEBOOK §12).
 - **Tells us:** a per-process uninitialised read makes the twice-run filter flaky; the driver pins it by re-exec.
 - **Next:** part 2: Rust driver, stub crate, translated tests, run.py, mutant proof.
+
+## 49. tinyjson ticket 02 done: Stage 1 Judge built and shown able to fail
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (a95b935eb250011bc)
+- **Done:** scratch crate (stub, `todo!()` bodies), adapter, Rust driver (literal-order port check 138 of 138), 22
+  translated tests, `run.py`. Governor re-ran: stub RED, 22 of 22 translated tests fail, 5534 of 5534 corpus diffs,
+  58.8 s. Mutants re-run by the governor: 11 of 11 caught by the corpus; upstream tests alone 8 of 11 (miss m05, m07,
+  m10). A throwaway rough port (subagent, not committed) went GREEN 22/22 and 0 of 5534, 63.7 s.
+- **Tells us:** D3's unpinned value varies even inside the reference's Catch binary (19 of 22 pass with U+0001);
+  RULEBOOK §8 D3 says so. Feature matrix is `""` only.
+- **Next:** ticket 03 (stress test, Opus reviews), then 04.

@@ -211,3 +211,132 @@ the governor re-measured with a 7-line probe (`["A"]`, GCC 16, `-O0`, 100 proces
 U+000C in 28, U+0000 never. RULEBOOK §8 D3 and §12 now say U+0001 (modal, pinned by the driver's re-exec). The
 reference build and the upstream result (22 cases, 17 passed, 5 failed; 189 assertions, 184 passed) were also
 re-run by the governor and match the subagent's numbers.
+
+## Judge, Rust side (ticket 02, part 2)
+
+Written 2026-10-12. Every number below was produced by a command run in this session (logs in the session scratchpad,
+report `migration/harness/work/diff.tsv`, mutant table `migration/harness/work/mutants/summary.tsv`).
+
+### Files
+
+| File (under `pilots/tinyjson/`)                | Role                                                                                                                                                          |
+|------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `experiments/scratch-crate/`                   | STUB crate `tinyjson_scratch`, library name `tinyjson`, no dependencies: Stage 1 names of RULEBOOK §5, `Result<T, Error>` of §7, every body `todo!()`; builds |
+| `migration/harness/rust/adapter.rs`            | the only file that calls the crate (`use tinyjson as tj`); plain types `J`, `S`, `AErr`, `R<T>`; Stage 1 version                                              |
+| `migration/harness/rust/dump.rs`               | Rust driver, line-for-line port of `dump.cpp` (sections, labels, `eq_safe`, bit-pattern doubles, error class map)                                             |
+| `migration/harness/rust/upstream.rs`           | the 22 upstream cases as `#[test]`s (`simple_json_constructor`, `tiny_json_hex_parsing`, ...)                                                                 |
+| `migration/harness/run.py`                     | the runner (`--crate DIR`, `--skip-tests`, `--limit N`, `--jobs N`)                                                                                           |
+| `experiments/e2_tinyjson_judge_sensitivity.py` | 11 one-character mutants of the C++ header against corpus and upstream tests                                                                                  |
+
+**How the Rust side is shared between the stub and the real crate.** `harness/rust/*.rs` is the single copy. `run.py`
+installs it into the crate being judged as `<crate>/tests/adapter/mod.rs` (adapter), `<crate>/examples/dump.rs` (driver,
+`#[path = "../tests/adapter/mod.rs"] mod adapter;`) and `<crate>/tests/upstream.rs` (`mod adapter;`), as judge.md §5
+lays out. For the scratch crate these three are git-ignored (`scratch-crate/.gitignore`); ticket 04 commits them in
+`pilots/tinyjson/rust/` and the Gate protects them. A real crate must have library name `tinyjson` and offer the items
+the adapter calls (the stub's `src/lib.rs` is the list); if the faithful port's signatures differ, only `adapter.rs`
+changes. Cargo output goes to `migration/harness/work/cargo-<crate>/`.
+
+### Commands
+
+```bash
+# the Judge on the stub (default crate); exit 0 = green
+python3 -I pilots/tinyjson/migration/harness/run.py
+# the Judge on a crate, translated tests skipped, about 600 inputs
+python3 -I pilots/tinyjson/migration/harness/run.py --crate pilots/tinyjson/rust --skip-tests --limit 600
+# the sensitivity experiment (about 95 s per mutant, one after the other)
+python3 -I pilots/tinyjson/experiments/e2_tinyjson_judge_sensitivity.py [m01_hex_class ...]
+```
+
+`run.py` prints the Reference compiler first (`g++-16 (Homebrew GCC 16.1.0) 16.1.0`), builds the C++ driver with
+`ref/build_ref.sh`, installs and builds the Rust side (`cargo build --example dump`), runs a port check (the string
+literals of `dump.rs`, in order, must equal those of `dump.cpp` from the equality guard on: 138 identical), `cargo test
+--test upstream`, then `harness.py --orig work/dump --rust <examples/dump> --jobs N`. A build error of the crate or a
+driver is exit 2 (the Judge is broken); a panic of the Rust driver is a DIFF (exit code 101).
+
+### Stub run (RED, as required by judge.md §4a item 3)
+
+| Piece            | Result                                                                                                             |
+|------------------|--------------------------------------------------------------------------------------------------------------------|
+| port check       | 138 of 138 literals identical                                                                                      |
+| translated tests | 0 passed, 22 failed of 22 (every `todo!()` panics)                                                                 |
+| corpus           | 5534 DIFF of 5534 inputs; Rust driver exit 101 on all 5534, 1 output line (`input.size`) against hundreds to thousands of lines |
+| runner           | reports diffs, exit 1, `JUDGE: RED`; no build error                                                                |
+| first full run   | 60.3 s wall: C++ build 8.3 s, Rust build 0.1 s (cached), `cargo test` 1.1 s, harness 50.7 s (8 jobs)               |
+
+### Validation beyond the stub (throwaway, not committed)
+
+A stub cannot show that `dump.rs`, the adapter and the translated tests are correct, because after the first `todo!()`
+nothing runs. So a rough 420-line Rust port of the header (copy in `migration/harness/work/rough-crate/`, git-ignored,
+built from the scratchpad; not a deliverable and not a Faithful port: it has D5 as the e1 window model, D3 as constant
+U+0001, a hand-made `strtod`) was run through the same `run.py --crate`. Result: **22 of 22 translated tests pass, 0
+DIFF of 5534 inputs, `JUDGE: GREEN`**, 63.7 s. Its first run showed 2259 DIFF, all of them its own simplifications
+(invalid UTF-8 without the window rule: 2201; a truncated trailing UTF-8 sequence accepted by `from_bytes`: 58); after
+modelling those two, 0. So the driver port, the adapter and the corpus can be green on a plausible port, and the Judge
+is red on the stub and on every mutant below. Ticket 04 should not treat the rough crate as the port.
+
+### Mutants (experiment e2)
+
+| Id  | One-character change in `tinyjson.h` (copy under `work/mutants/`) | Upstream tests (C++)                                      | Corpus (DIFF of 5534)         | Caught by   |
+|-----|-------------------------------------------------------------------|-----------------------------------------------------------|-------------------------------|-------------|
+| m01 | `isxdigit(c)` to `isdigit(c)` (hex digit class)                   | assertion count only (184 to 174)                         | 53                            | both        |
+| m02 | `parse_hex` loop `i < 4` to `i < 3`                               | new failing case: SimpleJson String Parsing Failure       | 49                            | both        |
+| m03 | `trim` default whitespace: TAB to VT                              | new failing case: Tiny Json Number Parsing                | 42                            | both        |
+| m04 | `parse_number` ends at `[` instead of `]`                         | new failing case: Tiny Json Array Parsing                 | 3880                          | both        |
+| m05 | `parse_value` starts a number at `,` instead of `.`               | survived                                                  | 25                            | corpus only |
+| m06 | `escape_char` `case U'f'` to `U'F'`                               | new failing case: Tiny Json String Parsing                | 19                            | both        |
+| m07 | `object_to_string` separator `" : "` to `" :"`                    | survived                                                  | 5534                          | corpus only |
+| m08 | `to_string` boolean false prints `fals`                           | assertion count only (184 to 174)                         | 5534                          | both        |
+| m09 | `array_to_string` comma `!=` to `==` (after last element)         | assertion count only (184 to 174)                         | 5534                          | both        |
+| m10 | `operator[](int)` `>=` to `>` (index == size accepted)            | survived                                                  | 5534 (driver aborts, exit -6) | corpus only |
+| m11 | `to_integer` tail check `!=` to `==`                              | new failing cases: at least 4 (Json Parsing 1, Array, Number, ...) | 1160                          | both        |
+
+**11 of 11 caught by the corpus, 0 survived.** The C++ upstream tests alone catch 8 of 11 and miss m05, m07 and m10; for
+m01, m08 and m09 they catch only through the assertion count, because the failing set is unchanged (the five D3 cases
+already fail, and the mutant just makes SimpleJson Serialization stop earlier). The translated Rust tests assert the D3
+value instead of failing, so for them these three mutants flip pass to fail. m02 was first planted as `4` to `5`; that
+also made the driver's own D3 pin probe (`\u0041`) throw, all 5534 inputs differed trivially, and it was replaced by `4`
+to `3`. Mutants were run on the C++ driver as the "Rust side" (same experiment, no translation noise); no Rust mutant
+was run because the stub cannot be green to begin with.
+
+### D3 in the translated tests
+
+The five cases that fail on the reference (Hex Parsing, Escape Parsing, Hex Char Parsing, Member Parsing, SimpleJson
+Serialization) keep the upstream expectation in a comment and assert U+0001 per `\u` escape, marked `DEVIATION(port):
+D3`. No other expected value changed (the other 17 are copied as they are; SimpleJson Json Class Test uses `assign` for
+`a2 = json(...)`). **Finding for RULEBOOK D3:** the value is not one constant inside the reference's own Catch binary. I
+rebuilt `tinyjsonTests.cpp` with every D3 expectation set to U+0001 (scratch copy) and ran it 12 times: 19 of 22 pass,
+identical each time; Hex Parsing gets U+0001 for the first three escapes and U+0000 for the 4th and 5th, Escape Parsing
+U+0000 for both, and the SimpleJson Serialization key does not match (not found). The value is stack residue of the
+tests that ran before. The pinned C++ *driver* gives U+0001 (396 corpus inputs with `\u`: only U+0001 in the decoded
+strings). So U+0001 is the right value for the Differential harness, and the upstream-test D3 values are an
+approximation that no Rust port can reproduce exactly.
+
+### §5a classes
+
+| Class                              | Status                   | Where / why                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|------------------------------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Allocation failure (D14)           | not testable             | `new` throws `bad_alloc`; a Rust allocation failure aborts the process, which cannot be compared with an exception. The driver would need a replaced `operator new`; recorded as Deviation D14, the driver's `attempt` has a `bad_alloc` arm that never runs                                                                                                                                                                                    |
+| Absent members of built values     | covered                  | `dump.cpp` section `build` and `matrix` and the 22 translated tests build values through every constructor, `add_member`, `add_element` and `operator[]`; absent keys and out-of-range indexes are probed on every node (`has_member(absent)`, `op[absent]`, `op[-1]`, `op[size]`). C++ has no NULL string or key inside a `json`; the NULL-pointer entries (`json((char*)nullptr)`, `parse(nullptr)`, `j[nullptr]`) are UB (D12): not testable |
+| Input without a trailing NUL (Q10) | covered                  | the adapter passes the slice as it is, no NUL added or removed (`adapter::parse`); the C++ driver passes `c_str()`, so an embedded NUL ends the document on both sides; corpus classes `broken_` and `pos_` hold NUL bytes. The `json(char[])` case is cut at its NUL by the driver (`build.char_array`)                                                                                                                                        |
+| Exceptions (class and `what()`)    | covered                  | every call goes through `attempt`; the classes `out_of_range`, `invalid_argument`, `runtime_error` are printed with the exact text. `range_error`, `bad_alloc`, `exception`, `unknown` never occur (the header rethrows everything as `runtime_error`)                                                                                                                                                                                          |
+| Copy semantics                     | partly                   | copy constructor, `operator=`, chain assignment, assignment of null, `get_object`/`get_array` copies (Q19) and mutation of a copy leaving the original unchanged: covered (`copy`, `assign`, `node`, `build` sections). Self-assignment `a = a` is not exercised (the adapter's `assign(&mut J, &J)` cannot express it in Rust)                                                                                                                 |
+| UB pairs of `operator==` (D1)      | not testable on C++ side | `eq_safe` skips them; the Rust port returns false there (D1). RULEBOOK §10 lists extra Rust-only tests (D1 pairs false, Q1, D2 values, Q4, Q5, Q9): not written in this ticket; Q1, D2, Q4, Q5 are covered by the differential matrix and round trip, **D1 has no test**                                                                                                                                                                        |
+| Locale (D8, D9)                    | not testable             | both sides run in the C locale (the driver never calls `setlocale`); a Rust crate has no locale                                                                                                                                                                                                                                                                                                                                                 |
+| Deep nesting (D11)                 | partly                   | depth up to 200 in the corpus (`deep_`); depth 100000 crashes the C++ side and is deliberately absent                                                                                                                                                                                                                                                                                                                                           |
+
+### Notes for the Skill session
+
+1. judge.md §4 and §5 do not say how one Rust driver/adapter/test set serves both a scratch crate and the real crate.
+   Used: single copy in `harness/rust/`, installed into the crate by `run.py`, `[lib] name = "tinyjson"` in the scratch
+   crate so the adapter's `use tinyjson as tj` is the same. A rule for this would help every C++ Pilot.
+
+2. A stub proves nothing about the driver port (execution stops at the first `todo!()`). A cheap port check (ordered
+   string literals of the Rust driver equal the C++ driver's) caught nothing here but would catch drift; a throwaway
+   rough port did the real validation. Suggest §4a mention both for the C++ route.
+
+3. judge.md §6 "one run at a time" held; the e2 experiment is 11 mutants x about 95 s = 17 minutes, most of it the
+   corpus on mutants the upstream tests already catch. judge.md says to skip the corpus then, but this ticket asked
+   which piece catches what, so all were run on both.
+
+4. `harness.py` detail strings are the whole differing line (up to several kB for `streams.*.src` records); a
+   `--detail-width` option would keep logs readable. `run.py` truncates to 160 characters itself.

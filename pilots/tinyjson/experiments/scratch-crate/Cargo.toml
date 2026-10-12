@@ -1,0 +1,15 @@
+[package]
+name = "tinyjson_scratch"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# STUB crate for the Stage 1 Judge of tinyjson (judge.md section 4a, C++ route). Real signatures, `todo!()` bodies.
+# It proves the Judge (red on a stub, the runner reports diffs not build errors); it is not the port.
+# `tests/` and `examples/` are installed by migration/harness/run.py from migration/harness/rust/ (git-ignored here).
+
+[lib]
+# the adapter says `use tinyjson as tj`: the real crate must offer the same library name
+name = "tinyjson"
+
+[dependencies]
