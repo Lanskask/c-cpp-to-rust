@@ -35,3 +35,18 @@ instead.
 - The subagent's measurements (GCC 16: 17 of 22 upstream tests pass, 5 failures from D3; clang does not build the
   header) are **unverified** by the governor: a `-fsyntax-only` clang run of an empty `main` including the header
   gave only a deprecation warning, which does not exercise the templates.
+
+## Decisions by the user (2026-10-11)
+
+- Rule: the Rust result must match the C++ origin as closely as possible. Applied to D3 and D5 (status `approved`);
+  D1, D2, D4 and D6-D16 are still `proposed`.
+- D3: kept bug. Every `\uXXXX` yields U+0000, as the Reference built at `-O0` does. The value is uninitialised in
+  C++ (`-O2` gives U+0001), so the Judge must build the C++ driver at `-O0`; this is my reading of the rule, to be
+  confirmed in ticket 02. The 5 upstream tests that assert real hex decoding are expected to fail in Rust as they
+  do on the Reference.
+- D5: emulate the libstdc++ `wbuffer_convert` chunk rule. The rule is measured with the C++ driver in ticket 02,
+  before Stage 1. Fallback if it cannot be reproduced exactly: end the input at the first invalid byte and add a
+  new Deviation row.
+- D4 interaction: with D3 giving U+0000, `\u` escapes never produce surrogates in the Reference, so D4 is not
+  reachable through `\u` input.
+- Skill-change requests sent to session `skill-editing-w-C2RustXW-PtrTrans-ORBIT` (7 items).

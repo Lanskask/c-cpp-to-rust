@@ -716,3 +716,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   test pass count, clang failure) are not re-verified.
 - **Next:** user approves or vetoes D1-D16 (D3 and D5 first: they decide what the Differential harness may compare);
   then ticket 02.
+
+## 45. tinyjson: D3 and D5 decided by the user's rule "match C++ origin as closely as possible"
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor
+- **Done:** RULEBOOK §8 rows D3 (kept bug: `\u` gives U+0000, driver built at `-O0`) and D5 (emulate the libstdc++
+  chunk rule, measured in ticket 02) set to `approved`; table re-aligned. Seven Skill change requests sent to the
+  Skill-editing session. No Skill file touched.
+- **Tells us:** the status line stays `drafted`; D1, D2, D4, D6-D16 still `proposed`. The `-O0` choice for D3 is the
+  governor's reading of the rule, not measured.
+- **Next:** user decides D1, D2, D4, D6-D16 (or says "same rule for all"), then ticket 02.
