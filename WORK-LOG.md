@@ -1004,3 +1004,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** untested: whether the classifier skips a launch that matches. First tinyjson Sonnet launch with
   `--settings` shows it.
 - **Next:** tinyjson-translation restarts with `claude --name tinyjson-translation --settings skill/c-to-rust/assets/settings.json`.
+
+## 65. Skill: guard.py protects the Judge from subagents only
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (user rule: in a Translation session the whole Pilot except the original
+  code is editable, only Skill files are blocked; docs lookup by a claude-code-guide agent for the `agent_id` field)
+- **Done:** `guard.py` checks a call only when the hook input has `agent_id`; SKILL.md Stage 1 step 1 verifies with
+  `guard.py check`; test `test_main_session_may_edit_the_judge_during_fanout`.
+- **Tells us:** the static deny of `Edit(pilots/*/migration/gate-passed.tsv)` stays: `gate.py` writes the file through
+  Python, so the governor is not hindered. Not verified live: `agent_id` on a real subagent call.
+- **Next:** first tinyjson fan-out after restart: governor edits RULEBOOK.md (allowed), an implementer attempt on it
+  must be refused; if it is not, `agent_id` is missing and decision 62 must be reverted.

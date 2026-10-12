@@ -68,8 +68,10 @@ Done when the rulebook status line says `stress-tested (<date>)` and RUN-NOTES r
 ### 3. `parts.tsv` has `todo`, `in_progress` or `failed` Parts → Stage 1 (Faithful port)
 1. Protect the Rulebook and the Judge for the fan-out (decision 44). The session was started from the repo root with
    `claude --settings skill/c-to-rust/assets/settings.json`, which loads the static deny-rules and the `guard.py`
-   hook. Run `tickets.py mark 04 in_progress` (Stage 2: ticket 06), then **verify**: an `Edit` of
-   `<ws>/migration/RULEBOOK.md` must be refused by the guard. If it is not refused, stop and tell the user.
+   hook. Run `tickets.py mark 04 in_progress` (Stage 2: ticket 06), then **verify**: `guard.py check
+   <ws>/migration/RULEBOOK.md` must print REFUSE. The hook refuses only tool calls of subagents (decision 62): you
+   may still edit the Rulebook and the Judge yourself, and the implementers may not. If `check` prints ALLOW, stop and
+   tell the user.
    A crate with several Parts needs a `rust/src/lib.rs` that declares them (`pub mod <stem>;`) and the cargo features of
    rulebook §3, written by the governor before the first batch (`tier.py --crate-root-part NAME` makes one Part the
    root).

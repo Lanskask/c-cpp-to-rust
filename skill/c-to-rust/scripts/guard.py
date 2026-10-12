@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: protect the Rulebook and the Judge only while a run is in fan-out (decision 44).
+"""PreToolUse hook: protect the Rulebook and the Judge from subagents while a run is in fan-out (decisions 44, 62).
 
 Wired in `assets/settings.json` for Edit|Write|MultiEdit|NotebookEdit|Bash. Claude Code passes the tool call as JSON
 on stdin; exit 2 blocks it and the message on stderr goes back to the model. The stage-dependent paths of Pilot P
 (`migration/RULEBOOK.md`, `migration/parts*.tsv`, `migration/harness/**`, `rust/Cargo.toml`, `rust/tests/*.rs`,
 `rust/examples/**`) are refused only while ticket 04 (Stage 1 fan-out) or 06 (Stage 2 fan-out) of P is
 `in_progress` in `pilots/P/migration/tickets/`. Outside fan-out they are writable: Mapping and Judge building must
-write them. A Judge change during fan-out means: `tickets.py mark 04 todo`, commit the change, mark it in_progress.
+write them. A Judge change by a subagent during fan-out means: `tickets.py mark 04 todo`, commit the change, mark it
+in_progress.
+
+Only tool calls made by a subagent (the hook input carries `agent_id`) are refused. The main (governor) session may
+edit everything under `pilots/P/` except what the static deny-rules in `assets/settings.json` hold (upstream source,
+`UPSTREAM`, `gate-passed.tsv`); the implementers it launches are the ones the Judge must be protected from.
 
 Bash commands are checked crudely: a command that names a protected path and contains a write marker (`>`, `tee`,
 `sed -i`, `mv`, `cp`, `rm`, `truncate`, `perl -i`) is refused. Writing through an interpreter (`python -c`) is not
 detected. The repo root is `$CLAUDE_PROJECT_DIR` (else this script's location), not the shell's cwd. Standalone on
 purpose (runs with `python3 -I`; decision 30). Errors fail closed (exit 2).
 
-`guard.py check PATH` prints ALLOW or REFUSE for PATH (working directory = repo root) and exits 0 / 1.
+`guard.py check PATH` prints ALLOW or REFUSE for PATH as a subagent would see it (working directory = repo root)
+and exits 0 / 1.
 """
 
 from __future__ import annotations
@@ -118,7 +124,8 @@ def main(argv: list[str]) -> int:
         data = json.load(sys.stdin)
         root = project_root()
         cwd = Path(str(data.get("cwd") or root))
-        msg = check_call(root, str(data.get("tool_name", "")), data.get("tool_input") or {}, cwd)
+        subagent = bool(data.get("agent_id"))
+        msg = check_call(root, str(data.get("tool_name", "")), data.get("tool_input") or {}, cwd) if subagent else None
     except Exception as e:  # fail closed: a broken guard must be noticed, not skipped
         print(f"guard: internal error, refusing: {e}", file=sys.stderr)
         return 2

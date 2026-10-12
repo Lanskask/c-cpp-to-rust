@@ -354,3 +354,15 @@ Each entry: decision, reason, who/what it came from. Newest last.
     are evaluated before it (Claude Code docs, via the claude-code-guide agent, not yet seen working). The edit was
     refused twice for this session ([Auto-Mode Bypass], [Self-Modification]) and was not worked around. A session must
     start with `--settings skill/c-to-rust/assets/settings.json` to get it. Open: whether the classifier honours it.
+
+62. **`guard.py` refuses only tool calls made by subagents; the main (governor) session may edit everything under
+    `pilots/P/` except what the static deny-rules hold.** The hook input's `agent_id` (documented PreToolUse field,
+    present when the hook fires inside a subagent) selects the calls to check; without it the call passes. The
+    static deny-rules are unchanged (upstream `src/**`, `UPSTREAM`, `gate-passed.tsv`, which only `gate.py` writes, and
+    the Skill files). Step 1 of the Stage 1 loop verifies with `guard.py check PATH` (REFUSE), not by an `Edit`.
+    _Reason:_ the user's rule (WORK-LOG 65): in a Translation session everything in the Pilot except the original code
+    is editable, only Skill files are blocked. The Judge still needs protection from the Haiku implementers, which is
+    what `agent_id` buys; the 04/06 `mark todo` ritual now applies to subagents only. Unverified in practice: that
+    `agent_id` arrives on real hook calls of Agent-tool subagents (docs only); first fan-out must show an implementer
+    `Edit` of `RULEBOOK.md` refused. A subagent that is not launched through the Agent tool (a separate `claude -p`) has
+    no `agent_id` and is not protected.
