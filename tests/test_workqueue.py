@@ -106,9 +106,7 @@ def test_mark_done_refuses_a_gate_pass_that_excused_checks(tmp_path: Path) -> No
     ws = tmp_path
     (ws / "migration").mkdir()
     parts = ws / "migration" / "parts.tsv"
-    parts.write_text(
-        "\t".join(wq.COLUMNS) + "\n" + "p\tfile\ta.c\tr.rs\tmechanical\t\tin_progress\t1\t\t\t\t\n"
-    )
+    parts.write_text("\t".join(wq.COLUMNS) + "\n" + "p\tfile\ta.c\tr.rs\tmechanical\t\tin_progress\t1\t\t\t\t\n")
     subprocess.run(["git", "-C", str(ws), "init", "-q"], check=True)
     subprocess.run(
         ["git", "-C", str(ws), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"],
