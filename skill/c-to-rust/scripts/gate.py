@@ -12,6 +12,8 @@ regression, except at Stage 2 the Judge checks `test` and `harness`, which alway
 Rollback is path-scoped (decision 17): `git checkout <HEAD> -- <path>` plus `git clean` of that path, for the
 Part's target_path and every `--also PATH` (relative to the workspace root, e.g. rust/tests/adapter/mod.rs).
 Cargo is called with `--manifest-path` (decision 25); pass `--toolchain nightly-2023-04-15` if needed.
+A `--snapshot` appends `part, stage, head, time` to `migration/attempts.tsv`: one row is one implementer run, the
+count `workqueue.py` uses for attempts. Snapshot only at the start of a run, never to "refresh" a baseline.
 A PASS appends `part, stage, head, features, time` to `migration/gate-passed.tsv`; `workqueue.py verify`
 requires such a row for every `done` Part (decision 7: done = gate passed and commit exists).
 Output: TSV lines `check<TAB>features<TAB>pass|fail|skip<TAB>detail`, summary on stderr. Exit 0 pass, 1 fail.
@@ -215,6 +217,20 @@ def record_pass(root: Path, part: str, stage: int, features: list[str]) -> None:
         f.write("\t".join(row) + "\n")
 
 
+def record_snapshot(root: Path, part: str, stage: int) -> None:
+    """Append one row to migration/attempts.tsv: a snapshot is the start of one implementer run (an attempt).
+
+    `workqueue.py mark done` and `verify` take the Part's attempts from here, so the count does not depend on the
+    governor remembering `mark in_progress` before every retry.
+    """
+    path = root / "migration" / "attempts.tsv"
+    if not path.is_file():
+        path.write_text("part\tstage\thead\ttime\n")
+    row = [part, str(stage), git(root, "rev-parse", "HEAD"), datetime.now(UTC).isoformat(timespec="seconds")]
+    with path.open("a") as f:
+        f.write("\t".join(row) + "\n")
+
+
 def rollback(root: Path, head: str, paths: list[str]) -> None:
     """Restore every path (target plus `--also` paths) to `head` and delete untracked files under them."""
     for path in paths:
@@ -260,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
                     }
                 )
             )
+            record_snapshot(root, args.part, args.stage)
             failing = sum(r.status == "fail" for r in results)
             print(f"gate: snapshot of {args.part} recorded ({failing} pre-existing failure(s))", file=sys.stderr)
             return 0

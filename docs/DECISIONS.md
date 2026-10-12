@@ -321,3 +321,11 @@ Each entry: decision, reason, who/what it came from. Newest last.
     `mark in_progress`, and cJSON Stage 2 ended with attempts 1 (cJSON) and 0 (cJSON_Utils) after three implementer
     runs, so the 5-attempt limit could never fire (WORK-LOG 48). Not done: counting runs in `gate.py` (it cannot tell
     an implementer run from a re-gate of the same attempt).
+
+58. **Attempts are counted from `gate.py --snapshot` rows (`migration/attempts.tsv`), not only from `mark in_progress`.**
+    `mark done` sets `attempts` to the larger of the counter and the recorded runs; `verify` flags a done Part whose
+    counter is lower. A snapshot means "an implementer run starts" (stage prompts already pair them). The cJSON
+    Stage 2 ledger was corrected to 3 and 3 from the three implementer commits (01845a3, e67e701, 3e23a08; the gate
+    passed both Parts in each). _Reason:_ decision 57 only catches `attempts 0`; a Part re-run while `in_progress`
+    still undercounted unless the governor remembered to re-mark it. Known limit: a snapshot taken without an
+    implementer run counts as a run; jsmn Stage 1 stays at 0 (accepted before the counter existed, not derivable).

@@ -158,3 +158,13 @@ def test_stage2_judge_checks_are_never_baselined(tmp_path: Path) -> None:
     assert not gate.Result("check", "", "fail").regresses({"check[]"}, 2)
     assert gate.Result("harness", "", "fail").regresses({"harness[]"}, 2)
     assert not gate.Result("harness", "", "fail").regresses({"harness[]"}, 1)
+
+
+def test_snapshot_appends_one_attempt_row_each_time(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts), "--snapshot"]
+    assert gate.main(args) == 0
+    assert gate.main(args) == 0
+    rows = (tmp_path / "migration" / "attempts.tsv").read_text().splitlines()
+    assert rows[0] == "part\tstage\thead\ttime" and len(rows) == 3
+    assert rows[1].split("\t")[:2] == ["p", "1"]

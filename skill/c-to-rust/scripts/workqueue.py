@@ -8,6 +8,8 @@ recorded a pass for it (`migration/gate-passed.tsv`, written by gate.py; `verify
 last check for Parts accepted before the record existed). A record taken after the commit also counts if the
 target is unchanged between the commit and the recorded HEAD. A `stubbed` Part must contain `todo!()` and have a
 `## <part>` section in RUN-NOTES.md (`verify`).
+`attempts` is the larger of the `mark ... in_progress` count and the number of `gate.py --snapshot` rows of the
+Part in `migration/attempts.tsv`; `mark done` raises it to that number and `verify` flags a lower one.
 After MAX_ATTEMPTS failed attempts a Part becomes `stubbed` (PLAN.md §4 retry policy).
 Exit code 0 on success, 1 on failure (verify: 1 if any done Part is not really done).
 """
@@ -116,6 +118,16 @@ def output_nonempty(path: Path) -> bool:
     return path.is_dir() and any(p.is_file() and p.stat().st_size > 0 for p in path.rglob("*"))
 
 
+def snapshot_count(root: Path, part: str, stage: int) -> int:
+    """Implementer runs recorded by `gate.py --snapshot` (migration/attempts.tsv); 0 for a run before the log."""
+    path = root / "migration" / "attempts.tsv"
+    if not path.is_file():
+        return 0
+    lines = [ln.split("\t") for ln in path.read_text().splitlines() if ln.strip()]
+    rows = [dict(zip(lines[0], cells, strict=False)) for cells in lines[1:]]
+    return sum(1 for r in rows if r.get("part") == part and r.get("stage") == str(stage))
+
+
 def stage_of(parts: Path) -> int:
     m = re.search(r"stage(\d+)", parts.name)
     return int(m.group(1)) if m else 1
@@ -166,6 +178,9 @@ def verify(rows: list[Row], root: Path, stage: int = 1, require_gate_record: boo
             continue
         if r["state"] != "done":
             continue
+        runs = snapshot_count(root, part, stage)
+        if runs > int(r["attempts"] or "0"):
+            problems.append(f"{part}: attempts {r['attempts'] or '0'} but {runs} snapshot(s) in attempts.tsv")
         if not output_nonempty(root / r["target_path"]):
             problems.append(f"{part}: target {r['target_path']} missing or empty")
         if not r["commit"] or not git_has_commit(root, r["commit"]):
@@ -230,6 +245,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{r['part_id']}\t{r['state']}\t{r['tier']}\t{r['source_paths']}\t{r['target_path']}")
             print(f"workqueue: {len(chosen)} part(s) ready", file=sys.stderr)
         elif args.cmd == "mark":
+            if args.state == "done":  # attempts = the larger of the counter and the recorded implementer runs
+                runs = snapshot_count(path.resolve().parent.parent, args.part, stage_of(path))
+                for r in rows:
+                    if r["part_id"] == args.part and runs > int(r["attempts"] or "0"):
+                        r["attempts"] = str(runs)
             row = mark(rows, args.part, args.state, args.commit, args.error, args.no_attempt)
             write_parts(path, rows)
             print(f"workqueue: {row['part_id']} -> {row['state']} (attempts {row['attempts']})", file=sys.stderr)

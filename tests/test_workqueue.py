@@ -75,3 +75,26 @@ def test_retry_while_in_progress_counts_again() -> None:
     wq.mark(rows, "a", "in_progress", None, None)
     wq.mark(rows, "a", "in_progress", None, None)
     assert wq.mark(rows, "a", "done", "abc", None)["attempts"] == "2"
+
+
+def test_snapshot_log_raises_attempts_on_done_and_verify_flags_a_lower_value(tmp_path: Path) -> None:
+    (tmp_path / "migration").mkdir()
+    (tmp_path / "migration" / "attempts.tsv").write_text(
+        "part\tstage\thead\ttime\n"
+        "a\t2\th1\tt\n"
+        "a\t2\th2\tt\n"
+        "a\t2\th3\tt\n"
+        "a\t1\th0\tt\n"  # another stage: not counted
+        "b\t2\th4\tt\n"
+    )
+    assert wq.snapshot_count(tmp_path, "a", 2) == 3
+    assert wq.snapshot_count(tmp_path, "a", 1) == 1
+    assert wq.snapshot_count(tmp_path, "missing", 2) == 0
+    parts = tmp_path / "migration" / "parts-stage2.tsv"
+    rows = [row("a", "in_progress", attempts="1")]
+    wq.write_parts(parts, rows)
+    assert wq.main(["--parts", str(parts), "mark", "a", "done", "--commit", "abc"]) == 0
+    assert wq.read_parts(parts)[0]["attempts"] == "3"  # 1 marked, 3 snapshots
+    low = [row("a", "done", attempts="1", commit="abc")]
+    problems = wq.verify(low, tmp_path, 2, require_gate_record=False)
+    assert any("3 snapshot(s)" in p for p in problems)

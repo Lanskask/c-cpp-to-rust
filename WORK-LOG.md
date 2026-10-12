@@ -799,3 +799,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   1022 and the `CHECK_TYPE_MISMATCH` use sites (CPP27 facet note not applied). Ticket 01 marked done.
 - **Tells us:** §2.1 and §6 rows are still `proposed`; they are not Deviations and the user has not reviewed them.
 - **Next:** ticket 02 (Judge): pin the reference toolchain (GCC 16, `-O0`, `-include locale`), measure the D5 chunk rule.
+
+## 51. Skill: attempt counting made automatic; cJSON Stage 2 ledger corrected (user decision)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `gate.py --snapshot` writes `migration/attempts.tsv`; `workqueue.py mark done` and `verify` use it
+  (decision 58, 3 tests). `pilots/cjson/migration/parts-stage2.tsv` attempts 1/0 -> 3/3 at the user's request
+  ("fix all counting"), `verify` ok. `make test` 119 passed, 1 skipped; lint clean.
+- **Tells us:** jsmn Stage 1 attempts 0 and cJSON Stage 1 attempts 1/1 are unchanged: no per-run record exists for
+  them (jsmn predates the counter; cJSON Stage 1 was one merged c2rust run, commit ee90077).
+- **Next:** none for the Skill.
