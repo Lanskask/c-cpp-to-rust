@@ -35,7 +35,11 @@ C_EXT = {".c", ".h"}
 CPP_EXT = {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".inl"}
 SKIP_DIRS = {".git", "build", "target", "node_modules"}
 # vendored or non-library directories that never become Parts (extend per project with --exclude)
-VENDORED_DIRS = {"fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity"}
+VENDORED_DIRS = {
+    "fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity", "catch2", "gtest", "gmock",
+}  # fmt: skip
+# vendored single-file test frameworks next to the project's own tests (tinyjson: test/catch.hpp, 1564 symbols)
+VENDORED_FILES = {"catch.hpp", "catch_amalgamated.hpp", "catch_amalgamated.cpp", "doctest.h", "doctest.hpp", "gtest.h"}
 KEYWORDS = {"if", "for", "while", "switch", "return", "sizeof", "else", "do", "catch", "defined"}
 TAG_PATTERNS: dict[str, re.Pattern[str]] = {
     "virtual": re.compile(r"\bvirtual\b"),
@@ -81,6 +85,23 @@ class Symbol:
     start: int
     end: int
     tags: list[str]
+
+
+def operator_name(before: str, rest: str) -> str | None:
+    """`json::operator bool` / `operator==` / `operator()` as one symbol name; None when `before` is no operator.
+
+    `before` is the declaration header up to the first `(`, `rest` the text from that `(` on.
+    """
+    m = re.search(r"((?:~?\w+::)*)operator(?:\b|(?=[^\w\s]))\s*(.*)$", before)
+    if not m:
+        return None
+    suffix = " ".join(m.group(2).split())
+    if not suffix and rest.startswith(")("):  # operator()(args): the first "(" belongs to the name
+        suffix = "()"
+    if not suffix:
+        return None
+    sep = " " if (suffix[0].isalpha() or suffix[0] == "_") else ""
+    return f"{m.group(1)}operator{sep}{suffix}"
 
 
 def strip_comments_and_strings(text: str, keep_strings: bool = False) -> str:
@@ -246,6 +267,9 @@ def scan_regex(text: str, rel: str, lang: str = "c") -> list[Symbol]:
             return ("enum" if "enum" in h.split()[:2] else "record", "")  # anonymous: name from trailing typedef
         if "(" in h:
             before = h.split("(", 1)[0]
+            op = operator_name(before, h[len(before) :])
+            if op:
+                return ("function", op)
             ids = [x for x in IDENT.findall(before) if x not in KEYWORDS]
             if ids and "=" not in before:
                 # Qualified C++ names: Class::method -> keep the last two components
@@ -397,7 +421,9 @@ def source_files(root: Path, lang: str, exclude: tuple[str, ...] = ()) -> list[P
 
     def kept(p: Path) -> bool:
         rel = p.relative_to(root)
-        return not (skip & set(rel.parts)) and not any(fnmatch.fnmatch(str(rel), g) for g in exclude)
+        if skip & set(rel.parts) or rel.name in VENDORED_FILES:
+            return False
+        return not any(fnmatch.fnmatch(str(rel), g) for g in exclude)
 
     return sorted(p for p in root.rglob("*") if p.suffix in exts and p.is_file() and kept(p))
 

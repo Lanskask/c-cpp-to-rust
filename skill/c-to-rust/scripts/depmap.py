@@ -10,7 +10,9 @@ Input: inventory.tsv (from inventory.py) and the source root. Outputs in --out-d
               that tests reach; examples and unused helpers show up here
 A Part is a group of files sharing directory and stem (jsmn.h + jsmn.c = Part `jsmn`).
 Roots for dead-code analysis are symbols in test files (path has a test/tests component or a name starting
-with `test`). Call edges are name-based (a call to a name defined once in the project); ambiguous names are
+with `test`) and in example/sample/demo directories. Do not --exclude test/ or samples/ in inventory.py: without
+their symbols a header-only library has no caller of its public API and every function is reported dead.
+Call edges are name-based (a call to a name defined once in the project); ambiguous names are
 resolved to the same file first and skipped otherwise, so the graph under-approximates for overloads.
 Exit code 0 on success, 1 on failure.
 """
@@ -29,6 +31,7 @@ INHERIT = re.compile(r"\b(?:class|struct)\s+(\w+)\s*(?:final\s*)?:\s*([^{;]+)\{"
 IDENT = re.compile(r"[A-Za-z_]\w*")
 CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 TEST_DIRS = {"test", "tests", "unittest", "unittests"}
+EXAMPLE_DIRS = {"example", "examples", "sample", "samples", "demo"}
 # same list as inventory.py: vendored or non-library directories never take part in the graph
 VENDORED_DIRS = {"fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity", ".git", "build"}
 
@@ -49,6 +52,11 @@ def read_inventory(path: Path) -> list[Sym]:
 def is_test_file(rel: str) -> bool:
     p = Path(rel)
     return bool(TEST_DIRS & set(p.parts[:-1])) or p.stem.lower().startswith("test")
+
+
+def is_root_file(rel: str) -> bool:
+    """Tests and examples are the callers of a library's public API: roots of the dead-code walk."""
+    return is_test_file(rel) or bool(EXAMPLE_DIRS & set(Path(rel).parts[:-1]))
 
 
 def part_of(rel: str) -> str:
@@ -82,7 +90,7 @@ def symbol_edges(root: Path, syms: list[Sym]) -> list[tuple[str, str, str]]:
     types: dict[str, list[Sym]] = defaultdict(list)
     for s in syms:
         if s[1] == "function":
-            funcs[s[0]].append(s)
+            funcs[s[0].rsplit("::", 1)[-1]].append(s)  # call site: `get_string`; symbol: `json::get_string`
         elif s[1] in ("record", "typedef", "enum"):
             types[s[0]].append(s)
     cache: dict[str, list[str]] = {}
@@ -106,7 +114,7 @@ def symbol_edges(root: Path, syms: list[Sym]) -> list[tuple[str, str, str]]:
         if s[1] != "function":
             continue
         body = "\n".join(lines_of(s[2])[s[3] - 1 : s[4]])
-        for name in sorted(set(CALL.findall(body)) - {s[0]}):
+        for name in sorted(set(CALL.findall(body)) - {s[0].rsplit("::", 1)[-1]}):
             t = resolve(funcs.get(name, []), s[2])
             if t:
                 edges.append((ref(s), ref(t), "call"))
@@ -163,6 +171,14 @@ def tarjan(graph: dict[str, set[str]]) -> list[list[str]]:
     return out
 
 
+def implicit_callee(name: str) -> bool:
+    """Operators, constructors and destructors are invoked by syntax, never by a name-based call: not dead evidence."""
+    if re.search(r"(^|::)(operator\b|operator(?=[^\w\s])|~)", name):  # `A::operator std::string` holds a `::`
+        return True
+    *scope, last = name.split("::")
+    return bool(scope) and scope[-1] == last
+
+
 def dead_candidates(syms: list[Sym], edges: list[tuple[str, str, str]]) -> list[str]:
     ref = lambda s: f"{s[0]}@{s[2]}"  # noqa: E731
     adj: dict[str, set[str]] = defaultdict(set)
@@ -170,14 +186,18 @@ def dead_candidates(syms: list[Sym], edges: list[tuple[str, str, str]]) -> list[
         if k != "include":
             adj[a].add(b)
     seen: set[str] = set()
-    todo = [ref(s) for s in syms if is_test_file(s[2])]
+    todo = [ref(s) for s in syms if is_root_file(s[2])]
     while todo:
         v = todo.pop()
         if v in seen:
             continue
         seen.add(v)
         todo.extend(adj.get(v, ()))
-    return sorted(ref(s) for s in syms if s[1] == "function" and ref(s) not in seen and not is_test_file(s[2]))
+    return sorted(
+        ref(s)
+        for s in syms
+        if s[1] == "function" and ref(s) not in seen and not is_root_file(s[2]) and not implicit_callee(s[0])
+    )
 
 
 def build(root: Path, syms: list[Sym]) -> tuple[list[tuple[str, str, str]], list[list[str]], list[str]]:

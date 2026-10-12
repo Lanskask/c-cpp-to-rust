@@ -726,3 +726,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the status line stays `drafted`; D1, D2, D4, D6-D16 still `proposed`. The `-O0` choice for D3 is the
   governor's reading of the rule, not measured.
 - **Next:** user decides D1, D2, D4, D6-D16 (or says "same rule for all"), then ticket 02.
+
+## 46. Skill: C++ inventory fixes for tinyjson requests 1-3 (Skill-editing session)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `inventory.py` skips vendored test headers and names operators; `depmap.py` resolves qualified methods by
+  bare call name, roots examples, ignores operators/ctors/dtors for dead code (decision 54,
+  `tests/test_cpp_inventory.py`). `make test` 106 passed, 1 skipped; `make lint` clean.
+- **Tells us:** tinyjson without `--exclude`: 69 symbols, 4 dead-code candidates. The Translation session can re-run
+  `inventory.py` without the two `--exclude` flags. Requests 4-7 (C++ rulebook template, idiom table, judge.md
+  toolchain slot, §8 default rule, C++ ticket text) are design work and wait for the user.
+- **Next:** user decides the shape of requests 4-7 (see the reply in the session).

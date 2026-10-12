@@ -282,3 +282,13 @@ Each entry: decision, reason, who/what it came from. Newest last.
     follows a fixed order (ledger, `mark todo`, RULEBOOK + §12, Judge, red run), and a crash counts as red.
     _Reason:_ the cJSON Stage 2 review found five BLOCKs on paths the 3881-input corpus never reached, and the first
     recorded gate runs showed `allow fail` hidden by the baseline (WORK-LOG 39, `stage2_review_patch.md`).
+
+54. **C++ inventory: vendored test frameworks are skipped, operators get one name, test/example dirs stay in as dead-code
+    roots.** `inventory.py` skips `catch.hpp`, `doctest.h` and friends by file name (`VENDORED_FILES`) and names
+    `operator bool`, `operator==`, `operator()` as one symbol (`json::operator bool`) instead of the conversion type.
+    `depmap.py` matches `json::get` by its bare call name, treats samples/examples as roots next to tests, and never
+    lists operators, constructors or destructors as dead (they are called by syntax). Not done: `test/` and
+    `samples/` are **not** skipped by default, because they are the callers that make a header-only API live
+    (`tier.py` already keeps them out of the Parts). _Reason:_ tinyjson ticket 01 (1564 of 1630 symbols from
+    `test/catch.hpp`; 39 of 42 symbols "dead"). Measured on tinyjson with no `--exclude`: 69 symbols, 4 dead-code
+    candidates (was 39 of 42).
