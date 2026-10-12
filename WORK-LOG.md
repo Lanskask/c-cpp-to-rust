@@ -842,3 +842,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** D3's unpinned value varies even inside the reference's Catch binary (19 of 22 pass with U+0001);
   RULEBOOK §8 D3 says so. Feature matrix is `""` only.
 - **Next:** ticket 03 (stress test, Opus reviews), then 04.
+
+## 50. tinyjson ticket 03: stress test run, 10 rule proposals, rulebook not yet changed
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; 5 Haiku translators (A1, A2, B1, B2, C1); Opus 5.5 reviewer (a1960ca45a6798193)
+- **Done:** 3 groups (parser, `operator==`/copy/destructor, `to_string`) as the 3 hardest, 2 runs each planned; C2 not run
+  (the auto-mode classifier refused the launch twice). `cargo check` clean on A1, A2, B1, B2, C1 (governor). B1 vs B2
+  `eq` matrix over 147 rows: only `array == null` and `object == null` differ (B2 wrong). Opus review: A 6 BEHAVIOUR,
+  B 1, C1 1 unfaithful (Q5 not coded); P1-P10 proposed (RUN-NOTES "Rule proposals").
+- **Tells us:** the C4 row's "explicit chain" wording was read as `match` arms; both A agents invented bodies for helpers
+  they were not given (prompt slot gap); D3 and the strtod scanners were missed by both.
+- **Next:** user accepts or edits P1-P10, Opus applies them, a second A/B round, then status `stress-tested`.

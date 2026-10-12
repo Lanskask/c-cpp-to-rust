@@ -340,3 +340,173 @@ approximation that no Rust port can reproduce exactly.
 
 4. `harness.py` detail strings are the whole differing line (up to several kB for `streams.*.src` records); a
    `--detail-width` option would keep logs readable. `run.py` truncates to 160 characters itself.
+
+## Rule proposals
+
+Ticket 03 stress test (2026-10-12): groups A (`parser`) and B (`operator==`, copy, destructor) translated twice by Haiku,
+group C once (C2 launch was refused by the auto-mode classifier). Review by Opus:
+`pilots/tinyjson/experiments/stress_test_diff_review.md` (differences, evidence, verdict). Status of every proposal:
+**proposed, not applied** (waiting for the user).
+
+### P1. `operator==` fallthrough shape (B-1) — §2, amends row C4
+
+Existing row:
+
+```text
+| C4         | `operator==` keeps its switch fallthrough as an explicit chain in case order `array, object, null, string, boolean, number_integer, number_double, default`; never merge or reorder the arms (Q1, D1, D2)                      | the fallthrough decides the result for mismatched types                           |
+```
+
+Proposed text (replaces the Override cell):
+
+> `operator==` keeps its switch fallthrough as an explicit chain in case order `array, object, null, string, boolean,
+> number_integer, number_double, default`; never merge or reorder the arms (Q1, D1, D2). A Rust `match` arm cannot
+> fall through, so write the chain as `if`/`else if` over `(self._type, o._type)` pairs, not as one `match` arm per
+> case that returns `false` on a mismatch. The complete result table: same type → compare the payloads; left `array`
+> or `object`, right `null` → `true` (Q1); left `number_integer`, right `number_double` → D2 bit-pattern compare;
+> every other pair → `false` (right type earlier in case order: `default`; later: D1). The `invalid` arm returns
+> `false` like `default:`, it does not panic.
+
+### P2. Code-point strings stay `u32` until `U32ToU8` (A-2) — §2.1, amends row CPP26
+
+Existing row:
+
+```text
+| CPP26 | `char32_t` input streams: `u32_istream = std::basic_istream<char32_t>`, `u32_sstream = std::basic_stringstream<char32_t>` (`tinyjson.h:14-15`); every parser function takes `u32_istream&` and uses `peek()`/`get()` with EOF `0xFFFFFFFF` (`660-1075`)                                                                                                                                             | `pub struct u32_sstream { buf: Vec<u32>, pos: usize }` with `new(&[u32])`, `peek() -> u32`, `get() -> u32`, `EOF: u32 = u32::MAX`; parser functions take `&mut u32_sstream`                                                                               | `U32Stream`, same methods; stays public (tests call the parser functions directly)                                                                              | the position after an error is observable (Q13); the C++ `int c = peek()` turns EOF into `-1` (D7)                                                                                                                               | proposed |
+```
+
+Proposed addition to the Stage 1 cell:
+
+> A local `std::u32string` is a `Vec<u32>` and is turned into bytes only where C++ calls `U32ToU8` (`parse_member`
+> h:769, `parse_bool` h:822, `parse_null` h:841, `parse_string` h:881, `parse_number` h:897). Never cast a code point
+> to `u8` (`c as u8`): it drops the UTF-8 encoding and the `U32ToU8` error.
+
+### P3. `tolower` on a code point (A-3) — §2, amends row L4, L5, L6
+
+Existing row:
+
+```text
+| L4, L5, L6 | `std::isxdigit`, `std::isspace`, `std::tolower` are called on `char32_t` code points: ASCII C-locale rules, and every value above 0x7F is "no" / unchanged (D10). Whitespace is `\t \n \v \f \r` and space (L5: `\v` included) | `tinyjson.h:818`, `837`, `917`, `1044`, `1059`                                    |
+```
+
+Proposed addition to the Override cell:
+
+> The code form is fixed: `fn tolower32(c: u32) -> u32 { if c <= 0x7F { (c as u8).to_ascii_lowercase() as u32 }
+> else { c } }`, `fn isspace32(c: u32) -> bool { matches!(c, 9..=13 | 32) }`, `fn isxdigit32(c: u32) -> bool { c <=
+> 0x7F && (c as u8).is_ascii_hexdigit() }`. Never `(c as u8).to_ascii_lowercase()` without the `<= 0x7F` test, and
+> never Rust `is_ascii_whitespace` (it lacks `\v`).
+
+### P4. `to_bool` lowercases again (A-4) — §2.1, amends row CPP30
+
+Existing row:
+
+```text
+| CPP30 | lambda in `std::transform` (`tinyjson.h:913-918`)                                                                                                                                                                                                                                                                                                                                                   | `for b in &mut s { *b = b.to_ascii_lowercase(); }`                                                                                                                                                                                                        | same                                                                                                                                                            | —                                                                                                                                                                                                                                | proposed |
+```
+
+Proposed addition to the trap cell:
+
+> `to_bool` is public and the Judge calls it on raw input: keep the lowercasing even though `parse_bool` already
+> lowercased its token. A statement that looks redundant in its only internal caller is still ported.
+
+### P5. `stoll` scanner (A-5) — §2, amends row I9
+
+Existing row:
+
+```text
+| I9         | `std::stoll` → hand-written `strtoll` scanner (base 10) + `i64` with `out_of_range` on overflow (D8)                                                                                                                           | `tinyjson.h:929-941`                                                              |
+```
+
+Proposed text (replaces the Override cell):
+
+> `std::stoll(str, &pos)` → `fn stoll(s: &[u8]) -> Result<(i64, usize), Error>` on bytes (no UTF-8 check, no
+> `trim`): skip leading C `isspace` bytes (`\t \n \v \f \r` and space), one optional `+` or `-`, then decimal digits.
+> No digit → `Err(InvalidArgument, "stoll")`. Accumulate in `i128` (or as a negative number) so that
+> `-9223372036854775808` parses; a value outside `i64` after all digits are read → `Err(OutOfRange, "stoll")`.
+> `pos` = index after the last digit. `to_integer` then returns `Err(RuntimeError, "Unexpected number(integer)
+> format.")` when `pos != s.len()` (h:935-938). Measured (probe): `" 5 "` → RuntimeError, `""` and `"-"` →
+> InvalidArgument, `99999999999999999999` → OutOfRange, `"\v5"` → 5, i64 min → OK.
+
+### P6. `stod` scanner (A-6) — §2, amends row I8
+
+Existing row:
+
+```text
+| I8         | `std::stod` → hand-written `strtod` prefix scanner + `f64::from_str`, with the `pos`, `invalid_argument` and `out_of_range` rules of D8                                                                                        | `tinyjson.h:943-954`                                                              |
+```
+
+Proposed text (replaces the Override cell):
+
+> `std::stod(str, &pos)` → `fn stod(s: &[u8]) -> Result<(f64, usize), Error>` on bytes, never `trim` +
+> `f64::from_str` of the whole token: skip leading C `isspace`, one optional sign, then the longest prefix of one of:
+> `inf`/`infinity`/`nan`/`nan(` [alnum `_`]* `)` (ASCII case-insensitive); `0x`/`0X` hex float (hex digits, optional
+> `.`, optional `p`/`P` exponent that is consumed only if digits follow); decimal digits with optional `.` and
+> optional `e`/`E` exponent consumed only if digits follow. No digit consumed → `Err(InvalidArgument, "stod")`. The
+> value is `f64::from_str` of the decimal prefix (hex: exact computation, correctly rounded). Finite digits that give
+> ±inf, or non-zero digits that give 0 or a subnormal → `Err(OutOfRange, "stod")` (D8 measured `1e400`, `1e-310`,
+> `1e-400`). `to_double` then returns `Err(RuntimeError, "Unexpected number(double) format.")` when `pos !=
+> s.len()`. Probe: `1.5x` → RuntimeError, `abc` → InvalidArgument, `1e400` → OutOfRange.
+
+### P7. Stub signatures are binding (A-7) — §5, amends the second bullet
+
+Existing bullet:
+
+```text
+- Stage 1 keeps the C++ names (`json`, `json_t`, `parser`, `u32_sstream`, `get_string`, `U32ToU8`, …) with
+  `#![allow(non_camel_case_types, non_snake_case)]`. Overloads and operators get these names (proposed):
+```
+
+Proposed sentence appended to the bullet:
+
+> The signatures in the stub crate (`experiments/scratch-crate/src/lib.rs`) are binding in Stage 1: never change a
+> parameter type, return type, name or visibility, because `harness/rust/adapter.rs` compiles against them (for
+> example `get_next_non_space -> u32`, `peek_next_non_space -> i32`); compare with `-1i32` or `u32::MAX` at the call
+> site instead.
+
+### P8. D5 carries the measured window rule (A-1) — §8, amends row D5
+
+Existing row:
+
+```text
+| D5  | Input decoding through `wbuffer_convert` (`tinyjson.h:630-633`): invalid UTF-8 (a stray byte, an overlong form, an encoded surrogate, a code point above U+10FFFF) is not an error but an early EOF, at the start of the libstdc++ conversion chunk that holds it. Measured: `["` + 26 `a` + `\xff"]` (32 bytes) fails `invalid json format` (the first `peek` is already EOF); with 27 `a` it fails `expected char '"' not found`; a valid document followed by garbage about 40 bytes later parses OK. A UTF-8 BOM is not skipped (U+FEFF is not whitespace) in both                                                                                                  | emulate the libstdc++ `wbuffer_convert` chunk rule so the early EOF lands at the same byte as in the Reference. The exact rule is measured with the C++ driver in ticket 02 before Stage 1. If it cannot be reproduced exactly, fall back to ending the input at the first invalid byte and record the remaining mismatch as a new Deviation row; `DEVIATION(port): D5`                                                                                                                              | yes: corpus byte classes 0x80-0xFF, compared byte-exactly (error text and parse result)                                                                                                                                                                                                                                                                                                                                                                                                                   | approved (user rule: match C++ origin as closely as possible) |
+```
+
+Proposed text (replaces the Rust-behaviour cell):
+
+> Emulate the libstdc++ `wbuffer_convert` window rule (measured exactly, experiment e1, 20160 inputs, 0 mismatches):
+> `parse` does not call `U8ToU32`. It decodes the bytes before the first NUL in windows of at most 29 bytes; window 0
+> starts at byte 0. A window is decoded as a whole with the Unicode well-formed table (no overlongs, no surrogates,
+> nothing above U+10FFFF). If its last bytes are a valid but incomplete sequence of `u` bytes, the next window starts
+> at those bytes and holds them plus `29 - u` new bytes. If a window holds an ill-formed byte (also a sequence cut by
+> the window end that is ill-formed so far), the stream ends at the **start of that window**: every character of that
+> window is dropped, nothing after it is read, no error is raised. An incomplete sequence at the very end of the input
+> is dropped. `DEVIATION(port): D5`.
+
+### P9. `U8ToU32` / `U32ToU8` error texts (A-8, S-2) — §2.1, amends row CPP28
+
+Existing row:
+
+```text
+| CPP28 | `std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>` `to_bytes`/`from_bytes` (`U32ToU8`, `U8ToU32`, `tinyjson.h:42-68`)                                                                                                                                                                                                                                                                    | hand-written UTF-8 encoder/decoder with the C++ error message (`"invalid utf32 string: "` + library text, D4)                                                                                                                                             | same                                                                                                                                                            | a surrogate code point (`0xD800-0xDFFF`) or a value above `0x10FFFF` fails (D4); `U8ToU32` has no caller in the header but is public: port it                                                                                    | proposed |
+```
+
+Proposed text (replaces the Stage 1 cell):
+
+> Hand-written UTF-8 encoder/decoder. `U32ToU8` fails on a surrogate or a value above `0x10FFFF` with
+> `Err(RuntimeError, "invalid utf32 string: wstring_convert::to_bytes")`. `U8ToU32` decodes with the Unicode
+> well-formed table and fails on any ill-formed sequence with `Err(RuntimeError, "invalid utf32 string:
+> wstring_convert::from_bytes")`; a valid but incomplete sequence at the very end is dropped without error (probe:
+> `a\xFF` fails, `a\xC3` → `[U+0061]`).
+
+### P10. Q5 is code, not a comment (C-1) — §9, amends row Q5
+
+Existing row:
+
+```text
+| Q5  | Inside `object_to_string`/`array_to_string` keys and nested results go through `.c_str()`, so they stop at the first NUL: `["a\u0000b"]`-like content prints as `["a]` (measured with a `std::string` holding a NUL); a top-level string keeps the NUL (BUG)                                                                                                                                                                                                                                                               | `tinyjson.h:582`, `586`, `606` vs `555`                  |
+```
+
+Proposed addition to the Behaviour cell:
+
+> Stage 1 code: a helper `fn c_str(s: &[u8]) -> &[u8]` (the bytes before the first NUL) applied to the key at h:582
+> and to the nested `to_string()` result at h:586 and h:606, not to the top-level string at h:555. A `BUG(port)` or
+> `QUIRK(port)` marker never replaces reproducing the behaviour.
