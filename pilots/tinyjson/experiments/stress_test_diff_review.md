@@ -305,3 +305,157 @@ Proposed addition:
 > first. For Q4, Q5 and Q11 that is `// BUG(port): Q<n> <reason>` followed by `// QUIRK(port): Q<n>`; never one
 > without the other. The marker goes above the statement that reproduces the behaviour (for Q5: the `c_str` call),
 > not above an unrelated line.
+
+## Round 2 (A3, B3, C3)
+
+Reviewed 2026-10-12. Translations under `pilots/tinyjson/migration/harness/work/stress/{R2-A3,R2-B3,R2-C3}/src/lib.rs`,
+made by Haiku against the RULEBOOK with P1-P11 applied (§12). Each prompt gave the source of its group and only the
+signatures of the stub items outside it (plan item 1). All three diffs against the stub touch only their group plus
+private helpers; every body outside the group is still `todo!()`. The column "Round 1 pair" names the round 1 runs of
+the same group.
+
+Probes (scratchpad, not committed): a combined Rust crate made of the A3 parser, the B3 `assign`/`eq`/`ne`/`Clone`/
+`Drop` and the C3 `to_string` family, with reviewer fills for the remaining stub items (constructors, getters,
+`add_member`, `u32_sstream`, `trim`, `U32ToU8`, and a naive `stoll`/`stod` that is not under review), against a C++
+probe on the header (GCC 16.1, `-std=c++17 -include locale -O0`) that prints `parse(..).to_string()` or the exception
+class and `what()`. 34 hand-written inputs (D5 26/27 `a` cases, keys and strings with `é`, `[truť]`, `[TRUE, False ,
+NuLL]`, escapes, `\v`/`\f` between tokens, U+0085/U+00A0/U+2028/U+3000 between tokens, fullwidth hex digits, EOF in
+every container, a BOM) and 6000 random string documents with and without ill-formed UTF-8: every output equal except
+inputs that hold a number (the naive `stoll`/`stod` fill) or a `\uXXXX` escape (D3: the C++ value changes per process;
+777 of the second random set, all of them with `\u0041`).
+
+### Group A: `class parser` (h:622-1077), A3
+
+| #      | Difference                                                             | A3                                                                                                                                                               | Round 1 pair                                                             | Faithful (C++)                                                                                                                                                                                | Judge observes?                | Class             |
+|--------|------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------|-------------------|
+| R2A-1  | `parse` input decoding (h:630-633, D5)                                 | `decode_windows`: 29-byte windows, a window with an ill-formed byte ends the stream at its start, an incomplete tail starts the next window (P8)                 | A1 stops at the first ill byte, A2 returns `Err`                         | A3. Probe: `["`+26 `a`+`\xff"]` → `invalid json format`, 27 `a` → `expected char '"' not found`; 3000 random inputs with ill-formed bytes and 2223 mostly valid ones: 0 mismatches. A-1 fixed | yes: `utf8` class              | DEVIATION-RELATED |
+| R2A-2  | `parse_member` result (h:744-769)                                      | `Vec<u32>`, `U32ToU8` at the end (P2)                                                                                                                            | A2 same; A1 `c as u8`                                                    | A3 = A2. Probe: key `"é"` → `{"é" : 1}` in both. A-2 fixed                                                                                                                                    | yes: non-ASCII keys            | BEHAVIOUR         |
+| R2A-3  | `parse_bool`/`parse_null` `tolower` (h:818, 837)                       | `tolower32` in the exact P3 form                                                                                                                                 | A2 same; A1 `(c as u8).to_ascii_lowercase()`                             | A3 = A2. Probe: `[truť]` → `invalid boolean string` in both. A-3 fixed                                                                                                                        | yes: `broken_0149`-`0175`      | BEHAVIOUR         |
+| R2A-4  | `to_bool` lowercasing (h:913-918)                                      | lowercases again, comment cites P4                                                                                                                               | A1 same; A2 compares as is                                               | A3 = A1. A-4 fixed (read; `to_bool` called alone not probed)                                                                                                                                  | yes: `TRUE` input              | BEHAVIOUR         |
+| R2A-5  | `stoll` / `stod` (h:933, 946, I9, I8)                                  | private `fn stoll`/`fn stod` with the I9/I8 signatures but `todo!()` bodies and a `TODO(port)` ("written by another agent"); every number panics                 | A1 hand `stoll` + `f64::from_str`; A2 `from_str_radix` + `f64::from_str` | A3 wrong: C++ never panics. The wrappers `to_integer`/`to_double` around them are right (`pos != size` → `Unexpected number(...) format.`). A-5, A-6 not fixed: untested in round 2           | yes: every input with a number | BEHAVIOUR (open)  |
+| R2A-6  | `get_next_non_space` return type (h:1007)                              | `-> u32` as in the stub (P7)                                                                                                                                     | A2 same; A1 `-> i32`                                                     | A3. A-7 fixed                                                                                                                                                                                 | yes: adapter build             | BEHAVIOUR         |
+| R2A-7  | `parse_hex` value (h:1069-1074, D3)                                    | consumes 4 `isxdigit32` digits, returns U+0001 (D3)                                                                                                              | both decoded the digits (S-1)                                            | A3. Probe: `["\u0041"]` → U+0001; the C++ process gives U+0001 or U+000A/U+000C per process (D3, the Judge re-executes). S-1 fixed                                                            | yes: 5 tests, `\u` inputs      | DEVIATION-RELATED |
+| R2A-8  | bodies outside the group (`u32_sstream`, `trim`, `U32ToU8`, `U8ToU32`) | left `todo!()` (plan item 1)                                                                                                                                     | both invented them (A-8, A-9, A-16, S-2)                                 | n/a: not in this group any more; S-2 and A-8 move to whoever writes h:29-68                                                                                                                   | n/a                            | COSMETIC          |
+| R2A-9  | `parse_value` dispatch (h:662-699)                                     | `match char::from_u32(..)` with char patterns                                                                                                                    | A1 integer literals, A2 guards                                           | all three                                                                                                                                                                                     | n/a                            | COSMETIC          |
+| R2A-10 | `skip_char` message (h:1029-1034)                                      | `Vec<u32>` + `U32ToU8`, the C++ shape                                                                                                                            | A1 hand UTF-8, A2 `char::from_u32`                                       | all three (every `expected` is ASCII)                                                                                                                                                         | n/a                            | COSMETIC          |
+| R2A-11 | `escape_char` result (h:962-1004)                                      | `match` assigns `c`, then `Ok(c)` (C++ shape)                                                                                                                    | A1 arm value, A2 early `return`                                          | all three                                                                                                                                                                                     | n/a                            | COSMETIC          |
+| R2A-12 | `isspace`/`isxdigit` helpers (L4-L6)                                   | free `isspace32`/`isxdigit32` in the P3 form                                                                                                                     | A1 private methods, A2 free fns                                          | all three                                                                                                                                                                                     | n/a                            | COSMETIC          |
+| R2A-13 | `parse_object` comma arm (h:727)                                       | calls `get_next_non_space` without storing the result                                                                                                            | both store it                                                            | all (C++ overwrites `c` at h:734)                                                                                                                                                             | n/a                            | COSMETIC          |
+| R2A-14 | `parse_array` `do ... while (c != EOF)` (h:787-801)                    | `loop` with `if c == EOF { break }` after the `,`/`]` tests                                                                                                      | loop shapes differ                                                       | all (probes `[1,2`, `[1,]`)                                                                                                                                                                   | n/a                            | COSMETIC          |
+| R2A-15 | markers and `PORT STATUS`                                              | §4 spelling, `BUG(port): Q11` + `QUIRK(port): Q11` stacked (P11), no `DECISION(port)`; status `confidence=medium todos=1 deviations=D3,D5,D7,D8,D10,D11,D12,D13` | A1 extra ids in status, A2 `DECISION(port)`                              | A3 closest to §4 and §11 (the `todos=1` is honest)                                                                                                                                            | no                             | COSMETIC          |
+
+### Group B: copy constructor, `operator=`, `operator==`, `operator!=`, destructor, B3
+
+| #     | Difference                                                 | B3                                                                                                                                                                                                       | Round 1 pair                                            | Faithful (C++)                                                                                                                                                                                                                                  | Judge observes?        | Class     |
+|-------|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------|-----------|
+| R2B-1 | `array == null`, `object == null` (h:297-317, Q1)          | `true`                                                                                                                                                                                                   | B1 `true`, B2 `false`                                   | B3 = B1. Probe: 7x7 matrix (array, object, null, string, boolean, integer, double): the 31 defined pairs equal C++, the 18 D1 pairs are `false`; integer with the bits of 1.0 `==` 1.0 is `true`, integer 1 `==` 1.0 is `false` (D2). B-1 fixed | yes: `matrix`, Q1 test | BEHAVIOUR |
+| R2B-2 | shape of the `operator==` chain (C4)                       | one `if self._type == X` block per left type in case order, with nested `o._type` tests                                                                                                                  | B1 if/else over pairs, B2 `match` per case              | same results; C4 asks for an `if`/`else if` chain over `(self._type, o._type)` pairs                                                                                                                                                            | no                     | COSMETIC  |
+| R2B-3 | `assign` order (h:261-291, D13)                            | copies the new payload, then `drop_payload(old)`                                                                                                                                                         | B1 `*self = other.clone()`; B2 drops first, then copies | all (D13)                                                                                                                                                                                                                                       | n/a                    | COSMETIC  |
+| R2B-4 | `invalid` arm in `assign` and `Clone` (h:253-254, 287-288) | `unreachable!(..)`                                                                                                                                                                                       | same kind of handling                                   | all (§7: unreachable)                                                                                                                                                                                                                           | no                     | COSMETIC  |
+| R2B-5 | `Drop` `invalid` arm (h:494-495)                           | no-op                                                                                                                                                                                                    | B1 no-op, B2 `unreachable!()`                           | B3 = B1                                                                                                                                                                                                                                         | no                     | COSMETIC  |
+| R2B-6 | `eq` `invalid` arm (h:351-352)                             | final `false`                                                                                                                                                                                            | B1 `false`, B2 `unreachable!()`                         | B3 = B1 (C4: "returns `false` like `default:`")                                                                                                                                                                                                 | no                     | COSMETIC  |
+| R2B-7 | null checks before `Box::from_raw`                         | `if !value.is_null()` in every arm                                                                                                                                                                       | B2 same, B1 none                                        | all                                                                                                                                                                                                                                             | no                     | COSMETIC  |
+| R2B-8 | `Clone` construction (h:227-256)                           | struct literal per arm                                                                                                                                                                                   | B1 same, B2 null then assign                            | all                                                                                                                                                                                                                                             | n/a                    | COSMETIC  |
+| R2B-9 | markers and `SAFETY`                                       | only `DEVIATION(port): D2`; Q1 sites carry `// Q1: ...` (no `QUIRK(port): Q1`), no `DEVIATION(port): D1` or `D13`; the D2 `unsafe` block lacks `// SAFETY:` (all others have it); status `deviations=D2` | B1 had Q1, D1, D2, D13 markers; B2 a wrong id           | B1 closer to §4; S-4 mostly fixed                                                                                                                                                                                                               | no                     | COSMETIC  |
+
+### Group C: `to_string`, `object_to_string`, `array_to_string` (h:544-617), C3
+
+| #     | Difference                                                       | C3                                                                                                                                                                                                                                                        | Round 1 pair                                 | Faithful (C++)                                                                                                                                        | Judge observes?        | Class     |
+|-------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------|-----------|
+| R2C-1 | keys and nested results through `.c_str()` (h:582, 586, 606, Q5) | cut at the first NUL with `split(\|&b\| b == 0).next()` at all three sites; the top-level string (h:555) keeps it                                                                                                                                         | C2 same, C1 appended whole                   | C3 = C2. Probe via the API: `{"a\0b":"x\0y","k":["p\0q",2]}` → `{"a" : "x,"k" : ["p,2]}` in both; top-level `"x\0y"` keeps the NUL in both. C-1 fixed | yes: NUL keys, Q5 test | BEHAVIOUR |
+| R2C-2 | form of the Q5 cut                                               | inline `split` at each site                                                                                                                                                                                                                               | C2 inline `split`                            | same bytes; Q5 asks for a helper `fn c_str(s: &[u8]) -> &[u8]`                                                                                        | no                     | COSMETIC  |
+| R2C-3 | `std::to_string(double)` (h:561, D9)                             | NaN → `nan` (both signs), `is_infinite` + `is_sign_positive`, then `{:.6}`                                                                                                                                                                                | C1 same, C2 `== INFINITY`                    | all. Probe: `nan`, `-nan`, `inf`, `-inf`, `-0.0`, `1e-7`, `5e-7`, `2.5`, `1e21`, `123456.7890125` print the same bytes as C++                         | yes, no difference     | COSMETIC  |
+| R2C-4 | getters inside the arms                                          | `if let Ok(..)` with fallbacks (`0`, `0.000000`, `false`, empty)                                                                                                                                                                                          | C1 same kind, C2 `unreachable!()`            | all (the arm fixes the type)                                                                                                                          | no                     | COSMETIC  |
+| R2C-5 | separator placement (h:588-591, 608-611, CPP31)                  | `,` before every item but the first                                                                                                                                                                                                                       | C1 same, C2 after every item but the last    | all                                                                                                                                                   | no                     | COSMETIC  |
+| R2C-6 | `std::to_string(long long)` (h:558)                              | `format!("{}", ..)`                                                                                                                                                                                                                                       | C2 same, C1 `to_string()`                    | all                                                                                                                                                   | n/a                    | COSMETIC  |
+| R2C-7 | `invalid` arm (h:569-570)                                        | `unreachable!(..)`                                                                                                                                                                                                                                        | both `unreachable!`                          | all (§7)                                                                                                                                              | no                     | COSMETIC  |
+| R2C-8 | markers, comments, `PORT STATUS`                                 | `BUG(port): Q4` + `QUIRK(port): Q4` and `BUG(port): Q5` + `QUIRK(port): Q5` stacked (P11), `DEVIATION(port): D9`, no `DECISION(port)`; doc comments cite h:574-625 and h:628-646 (real: 574-596, 598-617); status `confidence=high todos=0 deviations=D9` | C2 had `DECISION(port)`, C1 lone `BUG(port)` | C3 closest to §4                                                                                                                                      | no                     | COSMETIC  |
+
+### Rules cited (full text)
+
+RULEBOOK §2, row C4, Override cell (R2B-1, R2B-2):
+
+> `operator==` keeps its switch fallthrough as an explicit chain in case order `array, object, null, string, boolean,
+> number_integer, number_double, default`; never merge or reorder the arms (Q1, D1, D2). A Rust `match` arm cannot fall
+> through, so write the chain as `if`/`else if` over `(self._type, o._type)` pairs, not as one `match` arm per case that
+> returns `false` on a mismatch. The complete result table: same type → compare the payloads; left `array` or `object`,
+> right `null` → `true` (Q1); left `number_integer`, right `number_double` → D2 bit-pattern compare; every other pair →
+> `false` (right type earlier in case order: `default`; later: D1). The `invalid` arm returns `false` like `default:`,
+> it does not panic (P1)
+
+RULEBOOK §2, row I9, Override cell (R2A-5):
+
+> `std::stoll(str, &pos)` → `fn stoll(s: &[u8]) -> Result<(i64, usize), Error>` on bytes (no UTF-8 check, no `trim`):
+> skip leading C `isspace` bytes (`\t \n \v \f \r` and space), one optional `+` or `-`, then decimal digits. No digit →
+> `Err(InvalidArgument, "stoll")`. Accumulate in `i128` (or as a negative number) so that `-9223372036854775808` parses;
+> a value outside `i64` after all digits are read → `Err(OutOfRange, "stoll")`. `pos` = index after the last digit.
+> `to_integer` then returns `Err(RuntimeError, "Unexpected number(integer) format.")` when `pos != s.len()` (h:935-938).
+> Measured (probe): `" 5 "` → RuntimeError, `""` and `"-"` → InvalidArgument, `99999999999999999999` → OutOfRange,
+> `"\v5"` → 5, i64 min → OK (P5)
+
+RULEBOOK §2, row I8, Override cell (R2A-5):
+
+> `std::stod(str, &pos)` → `fn stod(s: &[u8]) -> Result<(f64, usize), Error>` on bytes, never `trim` + `f64::from_str`
+> of the whole token: skip leading C `isspace`, one optional sign, then the longest prefix of one of:
+> `inf`/`infinity`/`nan`/`nan(` [alnum `_`]* `)` (ASCII case-insensitive); `0x`/`0X` hex float (hex digits, optional
+> `.`, optional `p`/`P` exponent that is consumed only if digits follow); decimal digits with optional `.` and optional
+> `e`/`E` exponent consumed only if digits follow. No digit consumed → `Err(InvalidArgument, "stod")`. The value is
+> `f64::from_str` of the decimal prefix (hex: exact computation, correctly rounded). Finite digits that give ±inf, or
+> non-zero digits that give 0 or a subnormal → `Err(OutOfRange, "stod")` (D8 measured `1e400`, `1e-310`, `1e-400`).
+> `to_double` then returns `Err(RuntimeError, "Unexpected number(double) format.")` when `pos != s.len()`. Probe: `1.5x`
+> → RuntimeError, `abc` → InvalidArgument, `1e400` → OutOfRange (P6)
+
+RULEBOOK §9, row Q5, Behaviour cell (R2C-1, R2C-2):
+
+> Inside `object_to_string`/`array_to_string` keys and nested results go through `.c_str()`, so they stop at the first
+> NUL: `["a\u0000b"]`-like content prints as `["a]` (measured with a `std::string` holding a NUL); a top-level string
+> keeps the NUL (BUG). Stage 1 code: a helper `fn c_str(s: &[u8]) -> &[u8]` (the bytes before the first NUL) applied to
+> the key at h:582 and to the nested `to_string()` result at h:586 and h:606, not to the top-level string at h:555. A
+> `BUG(port)` or `QUIRK(port)` marker never replaces reproducing the behaviour (P10)
+
+RULEBOOK §4, markers paragraph (R2A-15, R2B-9, R2C-8):
+
+> Markers: `TODO(port):`, `PERF(port):`, `BUG(port):`, `QUIRK(port): Q<n>`, `DEVIATION(port): D<n>`, exact spelling, one
+> comment line directly above the site. Until the stress test fixes the exact sites, a marker goes on every source site
+> cited in §8 and §9.
+
+### Counts per class
+
+| Group | BEHAVIOUR | of which open | DEVIATION-RELATED | COSMETIC |
+|-------|-----------|---------------|-------------------|----------|
+| A3    | 5         | 1 (R2A-5)     | 2                 | 8        |
+| B3    | 1         | 0             | 0                 | 8        |
+| C3    | 1         | 0             | 0                 | 7        |
+
+### Round 1 items
+
+- Fixed: A-2 (R2A-2), A-3 (R2A-3), A-4 (R2A-4), A-7 (R2A-6), B-1 (R2B-1), C-1 (R2C-1), S-1 (R2A-7), and the
+  DEVIATION-RELATED A-1 (R2A-1). Each fixed run agrees with the round 1 run that was faithful and with the C++ probe.
+- Still open: A-5 and A-6. A3 wrote `to_integer`/`to_double` correctly around `stoll`/`stod`, but left both scanners as
+  `todo!()`, so round 2 says nothing about P5/P6. This is also newly wrong: A1 and A2 returned values, A3 panics on
+  every number.
+- Not applicable: S-2 and A-8 (`U32ToU8`/`U8ToU32` are outside every group now and stay `todo!()`); S-5 (stub fixed).
+  S-4 (`// SAFETY:`) is fixed except one block in B3 (R2B-9).
+
+### Verdict
+
+B3 and C3 agree with their faithful round 1 run and with the C++ probe on every BEHAVIOUR item; the rest is COSMETIC. A3
+agrees on every BEHAVIOUR item it wrote, and its D5 window decoder matched the C++ probe on every input tried. The one
+open BEHAVIOUR difference is R2A-5: A3 left `stoll`/`stod` as `todo!()`. That is not a gap in the RULEBOOK (I8 and I9
+give both scanners in full); the group prompt said to leave every body outside the group as `todo!()`, and the helpers
+are not in the stub. The Skill already has a fix, `stage1-prompt.md` HARD RULE 9 (commit `0cc0fe5`), quoted in full:
+
+> 9. A helper your functions need that is not in the stub (a libc function the rulebook maps, a C++ `std::` call
+>    such as `stoll`/`stod`, rulebook I8/I9) is yours: add it to {target_path} as a private fn and implement it
+>    fully. A `todo!()` body is only for a function the stub already lists and your instructions leave out.
+
+So every remaining difference has a class and a rule, and the success criterion of the plan (item 4) is met in its
+second form. No P12 is needed. The first form ("no pair differs on any BEHAVIOUR item") holds for B and C only: the
+`stoll`/`stod` scanners, the place where A1 and A2 differed most (A-5, A-6), have no round 2 sample. Before the RULEBOOK
+status becomes `stress-tested`, rerun group A once with HARD RULE 9 in the prompt (the `R2b-A3` directory is already
+prepared and still equal to the stub) and check only R2A-5 against P5/P6 with the probes listed in I8/I9. Nothing in
+this review asks for a B rerun (`R2b-B3` is also prepared).
+
+The COSMETIC rows R2B-2, R2B-9 and R2C-2 show runs that follow a rule's result but not its prescribed form (C4 chain
+over pairs, §4 markers on every §8/§9 site, Q5 `c_str` helper). The Judge cannot see them; they matter only if Stage 2
+or a reviewer relies on finding the markers.

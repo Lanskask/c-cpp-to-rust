@@ -46,6 +46,7 @@ pub type json_array = Vec<json>;
 #[derive(Debug)]
 pub struct json {
     _type: json_t,
+    _value: *mut std::ffi::c_void,
 }
 
 impl json {

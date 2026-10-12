@@ -872,3 +872,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `stoll`/`stod` as `todo!()` after a "leave every other body todo!()" instruction).
 - **Not done:** the classifier-refusal request (settings.json allow rule for Agent) is a permission change and was
   put to the user instead of being applied.
+
+## 54. tinyjson ticket 03 round 2: A3, B3, C3 run and reviewed
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 translators A3, B3 (a160c4f02e797406f); Opus 5.5 reviewer (a5ec89f16886ed59e)
+- **Done:** B3 run (A3, C3 existed); `cargo check` clean on all three (governor). Opus review appended to
+  `experiments/stress_test_diff_review.md` ("Round 2"): B3 and C3 agree with their faithful round 1 run on every
+  BEHAVIOUR item; A3 fixed A-1..A-4, A-7, S-1. No P12.
+- **Tells us:** the one open BEHAVIOUR item is A3 leaving `stoll`/`stod` as `todo!()` (the group prompt said to leave
+  outside bodies alone; HARD RULE 9 from entry 53 was not in that prompt). B3 markers are thinner than B1 (COSMETIC).
+- **Next:** rerun group A once (R2b-A3, prompt with HARD RULE 9), check only `stoll`/`stod` against P5/P6 and the
+  Judge, then set the RULEBOOK status to `stress-tested`.
