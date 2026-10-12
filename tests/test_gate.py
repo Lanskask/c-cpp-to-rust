@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import gate
+import pytest
 
 HEADER = "part_id\tkind\tsource_paths\ttarget_path\ttier\tdeps\tstate\tattempts\tmodel\tlast_error\tcommit\tupdated\n"
 
@@ -168,3 +169,36 @@ def test_snapshot_appends_one_attempt_row_each_time(tmp_path: Path) -> None:
     rows = (tmp_path / "migration" / "attempts.tsv").read_text().splitlines()
     assert rows[0] == "part\tstage\thead\ttime" and len(rows) == 3
     assert rows[1].split("\t")[:2] == ["p", "1"]
+
+
+def test_pass_message_lists_excused_checks_and_strict_judge_refuses(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    crate, parts = make_workspace(tmp_path)
+    args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts), "--harness-cmd", "false"]
+    assert gate.main([*args, "--snapshot"]) == 0
+    capsys.readouterr()
+    assert gate.main(args) == 0
+    err = capsys.readouterr().err
+    assert "2 of 3 checks passed" in err and "EXCUSED" in err and "harness[]" in err
+    assert gate.main([*args, "--strict-judge", "--no-rollback"]) == 1
+
+
+def test_snapshot_creates_nested_gate_dir_for_slash_part_ids(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    parts.write_text(HEADER + "src/p\tfile\ta.c\trust/src/lib.rs\tmechanical\t\ttodo\t0\t\t\t\t\n")
+    assert gate.main(["src/p", "--crate", str(crate), "--stage", "1", "--parts", str(parts), "--snapshot"]) == 0
+    assert (tmp_path / "migration" / "gate" / "src" / "p.stage1.json").is_file()
+
+
+def test_rollback_leaves_untracked_also_paths_alone(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    judge = crate / "tests" / "judge.rs"
+    judge.parent.mkdir()
+    judge.write_text("// untracked Judge file\n")
+    args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts), "--also", "rust/tests/judge.rs"]
+    assert gate.main([*args, "--snapshot"]) == 0
+    (crate / "src" / "lib.rs").write_text('pub fn f() -> i32 { "no" }\n')
+    assert gate.main(args) == 1
+    assert judge.read_text() == "// untracked Judge file\n"
+    assert (crate / "src" / "lib.rs").read_text() == "pub fn f() -> i32 { 1 }\n"

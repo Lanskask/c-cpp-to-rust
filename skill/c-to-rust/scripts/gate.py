@@ -8,6 +8,8 @@ Flow:  gate.py PART --crate DIR --stage N --snapshot    # before changing the Pa
 Checks run once per feature set (`--features ""` `--features strict` ...; default: one run, no features), in
 order, stopping at the first regression. A check that already failed in the baseline is not a
 regression, except at Stage 2 the Judge checks `test` and `harness`, which always count.
+`--strict-judge` makes them always count at Stage 1 too; without it a PASS lists the checks the baseline
+excused (`1 of 3 checks passed; EXCUSED ...`), because a stub baseline fails the Judge and the Part still passes.
 `--harness-cmd` is a shell command with `{features}` replaced by the feature list; exit 0 = pass.
 Rollback is path-scoped (decision 17): `git checkout <HEAD> -- <path>` plus `git clean` of that path, for the
 Part's target_path and every `--also PATH` (relative to the workspace root, e.g. rust/tests/adapter/mod.rs).
@@ -138,12 +140,14 @@ def run_checks(
     stop_on_regression: bool,
     permitted_lints: list[str] | None = None,
     min_tests: int = 0,
+    strict_judge: bool = False,
 ) -> list[Result]:
     results: list[Result] = []
+    judge_stage = 2 if strict_judge else stage  # `regresses` never excuses Judge checks at stage 2
 
     def record(res: Result) -> bool:
         results.append(res)
-        return res.regresses(baseline, stage) and stop_on_regression
+        return res.regresses(baseline, judge_stage) and stop_on_regression
 
     for feats in feature_sets:
         steps: list[tuple[str, list[str] | None]] = [
@@ -232,8 +236,16 @@ def record_snapshot(root: Path, part: str, stage: int) -> None:
 
 
 def rollback(root: Path, head: str, paths: list[str]) -> None:
-    """Restore every path (target plus `--also` paths) to `head` and delete untracked files under them."""
+    """Restore every path (target plus `--also` paths) to `head` and delete untracked files under them.
+
+    A path that does not exist at `head` (an untracked Judge file passed with `--also`) is left alone: deleting it
+    would destroy work that no commit holds.
+    """
     for path in paths:
+        probe = subprocess.run(["git", "-C", str(root), "cat-file", "-e", f"{head}:{path}"], capture_output=True)
+        if probe.returncode != 0:
+            print(f"gate: {path} is not in {head[:8]}: left as is (commit it to have it restored)", file=sys.stderr)
+            continue
         git(root, "checkout", head, "--", path)
         git(root, "clean", "-fdq", "--", path)
 
@@ -250,6 +262,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-lint", action="append", default=[], help="lint a Stage 2 `#[allow]` may name; repeatable")
     p.add_argument("--toolchain", help="rustup toolchain name for cargo, e.g. nightly-2023-04-15")
     p.add_argument("--also", action="append", default=[], help="extra path restored with the target; repeatable")
+    p.add_argument(
+        "--strict-judge",
+        action="store_true",
+        help="Stage 1: never excuse `test`/`harness` failures the baseline already had (once the Judge compiles)",
+    )
     p.add_argument("--snapshot", action="store_true", help="record HEAD and baseline, change nothing")
     p.add_argument("--no-rollback", action="store_true", help="report only; keep the working tree as is")
     return p
@@ -266,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
         target = target_of(parts, args.part)
         if args.snapshot:
             results = run_checks(crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, set(), False)
-            snap.parent.mkdir(exist_ok=True)
+            snap.parent.mkdir(parents=True, exist_ok=True)
             snap.write_text(
                 json.dumps(
                     {
@@ -286,14 +303,23 @@ def main(argv: list[str] | None = None) -> int:
         baseline = set(saved["failing"])
         paths = list(dict.fromkeys([target, *saved.get("paths", []), *args.also]))
         results = run_checks(
-            crate, args.stage, feature_sets, args.harness_cmd, args.toolchain, baseline, True, args.allow_lint
+            crate,
+            args.stage,
+            feature_sets,
+            args.harness_cmd,
+            args.toolchain,
+            baseline,
+            True,
+            args.allow_lint,
+            args.min_tests,
+            args.strict_judge,
         )
     except (ValueError, RuntimeError, OSError) as e:
         print(f"gate: {e}", file=sys.stderr)
         return 1
     for r in results:
         print(f"{r.check}\t{r.features}\t{r.status}\t{r.detail}")
-    regressions = [r for r in results if r.regresses(baseline, args.stage)]
+    regressions = [r for r in results if r.regresses(baseline, 2 if args.strict_judge else args.stage)]
     if regressions:
         first = regressions[0]
         if not args.no_rollback:
@@ -302,8 +328,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gate: FAIL {args.part}: {first.key}: {first.detail} ({action})", file=sys.stderr)
         return 1
     ok = sum(r.status == "pass" for r in results)
+    ran = sum(r.status != "skip" for r in results)
+    excused = [r.key for r in results if r.status == "fail"]
     record_pass(root, args.part, args.stage, feature_sets)
-    print(f"gate: PASS {args.part} ({ok} checks passed, stage {args.stage})", file=sys.stderr)
+    note = f"; EXCUSED by the baseline, still failing: {', '.join(excused)}" if excused else ""
+    print(f"gate: PASS {args.part} ({ok} of {ran} checks passed, stage {args.stage}{note})", file=sys.stderr)
     return 0
 
 

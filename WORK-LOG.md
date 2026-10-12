@@ -971,3 +971,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   classifier denied both a file swap and a scratch-crate copy, so the new inputs are proven green on the fixed Part
   but not shown to fail on the P2 bug. A new Part-level fix therefore rests on the reviewer's reading.
 - **Next:** ticket 05 (Stage 2 Judge).
+
+## 62. Skill: gate.py findings from tinyjson ticket 04 (four items)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (report from tinyjson-translation-4)
+- **Done:** `gate.py`: PASS line `N of M checks passed` plus the excused checks, `--strict-judge`, `mkdir` with parents
+  for part ids with a slash, rollback leaves paths absent at HEAD alone, `--min-tests` now reaches the checks (found
+  while editing: it was parsed and never passed). `judge.md` §3 item 5 (every narrowing site needs a code point above
+  0xFF at its own position); `stage1-prompt.md` HARD RULE 10 (row checklist reply). Three new tests in `test_gate.py`.
+- **Tells us:** finding 1 is a design tension, not a bug: the Stage 1 baseline exists for half-translated crates.
+  Rule 10 is untested: whether it cuts fix rounds needs a Haiku run with and without it.
+- **Next:** tinyjson governor adds `--strict-judge` to the final Stage 1 gate of each Part.

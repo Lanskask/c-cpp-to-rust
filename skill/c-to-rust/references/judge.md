@@ -40,7 +40,12 @@ A generator script (`make_inputs.py`, fixed seed) writes the corpus so it is rep
    primitive, as a string character, after a backslash). Decision 28: without this the E2 mutant (`~` rejected) passed a
    164-input hand-picked corpus and all 16 upstream tests.
 4. Seeded mutations (flip, cut, insert, duplicate) of the valid inputs.
-5. Only deterministic inputs: run the original driver twice and drop inputs whose output differs (`rand`, `time`,
+5. **Every narrowing site of the original** (`as u8`, `(char)`, `(unsigned char)`, a `switch` on a narrowed value): an
+   input with a code point above 0xFF (and a NUL, and a byte 0x80..0xFF) at that exact position, not only at the
+   position where the first such bug was found. A corpus that has the case in one place does not cover the same cast
+   at another (tinyjson ticket 04: `bool`/`null` tokens covered, the same cast at the value start was not; the review
+   found four defects the corpus could not see). Add the gap before the Part is first accepted, not after.
+6. Only deterministic inputs: run the original driver twice and drop inputs whose output differs (`rand`, `time`,
    uninitialised memory). Record dropped inputs in `RUN-NOTES.md`.
 
 ## 4. Stage 1 runner (`migration/harness/run.py [FEATURES]`, exit 0 = pass)

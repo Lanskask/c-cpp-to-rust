@@ -339,3 +339,12 @@ Each entry: decision, reason, who/what it came from. Newest last.
     for that to be part of `to-tickets`. The plugin cache is replaced on a plugin update, so the canonical copy lives
     in this repo and the installer is re-run after an update. Not done: a fork of the c-to-rust script is not merged
     with it (two copies of the render and mark logic; the c-to-rust one keeps its fixed seven-ticket chain).
+
+60. **`gate.py`: a PASS prints `N of M checks passed` and lists the checks the baseline excused; `--strict-judge` makes
+    Stage 1 behave like Stage 2 for `test`/`harness`.** Snapshot dirs are created with parents (part id `src/x`),
+    rollback skips a path that does not exist at the snapshot HEAD (an untracked `--also` Judge file), and
+    `--min-tests` is now passed to the checks (it was parsed and ignored). _Reason:_ tinyjson ticket 04 printed
+    `gate: PASS (1 checks passed)` with 5/22 tests red and 5561 corpus diffs because the stub baseline failed both
+    Judge checks (WORK-LOG 59). Default Stage 1 still excuses them: a half-translated crate may not compile while
+    other Parts are `todo` (decision 29). Not done: refusing `mark done` when a Judge check was excused; the governor
+    runs the last Stage 1 gate with `--strict-judge`.

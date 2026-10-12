@@ -50,6 +50,10 @@ HARD RULES
 9. A helper your functions need that is not in the stub (a libc function the rulebook maps, a C++ `std::` call
    such as `stoll`/`stod`, rulebook I8/I9) is yours: add it to {target_path} as a private fn and implement it
    fully. A `todo!()` body is only for a function the stub already lists and your instructions leave out.
+10. Before you finish, reply with one line per rulebook row that applies to a function of {target_path}: every §2
+   override, §8 D-id, §9 Q-id and every error text of §7, as `<id>: <function>` where you applied it, or
+   `<id>: n/a (<reason>)`. A row you cannot place is a bug in your file, not in the row. (Added after tinyjson ticket
+   04: the Haiku body needed three fix rounds on error texts, the `operator==` table and D5/Q5, all in the prompt.)
 
 C2RUST OUTPUT (if not "none": start from it; merge the per-configuration variants into one file with
 #[cfg(feature)] guards; keep its semantics, replace current_block state machines only where the
