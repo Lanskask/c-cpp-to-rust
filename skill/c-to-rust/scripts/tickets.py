@@ -186,7 +186,8 @@ CHAIN = (
                 "Protect the Rulebook and the Judge, then start the fan-out",
                 (
                     "session started with `claude --settings skill/c-to-rust/assets/settings.json` (SKILL.md step 3.1)",
-                    "`tickets.py mark 04 in_progress`, then `guard.py check <ws>/migration/RULEBOOK.md` must print REFUSE; if not, stop",
+                    "`tickets.py mark 04 in_progress`, then `guard.py check <ws>/migration/RULEBOOK.md` must print "
+                    "REFUSE; if not, stop",
                     "write `rust/src/lib.rs` (`pub mod <stem>;` per Part) and the cargo features of rulebook §3",
                 ),
             ),
@@ -249,7 +250,10 @@ CHAIN = (
         (
             Task(
                 "Start the fan-out with the guard active",
-                ("`tickets.py mark 06 in_progress`, then `guard.py check <ws>/migration/RULEBOOK.md` must print REFUSE (SKILL.md 3.1)",),
+                (
+                    "`tickets.py mark 06 in_progress`, then `guard.py check <ws>/migration/RULEBOOK.md` must print "
+                    "REFUSE (SKILL.md 3.1)",
+                ),
             ),
             Task(
                 "Rewrite every Part in batches",
