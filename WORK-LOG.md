@@ -1067,3 +1067,9 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `--output-format`, `--permission-mode`, `--max-budget-usd`. The JSON `result` field is assumed, with a fallback to
   raw stdout. No real `claude -p` run yet.
 - **Next:** one real `run.py ... --go` on tinyjson stage 2 with `--max-attempts 1` and a small budget.
+
+## 69. Skill: --deviations ask|policy in run.py
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (user request)
+- **Done:** flag in `run.py` (default `ask`), SKILL.md and run-loop.md wording, one test (8 in the file).
+- **Next:** none.

@@ -400,3 +400,8 @@ Each entry: decision, reason, who/what it came from. Newest last.
     user between mechanical steps). Not done: tag-matched idiom rows, c2rust slot, §6 design, stubs. Limits: tested
     only against a fake `claude`; a headless implementer has no `agent_id`, so decision 63's hashes are its guard. The
     classifier allow rule asked for in the same request is a permission edit and was left to the user.
+
+67. **Who approves deviations is a switch: `run.py --deviations ask|policy`, default `ask`.** `ask` stops on every §8
+    row that is not `approved`, including `approved (policy)`; `policy` accepts those rows and the user reviews them
+    afterwards. SKILL.md allows policy status only when the user chose it. _Reason:_ decision 65 changed decision 11 on
+    a peer's relay; the user asked for a flag to choose (this session). Default is the conservative one.

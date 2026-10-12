@@ -55,7 +55,8 @@ to.
    first (`references/judge.md` §8), because the Judge and every Deviation depend on it. Every `config-macro:` tag gets a §3 row; every UB or platform
    behaviour gets a §8 Deviation row with status `proposed`.
 
-**Policy approval (decision 65).** A §8 row whose Rust behaviour reproduces what the original does (observed with
+**Policy approval (decision 65), only when the user chose it** (`run.py --deviations policy`, or said so in the
+session; without that every row waits for the user, decision 11). A §8 row whose Rust behaviour reproduces what the original does (observed with
 the Reference build or on the C build, or defined by the language standard) follows the user's rule "match the origin
 as closely as possible": its status is `approved (policy)` and it does not wait. Every other row stays `proposed`:
 no single origin result (undefined behaviour, a platform dependency, an overload the compiler resolves

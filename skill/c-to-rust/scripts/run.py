@@ -57,6 +57,7 @@ class Config:
     max_turns: int
     gate_cmd: str
     snapshot_cmd: str
+    deviations: str = "ask"  # ask | policy
 
     @property
     def name(self) -> str:
@@ -94,8 +95,14 @@ def preconditions(cfg: Config) -> list[str]:
     status_line = re.search(r"^Status: (.*)$", text, re.M)
     if not status_line or not re.match(r"(deviations-approved|stress-tested)", status_line.group(1)):
         problems.append(f"RULEBOOK.md status is {status_line.group(1) if status_line else 'missing'}")
-    for row in re.findall(r"^\| (D\d+) \|.*\| proposed \|\s*$", text, re.M):
-        problems.append(f"deviation {row} is still `proposed`: the user decides it (SKILL.md step 1)")
+    for row_id, status in re.findall(r"^\| (D\d+) \|.*\| ([^|]+?) \|\s*$", text, re.M):
+        if status.startswith("proposed"):
+            problems.append(f"deviation {row_id} is still `proposed`: the user decides it (SKILL.md step 1)")
+        elif status.startswith("approved (policy)") and cfg.deviations == "ask":
+            problems.append(
+                f"deviation {row_id} is `approved (policy)`: approve it (status `approved`) or start with "
+                "--deviations policy"
+            )
     if not cfg.parts.is_file():
         problems.append(f"{cfg.parts} missing")
     return problems
@@ -456,6 +463,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-attempts", type=int, default=wq.MAX_ATTEMPTS)
     p.add_argument("--budget-output-tokens", type=int, default=0)
     p.add_argument("--go", action="store_true", help="spend tokens; without it the plan is printed and nothing runs")
+    p.add_argument(
+        "--deviations",
+        choices=("ask", "policy"),
+        default="ask",
+        help="ask: every deviation row must be `approved` by you (default); policy: `approved (policy)` rows pass",
+    )
     p.add_argument("--model", default="sonnet")
     p.add_argument("--reviewer-model", default="sonnet")
     p.add_argument("--claude", default="claude", help="the claude executable (tests pass a fake)")
@@ -486,6 +499,7 @@ def main(argv: list[str] | None = None) -> int:
         max_turns=a.max_turns,
         gate_cmd=a.gate_cmd or base + " STAGE={stage} PART={part}",
         snapshot_cmd=a.snapshot_cmd or base + "-snapshot STAGE={stage} PART={part}",
+        deviations=a.deviations,
     )
     try:
         return run(cfg)

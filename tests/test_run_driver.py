@@ -80,7 +80,7 @@ def argv(ws: Path, claude: Path, *extra: str) -> list[str]:
 
 def test_missing_preconditions_stop_without_spending(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ws = make_ws(tmp_path, rulebook_status="draft")
-    assert run.main(argv(ws, fake_claude(tmp_path), "--go")) == run.STOP
+    assert run.main(argv(ws, fake_claude(tmp_path), "--go", "--deviations", "policy")) == run.STOP
     assert "RULEBOOK.md status is draft" in capsys.readouterr().err
 
 
@@ -92,10 +92,17 @@ def test_proposed_deviation_row_stops_for_the_user(tmp_path: Path, capsys: pytes
     assert "D1" in capsys.readouterr().err
 
 
+def test_policy_rows_need_the_deviations_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    ws = make_ws(tmp_path)  # D1 is `approved (policy)`
+    assert run.main(argv(ws, fake_claude(tmp_path), "--deviations", "ask")) == run.STOP
+    assert "--deviations policy" in capsys.readouterr().err
+    assert run.main(argv(ws, fake_claude(tmp_path), "--deviations", "policy")) == 0
+
+
 def test_dry_run_prints_the_plan_and_runs_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ws = make_ws(tmp_path)
     os.environ["FAKE_LOG"] = str(tmp_path / "calls")
-    assert run.main(argv(ws, fake_claude(tmp_path))) == 0
+    assert run.main(argv(ws, fake_claude(tmp_path), "--deviations", "policy")) == 0
     out = capsys.readouterr().out
     assert "--model sonnet" in out and "rerun with --go" in out
     assert not (tmp_path / "calls").exists()
@@ -105,7 +112,7 @@ def test_one_part_is_accepted_committed_and_marked_done(tmp_path: Path, monkeypa
     ws = make_ws(tmp_path)
     monkeypatch.setenv("FAKE_LOG", str(tmp_path / "calls"))
     monkeypatch.setenv("FAKE_TARGET", str(ws / "rust" / "src" / "lib.rs"))
-    code = run.main(argv(ws, fake_claude(tmp_path), "--go"))
+    code = run.main(argv(ws, fake_claude(tmp_path), "--go", "--deviations", "policy"))
     assert code == 0
     rows = (ws / "migration" / "parts.tsv").read_text().splitlines()[1].split("\t")
     assert rows[6] == "done" and rows[10]  # state, commit
@@ -118,7 +125,7 @@ def test_review_block_costs_an_attempt_then_passes(tmp_path: Path, monkeypatch: 
     monkeypatch.setenv("FAKE_LOG", str(tmp_path / "calls"))
     monkeypatch.setenv("FAKE_TARGET", str(ws / "rust" / "src" / "lib.rs"))
     monkeypatch.setenv("FAKE_BLOCK_FIRST", "1")
-    assert run.main(argv(ws, fake_claude(tmp_path), "--go")) == 0
+    assert run.main(argv(ws, fake_claude(tmp_path), "--go", "--deviations", "policy")) == 0
     row = (ws / "migration" / "parts.tsv").read_text().splitlines()[1].split("\t")
     assert row[6] == "done" and row[7] == "2"  # two attempts
 

@@ -12,7 +12,8 @@ python3 -I skill/c-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempt
 ```
 
 Without `--go` nothing is spent: the driver checks the preconditions, prints the `claude -p` commands, the snapshot and
-gate commands and the budget, then exits 0. Add `--go` to start. Other options: `--model sonnet`,
+gate commands and the budget, then exits 0. Add `--go` to start. `--deviations ask|policy` decides who approves §8 rows: `ask` (default) stops on every row that is not `approved`
+by you, `policy` also accepts `approved (policy)`. Other options: `--model sonnet`,
 `--reviewer-model sonnet`, `--max-turns 60`, `--settings <file>`, `--gate-cmd` / `--snapshot-cmd` (templates with
 `{root} {ws} {name} {stage} {part}`; default `make -C {root} pilot-{name} STAGE={stage} PART={part}` and
 `pilot-{name}-snapshot`). Stage 2: `--stage 2` (reads `parts-stage2.tsv`, ticket 06).
@@ -23,7 +24,7 @@ gate commands and the budget, then exits 0. Add `--go` to start. Other options: 
 |-----------------------------------------------------------------|------------------------------------------------------|
 | Tickets before the fan-out ticket (04, Stage 2: 06) are `done`  | `migration/tickets/NN-*.md` `**Status:**` lines      |
 | Rulebook approved                                               | `Status: deviations-approved` or `stress-tested`     |
-| No §8 row still `proposed`                                      | rows ending `\| proposed \|` stop the driver          |
+| No §8 row `proposed`; `approved (policy)` only with `--deviations policy` | the status cell of each `D<n>` row |
 | Mapping, Judge, crate skeleton with every Part's module         | by the tickets (01-03); not checked separately       |
 | `make pilot-<name>` and `make pilot-<name>-snapshot` targets    | or pass `--gate-cmd` / `--snapshot-cmd`              |
 | `--settings skill/c-to-rust/assets/settings.json` allow rules   | the implementer runs with `--permission-mode acceptEdits` |
