@@ -773,3 +773,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the hand-written rows are complete except one throw line (1022) and one hidden facet `new`; the AST
   facts confirm what the rows cite.
 - **Next:** user answers the D1, D2, D4, D6-D16 question; CPP21 gets line 1022.
+
+## 49. Skill: `--cxx-flag` with a dash-leading value (tinyjson Skill bug 5)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `inventory.py` passes `--cxx-flag=<flag>` to `ast_facts.py` (argparse refused a separate `-std=c++11`, so
+  every documented use fell back to regex); a failed `ast_facts.py` now prints a warning line. Test
+  `test_dash_leading_cxx_flag_reaches_the_ast_engine`. `make test` 115 passed, 1 skipped; lint clean. Re-run on
+  tinyjson with `--cxx-flag=-std=c++11`: 92 symbols, engine `clang-ast+regex`, 65 fact rows.
+- **Tells us:** my own tests used no dash-leading flag, so the bug shipped (decision 56). The test now covers it.
+- **Next:** tinyjson session can drop its `clang++` wrapper script and use `--cxx-flag=-std=c++11`.

@@ -522,11 +522,12 @@ def run_ast_facts(
     for f in files:
         cmd += ["--file", f]
     for fl in flags:
-        cmd += ["--cxx-flag", fl]
+        cmd.append(f"--cxx-flag={fl}")  # `=` form: argparse refuses a separate value that starts with "-"
     r = subprocess.run(cmd, capture_output=True, text=True)
     sys.stderr.write(r.stderr)
     out = ast_dir / "ast-symbols.tsv"
     if r.returncode != 0 or not out.is_file():
+        print(f"inventory: warning: ast_facts.py failed (exit {r.returncode}); using the regex pass", file=sys.stderr)
         return None
     got: dict[str, list[tuple[str, str, int, int]]] = {}
     for ln in out.read_text().splitlines():

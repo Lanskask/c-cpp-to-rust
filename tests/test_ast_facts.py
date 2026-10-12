@@ -106,3 +106,13 @@ def test_depmap_prefers_clang_edges_for_parsed_callers(tmp_path: Path) -> None:
     assert not [e for e in edges if e[2] == "call"]
     edges_regex, _, _ = depmap.build(tmp_path, syms, None)
     assert ("f@a.hpp", "g@a.hpp", "call") in edges_regex
+
+
+@needs_clang
+def test_dash_leading_cxx_flag_reaches_the_ast_engine(tmp_path: Path) -> None:
+    root = make_lib(tmp_path)
+    out = tmp_path / "migration"
+    out.mkdir()
+    syms, engine = inventory.inventory(root, "cpp", None, (), out, cxx_flags=("-std=c++11", "-DUNUSED=1"))
+    assert engine == "clang-ast+regex"
+    assert (out / "calls.tsv").is_file() and syms
