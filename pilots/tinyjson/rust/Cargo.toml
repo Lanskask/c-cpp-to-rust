@@ -1,0 +1,14 @@
+[package]
+name = "tinyjson"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Faithful port (Stage 1) of `src/tinyjson.h` @ bcca77e. No dependencies (RULEBOOK section 1) and no cargo features
+# (RULEBOOK section 3: the feature matrix is `""` only).
+# `tests/` and `examples/` are installed by migration/harness/run.py from migration/harness/rust/.
+
+[lib]
+name = "tinyjson"
+
+[dependencies]

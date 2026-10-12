@@ -51,6 +51,17 @@ pilot-jsmn:
 	  --features "" --features strict --features parent-links --features strict,parent-links \
 	  --harness-cmd "python3 -I pilots/jsmn/migration/harness/run.py --stage $(STAGE) {features}"
 
+# tinyjson (C++ route, one Part, feature matrix "" only). Usage: make pilot-tinyjson [STAGE=1] [MIN_TESTS=0]
+pilot-tinyjson:
+	python3 -I $(SCRIPTS)/gate.py src/tinyjson --crate pilots/tinyjson/rust --stage $(STAGE) --min-tests $(MIN_TESTS) \
+	  --also rust/tests/adapter --parts pilots/tinyjson/migration/parts.tsv --features "" \
+	  --harness-cmd "python3 -I pilots/tinyjson/migration/harness/run.py --crate pilots/tinyjson/rust"
+
+pilot-tinyjson-snapshot:  ## record HEAD + baseline before editing the tinyjson Part
+	python3 -I $(SCRIPTS)/gate.py src/tinyjson --crate pilots/tinyjson/rust --stage $(STAGE) \
+	  --parts pilots/tinyjson/migration/parts.tsv --snapshot --also rust/tests/adapter --features "" \
+	  --harness-cmd "python3 -I pilots/tinyjson/migration/harness/run.py --crate pilots/tinyjson/rust"
+
 pilot-jsmn-snapshot:  ## record HEAD + baseline before editing the Part
 	python3 -I $(SCRIPTS)/gate.py $(PART) --crate pilots/jsmn/rust --stage $(STAGE) \
 	  --parts pilots/jsmn/migration/parts.tsv --snapshot --also rust/tests/adapter \
