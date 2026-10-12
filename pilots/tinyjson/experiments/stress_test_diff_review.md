@@ -459,3 +459,19 @@ this review asks for a B rerun (`R2b-B3` is also prepared).
 The COSMETIC rows R2B-2, R2B-9 and R2C-2 show runs that follow a rule's result but not its prescribed form (C4 chain
 over pairs, §4 markers on every §8/§9 site, Q5 `c_str` helper). The Judge cannot see them; they matter only if Stage 2
 or a reviewer relies on finding the markers.
+
+## Round 2b and 2c (group A rerun, Sonnet scanner)
+
+Reviewed 2026-10-12 by the governor (probes run, not committed). Crates under `migration/harness/work/stress/`.
+
+- **R2b-A3** (Haiku 5.5, group A with HARD RULE 9 in the prompt): `stoll`/`stod` are now implemented, `cargo check`
+  clean. `to_integer`: 8 of 8 probe inputs equal the C++ results of A-5. `to_double`: 8 of 11 equal; wrong are `1e-310`
+  (returns `Ok`; C++ `out_of_range "stod"`), `0x1p3` (`invalid_argument`; C++ 8.0) and `-inf` (`+inf`; C++ `-inf`).
+  Class: BEHAVIOUR, agent error (D8, I8 and P6 state all three).
+- **R2c-A3** (Sonnet 5.5, copy of R2b-A3 with only `stoll`/`stod` rewritten; the rest byte-identical): same 19 inputs
+  all equal; the agent compared 5257 inputs against g++ 16.1 `std::stod`/`std::stoll` (value bits, pos, exception
+  class), 0 mismatches. Two facts it measured and the rulebook did not state: `nan(` consumes up to the first `)`;
+  a hex-float subnormal is accepted when exact and out of range when inexact (decimal subnormals are always out of
+  range). Both are now in RULEBOOK §2 I8 and §8 D8.
+- **Verdict:** the remaining difference is agent tier, not a rule gap. Recorded as the §0 implementer tier rule
+  (strtod/strtoll scanners to Sonnet). Round 2 success criterion met in its second form.

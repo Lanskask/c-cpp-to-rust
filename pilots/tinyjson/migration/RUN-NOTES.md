@@ -556,3 +556,16 @@ twice-run filter `harness.py --repeat 2` on the C++ driver: 5561 same, 0 unstabl
 4. Success: no pair differs on any BEHAVIOUR item, or every remaining difference is classified (BEHAVIOUR with a
    rule proposal, DEVIATION-RELATED, or COSMETIC). Success closes the ticket 03 acceptance item "a same-model rerun
    agrees", and the RULEBOOK status line can then become `stress-tested`.
+
+### Round 2 result (2026-10-12)
+
+A3 (Haiku), B3 and C3 were reviewed against their round 1 pairs; every BEHAVIOUR item they wrote agrees with the
+faithful round 1 run and the C++ probe, the rest is COSMETIC or DEVIATION-RELATED, and no P12 was needed. A3 left
+`stoll`/`stod` as `todo!()`, so group A was rerun with `stage1-prompt.md` HARD RULE 9: the Haiku run A3b
+(`work/stress/R2b-A3`) wrote a `stod` that is wrong on 3 inputs (`1e-310` returned `Ok`, `0x1p3` gave
+`invalid_argument`, `-inf` lost its sign) although I8 states all three. A Sonnet 5.5 run (`work/stress/R2c-A3`, only
+`stoll`/`stod` rewritten) matched GCC 16.1 libstdc++ on 5257 inputs with 0 mismatches. The remaining differences are
+therefore classified as agent-tier, not a rule gap: the user decided (2026-10-12) to send the `strtod`/`strtoll`
+scanners to Sonnet (RULEBOOK §0 tier bullet, §12), and the subnormal and `nan(` facts measured in R2c-A3 were written
+into I8 and D8. This closes the plan's success criterion (item 4, second form); the RULEBOOK status is now
+`stress-tested (2026-10-12)`. Evidence: `pilots/tinyjson/experiments/stress_test_diff_review.md`, section "Round 2".

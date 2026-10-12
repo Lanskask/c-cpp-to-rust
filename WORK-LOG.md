@@ -893,3 +893,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `-inf` returns `+inf` (D8: `-inf`).
 - **Tells us:** the rules cover all three (D8, I8, P5/P6); the Haiku `strtod` scanner is the weak part, not a rule gap.
 - **Next:** user decides: escalate the strtod scanner to Sonnet / add a hint to I8, then accept `stress-tested`.
+
+## 56. tinyjson ticket 03 done: scanner tier rule, RULEBOOK stress-tested
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (a4815866164658559); Opus 5.5 subagent (aa96988bf5b38373f)
+- **Done:** R2c-A3: Sonnet rewrote only `stoll`/`stod`; governor re-probe 19 of 19 equal, agent 5257 inputs 0
+  mismatches vs g++ 16.1. RULEBOOK: §0 tier rule (scanners to Sonnet), I8/D8 subnormal and `nan(` wording, §12 rows,
+  status `stress-tested (2026-10-12)`; ticket 03 done.
+- **Tells us:** the tier rule overrides HARD RULE 9 for the two scanners: the Haiku group prompt must say "do not
+  write `stoll`/`stod` bodies, signatures only" (the Skill session should reflect that in stage1-prompt.md).
+- **Next:** ticket 04, Stage 1 faithful port (scanners as a separate Sonnet task, rest Haiku).
