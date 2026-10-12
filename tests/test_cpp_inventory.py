@@ -65,3 +65,15 @@ def test_qualified_method_is_reached_by_its_bare_call_name(tmp_path: Path) -> No
     ]
     _, _, dead = depmap.build(tmp_path, syms)
     assert dead == ["json::unused@lib.hpp"]
+
+
+def test_macro_wrapped_return_type_names_the_function_not_the_macro() -> None:
+    code = "CJSON_PUBLIC(cJSON *) cJSON_Parse(const char *value)\\n{\\n  return 0;\\n}\\n".replace("\\n", "\n")
+    names = [s.name for s in inventory.scan_regex(code, "c.c", "c") if s.kind == "function"]
+    assert names == ["cJSON_Parse"]
+
+
+def test_constructor_initialiser_list_is_not_a_second_declarator() -> None:
+    code = "json::json(int x) : _type(a), _value(b)\n{\n}\n"
+    names = [s.name for s in inventory.scan_regex(code, "a.cpp", "cpp") if s.kind == "function"]
+    assert names == ["json::json"]

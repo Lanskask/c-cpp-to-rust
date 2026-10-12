@@ -104,6 +104,56 @@ def operator_name(before: str, rest: str) -> str | None:
     return f"{m.group(1)}operator{sep}{suffix}"
 
 
+NOT_NAMES = KEYWORDS | {"throw", "noexcept", "__attribute__", "__declspec", "alignas", "decltype", "asm", "__asm__"}
+
+
+def declarator_prefix(h: str) -> str:
+    """The header text before the `(` of the declared function.
+
+    `CJSON_PUBLIC(cJSON *) cJSON_Parse(const char *s)` has two top-level groups: the first is a macro that wraps the
+    return type, so the name is in front of the second. A constructor's `: member(x)` initialiser list is not a
+    second declarator (a bare `:` sits between the groups).
+    """
+    groups: list[tuple[int, int]] = []  # (index of "(", index just after its ")") at nesting depth 0
+    depth = 0
+    start = -1
+    for i, ch in enumerate(h):
+        if ch == "(":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == ")" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                groups.append((start, i + 1))
+    if not groups:
+        return h
+    pick = 0
+    for k in range(len(groups) - 1):
+        between = h[groups[k][1] : groups[k + 1][0]]
+        words = IDENT.findall(between)
+        nxt = h[: groups[k + 1][0]].rstrip()
+        m = re.search(r"([A-Za-z_]\w*)$", nxt)
+        macro_prefix = (
+            bool(m)
+            and m.group(1) not in NOT_NAMES
+            and bool(words)
+            and re.fullmatch(r"[\s\w:*&<>]*", between) is not None
+            and not re.search(r"(^|[^:]):([^:]|$)", between)
+            and (m.group(1) == words[-1])
+        )
+        if macro_prefix and not re.match(r"\s*(const|noexcept|override|final)\b", between):
+            pick = k + 1
+        else:
+            break
+    # drop the macro groups: `CJSON_PUBLIC(cJSON *) cJSON_Parse` -> `CJSON_PUBLIC cJSON_Parse`
+    out, pos = "", 0
+    for a, b in groups[:pick]:
+        out += h[pos:a] + " "
+        pos = b
+    return out + h[pos : groups[pick][0]]
+
+
 def strip_comments_and_strings(text: str, keep_strings: bool = False) -> str:
     """Blank out comments and string/char literals but keep every newline so line numbers survive.
 
@@ -266,7 +316,7 @@ def scan_regex(text: str, rel: str, lang: str = "c") -> list[Symbol]:
         if re.match(r"^(typedef\s+)?(struct|union|enum|class)\b", h):
             return ("enum" if "enum" in h.split()[:2] else "record", "")  # anonymous: name from trailing typedef
         if "(" in h:
-            before = h.split("(", 1)[0]
+            before = declarator_prefix(h)
             op = operator_name(before, h[len(before) :])
             if op:
                 return ("function", op)
