@@ -1015,3 +1015,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Python, so the governor is not hindered. Not verified live: `agent_id` on a real subagent call.
 - **Next:** first tinyjson fan-out after restart: governor edits RULEBOOK.md (allowed), an implementer attempt on it
   must be refused; if it is not, `agent_id` is missing and decision 62 must be reverted.
+
+## 66. Skill: Judge hash check in gate.py, implementer default Sonnet 5.5 (tinyjson-translation-4 requests)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** request 1 was already met by decision 62; added the detective layer: `gate.py` stores hashes in the
+  snapshot and fails an attempt that changed the Rulebook or Judge files (`--accept-judge-change`). Request 2:
+  SKILL.md Models, stage1/stage2 prompts: Sonnet 5.5 implementer, "STATUS: done is not evidence". Two tests.
+- **Tells us:** the hash check initially fired on `--also` paths and broke an existing test; they are exempt now. The
+  Sonnet default rests on one Pilot's run, not on a controlled comparison.
+- **Next:** the tinyjson governor restarts with `--settings` (allow rule `Agent(model:sonnet)` is in).

@@ -202,3 +202,23 @@ def test_rollback_leaves_untracked_also_paths_alone(tmp_path: Path) -> None:
     assert gate.main(args) == 1
     assert judge.read_text() == "// untracked Judge file\n"
     assert (crate / "src" / "lib.rs").read_text() == "pub fn f() -> i32 { 1 }\n"
+
+
+def test_changed_rulebook_or_judge_file_fails_the_attempt_unless_accepted(tmp_path: Path) -> None:
+    crate, parts = make_workspace(tmp_path)
+    rulebook = tmp_path / "migration" / "RULEBOOK.md"
+    rulebook.write_text("# rules v1\n")
+    harness = tmp_path / "migration" / "harness"
+    (harness / "inputs").mkdir(parents=True)
+    (harness / "run.py").write_text("# judge\n")
+    args = ["p", "--crate", str(crate), "--stage", "1", "--parts", str(parts)]
+    assert gate.main([*args, "--snapshot"]) == 0
+    (crate / "src" / "lib.rs").write_text("pub fn f() -> i32 { 2 }\n")
+    (harness / "inputs" / "generated.bin").write_text("noise")  # corpus is not hashed
+    assert gate.main(args) == 0
+    rulebook.write_text("# rules v2 (edited by the attempt)\n")
+    assert gate.main(args) == 1
+    assert rulebook.read_text().startswith("# rules v2")  # Judge files are not rolled back
+    assert (crate / "src" / "lib.rs").read_text() == "pub fn f() -> i32 { 1 }\n"  # the target is
+    (crate / "src" / "lib.rs").write_text("pub fn f() -> i32 { 3 }\n")
+    assert gate.main([*args, "--accept-judge-change"]) == 0

@@ -1,7 +1,7 @@
 # Stage 1 prompt (Faithful port, one Part)
 
-The governor (Sonnet) fills the `{...}` slots and sends the result to the implementer (Haiku; a retry
-after 2 failures may escalate to Sonnet). The slots are the **only** context the implementer gets (PLAN §5): no other
+The governor (Sonnet) fills the `{...}` slots and sends the result to the implementer (Sonnet 5.5, `model: sonnet`;
+Haiku only when the user asks). The slots are the **only** context the implementer gets (PLAN §5): no other
 files, no chat history. Fill each slot from the named source:
 
 | Slot                                   | Source                                                                                                     |
@@ -53,7 +53,7 @@ HARD RULES
 10. Before you finish, reply with one line per rulebook row that applies to a function of {target_path}: every §2
    override, §8 D-id, §9 Q-id and every error text of §7, as `<id>: <function>` where you applied it, or
    `<id>: n/a (<reason>)`. A row you cannot place is a bug in your file, not in the row. (Added after tinyjson ticket
-   04: the Haiku body needed three fix rounds on error texts, the `operator==` table and D5/Q5, all in the prompt.)
+   04: a Haiku body needed three fix rounds on error texts, the `operator==` table and D5/Q5, all in the prompt.)
 
 C2RUST OUTPUT (if not "none": start from it; merge the per-configuration variants into one file with
 #[cfg(feature)] guards; keep its semantics, replace current_block state machines only where the
@@ -93,6 +93,7 @@ NOTE: <one line: what was hard, or the open question if blocked>
 
 1. `workqueue.py mark <part> in_progress`; `gate.py <part> --snapshot ...` (records HEAD + baseline).
 2. Send the prompt. The implementer writes `{target_path}`.
+   A reported `STATUS: done` is not evidence: run `cargo check` on the crate before the gate.
 3. `gate.py <part> --stage 1 ...`. Pass → `git commit` the target only (`E<n> <pilot>: <part> stage 1`),
    then `workqueue.py mark <part> done --commit <sha>`. Fail → the gate has already restored the target;
    `workqueue.py mark <part> failed --error "<gate line>"`, refill `{previous}`/`{tm_hits}`, retry.

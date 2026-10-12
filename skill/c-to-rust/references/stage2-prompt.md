@@ -4,6 +4,9 @@ Prerequisites, checked by the governor before the first Stage 2 Part (SKILL.md s
 rulebook §6 (Stage 2 API) is filled; the Stage 2 Judge (adapter, Rust driver, translated tests) is
 committed and validated on the Faithful port, including the planted-mutant check (`judge.md` §5).
 
+The implementer is Sonnet 5.5 (`model: sonnet`, SKILL.md Models). A reported `STATUS: done` is not evidence: run
+`cargo check` on the crate before the gate (a Haiku run reported done on a file with 12 compile errors).
+
 Slots (same sources as `stage1-prompt.md` unless stated):
 
 | Slot                         | Source                                                                                           |

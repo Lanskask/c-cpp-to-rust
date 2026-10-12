@@ -8,6 +8,9 @@ Flow:  gate.py PART --crate DIR --stage N --snapshot    # before changing the Pa
 Checks run once per feature set (`--features ""` `--features strict` ...; default: one run, no features), in
 order, stopping at the first regression. A check that already failed in the baseline is not a
 regression, except at Stage 2 the Judge checks `test` and `harness`, which always count.
+A change to the Rulebook, `migration/harness/**` (not `inputs/`) or the crate's `Cargo.toml`, `tests/**`,
+`examples/**` between snapshot and gate fails the attempt (hashes in the snapshot, decision 63) unless
+`--accept-judge-change` is passed; those files are not rolled back.
 `--strict-judge` makes them always count at Stage 1 too; without it a PASS lists the checks the baseline
 excused (`1 of 3 checks passed; EXCUSED ...`), because a stub baseline fails the Judge and the Part still passes.
 `--harness-cmd` is a shell command with `{features}` replaced by the feature list; exit 0 = pass.
@@ -24,6 +27,7 @@ Output: TSV lines `check<TAB>features<TAB>pass|fail|skip<TAB>detail`, summary on
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shlex
@@ -204,6 +208,34 @@ def git(root: Path, *args: str) -> str:
     return r.stdout.strip()
 
 
+def judge_hashes(root: Path, crate: Path) -> dict[str, str]:
+    """SHA-256 of the files an implementer must not change: the Rulebook, the harness, the crate's tests/examples/Cargo.
+
+    `migration/harness/inputs/` (generated corpus) and build output are left out. The gate compares these with the
+    snapshot (decision 63): a changed file fails the attempt unless the governor passes `--accept-judge-change`.
+    """
+    files: list[Path] = [root / "migration" / "RULEBOOK.md", crate / "Cargo.toml"]
+    for base, pattern in (
+        (root / "migration" / "harness", "**/*"),
+        (crate / "tests", "**/*"),
+        (crate / "examples", "**/*"),
+    ):
+        files += [f for f in sorted(base.glob(pattern)) if f.is_file()]
+    skip = ("/inputs/", "/target/", "/__pycache__/")
+    out: dict[str, str] = {}
+    for f in files:
+        key = (
+            f.resolve().relative_to(root.resolve()).as_posix() if f.resolve().is_relative_to(root.resolve()) else str(f)
+        )
+        if f.is_file() and not any(part in f"/{key}" for part in skip):
+            out[key] = hashlib.sha256(f.read_bytes()).hexdigest()
+    return out
+
+
+def changed_judge_files(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    return sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+
+
 def record_pass(root: Path, part: str, stage: int, features: list[str]) -> None:
     """Append one row to migration/gate-passed.tsv (tracked, unlike gate/*.json) for `workqueue.py verify`."""
     path = root / "migration" / "gate-passed.tsv"
@@ -267,6 +299,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Stage 1: never excuse `test`/`harness` failures the baseline already had (once the Judge compiles)",
     )
+    p.add_argument(
+        "--accept-judge-change",
+        action="store_true",
+        help="the Rulebook/Judge files changed since the snapshot on purpose (governor edit); do not fail the attempt",
+    )
     p.add_argument("--snapshot", action="store_true", help="record HEAD and baseline, change nothing")
     p.add_argument("--no-rollback", action="store_true", help="report only; keep the working tree as is")
     return p
@@ -290,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
                         "head": git(root, "rev-parse", "HEAD"),
                         "failing": [r.key for r in results if r.status == "fail"],
                         "paths": [target, *args.also],
+                        "judge": judge_hashes(root, crate),
                     }
                 )
             )
@@ -327,6 +365,24 @@ def main(argv: list[str] | None = None) -> int:
         action = "kept working tree" if args.no_rollback else f"restored {', '.join(paths)} to {str(saved['head'])[:8]}"
         print(f"gate: FAIL {args.part}: {first.key}: {first.detail} ({action})", file=sys.stderr)
         return 1
+    judge_raw = saved.get("judge")
+    recorded: dict[str, str] = {str(k): str(v) for k, v in judge_raw.items()} if isinstance(judge_raw, dict) else {}
+    if recorded and not args.accept_judge_change:
+        changed = [
+            c
+            for c in changed_judge_files(recorded, judge_hashes(root, crate))
+            if not any(c == q or c.startswith(q.rstrip("/") + "/") for q in paths)  # `--also` paths are the attempt's
+        ]
+        if changed:
+            if not args.no_rollback:
+                rollback(root, str(saved["head"]), [target])  # never the Judge files: the governor may own the edit
+            print(
+                f"gate: FAIL {args.part}: Rulebook/Judge files changed since the snapshot: {', '.join(changed[:8])}"
+                f"{' ...' if len(changed) > 8 else ''}. Review them; if the change is yours, re-run with"
+                " --accept-judge-change (the target was restored; the changed files were not)",
+                file=sys.stderr,
+            )
+            return 1
     ok = sum(r.status == "pass" for r in results)
     ran = sum(r.status != "skip" for r in results)
     excused = [r.key for r in results if r.status == "fail"]

@@ -102,9 +102,12 @@ next step.
 ## Models
 
 - Opus: rulebook, Deviations, Stage 2 API, stress-test diff review, first review per Pilot.
-- Sonnet: governing (this file: the governor session), Judge building, reviews, escalated retries.
-- Haiku: Part bodies and fixes (the implementer prompts). The default Haiku is Haiku 5.5 (`claude-haiku-5-5`); an Agent
-  launch says `model: haiku` and gets it.
+- Sonnet: governing (this file: the governor session), Judge building, reviews, and the implementers (Part bodies and
+  fixes, the implementer prompts). The default implementer is Sonnet 5.5 (`claude-sonnet-5-5`): an Agent launch says
+  `model: sonnet`. Decision 64: in tinyjson Haiku failed the Stage 1 gate (30 compile errors), needed three fix rounds
+  on rules that were in the prompt and reported `STATUS: done` on a Stage 2 file with 12 compile errors; Sonnet wrote
+  the scanners right first time.
+- Haiku: only when the user asks for it (a cost experiment). The default Haiku is Haiku 5.5 (`claude-haiku-5-5`).
 - Scripts: everything mechanical. If a step repeats by hand twice, it belongs in a script.
 
 ## Rules that hold in every branch
@@ -123,8 +126,12 @@ next step.
   the limit below reads it. `gate.py --snapshot` also appends a row to `migration/attempts.tsv` (one row = one
   implementer run: snapshot only at the start of a run); `mark done` raises `attempts` to that row count and refuses 0,
   `verify` flags a lower value.
+- An implementer's `STATUS: done` is not evidence. Before the gate, run `cargo check` on the crate yourself; the
+  gate decides acceptance, the report decides nothing.
 - Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).
-- The rulebook and the Judge are read-only during a batch. Judge changes (new corpus inputs from a
-  review `GAP`) are their own commit: `tickets.py mark 04 todo` (or 06), make and commit the change, mark it
-  `in_progress` again, then the Part is re-gated. The guard enforces this; the commit trail shows it.
+- The rulebook and the Judge are read-only for the implementers during a batch. The governor edits them freely, as
+  their own commit before the next run (new corpus inputs from a review `GAP`, a `RULE` amendment). Two checks
+  catch an implementer that touches them: `guard.py` refuses a subagent's edit (decision 62), and `gate.py` fails an
+  attempt when a hashed file changed since the snapshot (decision 63; `--accept-judge-change` for a governor edit
+  made between snapshot and gate).
 - Report numbers only from commands actually run; failing results are reported, not retried silently.

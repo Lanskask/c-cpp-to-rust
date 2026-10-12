@@ -366,3 +366,18 @@ Each entry: decision, reason, who/what it came from. Newest last.
     `agent_id` arrives on real hook calls of Agent-tool subagents (docs only); first fan-out must show an implementer
     `Edit` of `RULEBOOK.md` refused. A subagent that is not launched through the Agent tool (a separate `claude -p`) has
     no `agent_id` and is not protected.
+
+63. **`gate.py` hashes the Rulebook and the Judge at `--snapshot` and fails an attempt that changed them.** Hashed:
+    `migration/RULEBOOK.md`, `migration/harness/**` (not `inputs/`), the crate's `Cargo.toml`, `tests/**`, `examples/**`.
+    A changed file fails the attempt and rolls back the target only; `--accept-judge-change` passes a governor edit;
+    `--also` paths are exempt (they are restored, not judged). _Reason:_ decision 62 stops subagents that carry
+    `agent_id`; this is the detective layer that also catches a subagent the hook does not see, and it leaves a
+    record in the gate output (tinyjson-translation-4 proposal; the lock cost five `mark todo` cycles). Limit: it
+    sees only changes between snapshot and gate; a Judge edit committed before the snapshot is the governor's.
+
+64. **The implementer default is Sonnet 5.5, Haiku only on request; a reported `STATUS: done` is not evidence.**
+    SKILL.md Models, stage1-prompt and stage2-prompt say `model: sonnet`; the governor runs `cargo check` before the
+    gate. _Reason:_ the user's decision of 2026-10-12 as relayed by tinyjson-translation-4 (not seen directly in this
+    session) and its run: Haiku 5.5 gave 30 compile errors at the Stage 1 gate, needed three fix rounds on rules that
+    were in the prompt, and reported done on a Stage 2 file with 12 errors; Sonnet's scanners were right first time.
+    Supersedes the "default Haiku" wording of commit 8a13f8f; the Haiku 5.5 version choice stays for when Haiku is used.
