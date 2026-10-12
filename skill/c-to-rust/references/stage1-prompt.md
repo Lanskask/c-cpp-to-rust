@@ -47,6 +47,9 @@ HARD RULES
    shared label: one flag (or labelled block) and one copy of the label's code, never a copy per
    jump. A C index loop: same index variable and type, same exit-value tests, later loops resume
    from the same index; no .rev() ranges or added flags.
+9. A helper your functions need that is not in the stub (a libc function the rulebook maps, a C++ `std::` call
+   such as `stoll`/`stod`, rulebook I8/I9) is yours: add it to {target_path} as a private fn and implement it
+   fully. A `todo!()` body is only for a function the stub already lists and your instructions leave out.
 
 C2RUST OUTPUT (if not "none": start from it; merge the per-configuration variants into one file with
 #[cfg(feature)] guards; keep its semantics, replace current_block state machines only where the

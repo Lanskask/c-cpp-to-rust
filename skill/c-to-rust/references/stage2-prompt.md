@@ -50,6 +50,8 @@ HARD RULES
 6. Inner loop: cargo check / cargo test --manifest-path <crate>/Cargo.toml --features <set> for each
    feature set. Acceptance is decided by the gate.
 7. End {target_path} with the PORT STATUS trailer (stage=2).
+8. A private helper your rewrite needs that the Faithful port did not have is yours: add it to {target_path} and
+   implement it fully; never leave it as `todo!()`.
 
 RULEBOOK
 {rulebook}

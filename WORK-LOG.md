@@ -863,3 +863,12 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   (governor re-ran it into a stray `--help/` dir by mistake; identical, deletion pending). Judge change committed apart.
 - **Tells us:** D8 still says the underflow boundary is "to measure" and conflicts with P6; stub `json` lacks `_value`.
 - **Next:** decide P11 and the D8 wording; round 2 (A, B, C once) with the updated rulebook; then `stress-tested`.
+
+## 53. Skill: private helpers in the implementer prompts (tinyjson round-2 stress test)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `stage1-prompt.md` HARD RULE 9 and `stage2-prompt.md` HARD RULE 8: a helper that is not in the stub is
+  the implementer's to add and implement fully. Reported by the tinyjson-translation session (a Haiku agent left
+  `stoll`/`stod` as `todo!()` after a "leave every other body todo!()" instruction).
+- **Not done:** the classifier-refusal request (settings.json allow rule for Agent) is a permission change and was
+  put to the user instead of being applied.
