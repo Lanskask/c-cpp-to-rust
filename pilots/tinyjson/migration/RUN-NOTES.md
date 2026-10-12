@@ -612,3 +612,19 @@ point instead of once at the end (D4); markers spelled `MARKER: Id` on their own
 | Surrogate / > U+10FFFF stream | covered       | `streams.wide` probes (Judge commit b9d53af)                                        |
 | Code point above U+00FF at a dispatch | covered | `broken_` P2/P3 inputs (Judge commit b9d53af)                                     |
 | Deep nesting                  | partly        | `deep_` up to 200; D11 (100000 deliberately absent)                                |
+
+## Stage 2 review of attempt 1 (ticket 06, Sonnet reviewer a7dc33c2a1f542bca), 2026-10-12
+Fixed by the governor before the commit: D8 markers on `stoll`/`stod` (the trailer listed D8 without a marker), Q5 pair on
+`get_key`, Q1/Q4 markers, D3 marker on its own line, stale doc comments, two `PERF(port)` lines that recorded no
+problem, `U32Stream::peek` back to `&mut self` (§6), and `skip_char` now builds its message as `u32` and calls
+`u32_to_u8` (D4: a surrogate or a value above U+10FFFF gives `invalid utf32 string: wstring_convert::to_bytes`, as
+C++; this was inherited from Stage 1 and is not reachable through `parse`).
+Not done, left open:
+- GAP: the adapter calls only `get_key_mut` and `get_index_mut`; `get_key` and `get_index` (§6, read-only forms) are
+  never run. By reading they match. Proposed test: `{"a":1}`, `get_key(b"a\0zz")` is `Ok(1)`, `get_key(b"b\0c")` is
+  `key b not found.`; `[1]`, `get_index(1)` and `get_index(-1)` are `index 1 out of range.` / `index -1 out of range.`.
+- GAP: `skip_char` on a surrogate is not in the corpus (public API only): input `skip_char(U32Stream::new(&[0x61]),
+  0xD800)`; the `streams.wide` probes cover surrogates in the stream, not as `expected`.
+- NIT: `object_to_string`/`array_to_string` take `&Json` and re-match the tag (C `void*` leftover); `scan_*` has a
+  `let _ = idx` artefact (scanner code is verified separately, §0).
+Gate: 8 of 8 (check, test, harness, clippy, fmt, unsafe, unwrap, allow); 22/22 tests; corpus 0 DIFF of 5755.

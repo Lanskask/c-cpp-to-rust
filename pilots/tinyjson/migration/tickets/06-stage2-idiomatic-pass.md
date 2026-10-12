@@ -5,11 +5,11 @@ unjustified unwrap, same Corpus output.
 
 **Blocked by:** 05 Stage 2 Judge
 
-**Status:** todo
+**Status:** in_progress
 
 ## Tasks
 
-- [ ] Start the fan-out with the guard active
+- [x] Start the fan-out with the guard active
   - `tickets.py mark 06 in_progress`, then an `Edit` of RULEBOOK.md must be refused (SKILL.md 3.1)
 - [ ] Rewrite every Part in batches
   - `workqueue.py --parts <ws>/migration/parts-stage2.tsv next --batch N`

@@ -89,7 +89,12 @@ fn throws<T>(r: Result<T, AErr>) -> AErr {
 fn throws_with<T>(r: Result<T, AErr>, needle: &str) {
     let e = throws(r);
     let what = String::from_utf8_lossy(&e.what).to_string();
-    assert!(what.contains(needle), "what() = {:?} does not contain {:?}", what, needle);
+    assert!(
+        what.contains(needle),
+        "what() = {:?} does not contain {:?}",
+        what,
+        needle
+    );
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -460,7 +465,11 @@ fn simple_json_serialization() {
     add_m(&mut aj, "p2", s("abcdefg hijklmnop rsq  uvwxyz "));
     add_m(&mut aj, "_p3_", a::j_bool(false));
     add_m(&mut aj, "p4_____________", a::j_dbl(-0.9876540321));
-    add_m(&mut aj, "_______p5", a::j_arr(vec![s("abc"), a::j_dbl(0.31424), a::j_bool(false)]));
+    add_m(
+        &mut aj,
+        "_______p5",
+        a::j_arr(vec![s("abc"), a::j_dbl(0.31424), a::j_bool(false)]),
+    );
     add_m(&mut aj, "示例一", a::j_bool(false));
     add_m(&mut aj, "你好 hello", s("world\\u0039"));
     add_m(&mut aj, "世界__\\u0069_\\u005E", s("你好"));
@@ -718,9 +727,15 @@ fn simple_json_json_parsing_1() {
         b"C:\\VC\\helloworld/helloworld.exe"
     );
     assert_eq!(sz(key(key(&mut j, "arguments"), "args")), 0);
-    assert_eq!(gs(key(key(&mut j, "arguments"), "cwd")), b"C:\\VC\\helloworld/");
+    assert_eq!(
+        gs(key(key(&mut j, "arguments"), "cwd")),
+        b"C:\\VC\\helloworld/"
+    );
     assert_eq!(gi(key(key(&mut j, "arguments"), "debugServer")), 8888);
-    assert_eq!(gi(key(key(&mut j, "arguments"), "__configurationTarget")), 5);
+    assert_eq!(
+        gi(key(key(&mut j, "arguments"), "__configurationTarget")),
+        5
+    );
     assert_eq!(
         gs(key(key(&mut j, "arguments"), "__sessionId")),
         b"df7ac0b9-4d27-4aba-a73f-7fd8207bb590"

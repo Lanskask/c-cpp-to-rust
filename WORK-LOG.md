@@ -1025,3 +1025,18 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** the hash check initially fired on `--also` paths and broke an existing test; they are exempt now. The
   Sonnet default rests on one Pilot's run, not on a controlled comparison.
 - **Next:** the tinyjson governor restarts with `--settings` (allow rule `Agent(model:sonnet)` is in).
+
+## 63. tinyjson ticket 06: Stage 2 rewrite, attempt 1
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 implementer (a7a41ec7f0d736937); Sonnet 5.5 reviewer (a7dc33c2a1f542bca)
+- **Done:** Judge prep: `run.py --stage 2` judges the real crate, `--shim` the Faithful port; formatting-only Judge
+  commit (the gate's fmt check covers the installed Judge files). Haiku wrote a 1300-line Stage 2 `lib.rs` and reported
+  `done`; `cargo check` showed 12 errors (match-arm types, duplicate `PartialEq`, missing `TryFrom`/`From` impls), then
+  clippy (derivable Default, identity op, if-same-then-else, snake case), then the gate excused `fmt`, `unwrap` and
+  `allow` through the baseline. The governor repaired all of it; the gate then passed 8 of 8, 22/22 tests, corpus 0 DIFF
+  of 5755. The review found D8 and Q5 markers lost, a `peek` signature drift and a `skip_char` D4 gap; fixed, re-gated.
+- **Tells us:** (1) a Haiku report `STATUS: done` was false: always run `cargo check` first. The user moved the
+  implementer default to Sonnet 5.5. (2) the Stage 2 gate also prints PASS with excused checks: read `N of M`.
+  (3) the gate's `fmt` check formats the Judge files too: format the harness sources when the Judge is built.
+  (4) `get_key`/`get_index` (const forms) are in §6 but not in the adapter: unexercised.
+- **Next:** commit the Part, mark done, close ticket 06.
