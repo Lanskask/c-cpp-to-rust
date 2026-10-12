@@ -737,3 +737,15 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `inventory.py` without the two `--exclude` flags. Requests 4-7 (C++ rulebook template, idiom table, judge.md
   toolchain slot, §8 default rule, C++ ticket text) are design work and wait for the user.
 - **Next:** user decides the shape of requests 4-7 (see the reply in the session).
+
+## 47. Skill: C++ branch (tinyjson requests 4-7) (Skill-editing session)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `references/rulebook-template-cpp.md`, `references/idiom-table-cpp.md` (29 seed rows), judge.md §8
+  (reference build), §8 default rule in `rulebook-template.md`, SKILL.md pointers, `tickets.py init --lang cpp`
+  (reference-build and test-patch tasks; `tests/test_tickets.py`). `make test` 107 passed, 1 skipped; `make lint`
+  clean (decision 55).
+- **Tells us:** the idiom rows are generalised from tinyjson's unapproved RULEBOOK §2.1 and not compiled: seed, not
+  evidence. The tinyjson ticket files were written before `--lang cpp`; the Translation session can re-render them
+  with `tickets.py init --lang cpp --force` only if it has ticked nothing, otherwise add the two tasks by hand.
+- **Next:** read the verification report on the five literature ideas before building any of them.

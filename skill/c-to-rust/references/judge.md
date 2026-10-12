@@ -144,6 +144,25 @@ and the translated tests plus incremental cargo about 4 s.
   so you see a crash, not a list. Confirm the rest with `cargo test -- --skip <names>`.
 - Do not run the Judge under PyPy: the corpus step is process spawning, and PyPy was slower (76 s against 50 s).
 
+## 8. C++ Pilots: the reference build (tinyjson lesson)
+
+The C branch assumes the original builds with the default compiler. A C++ original may not (tinyjson's header needs
+another standard library and an `-include`, and its upstream test file needs two patches), and its behaviour on
+undefined behaviour changes with the optimisation level. So, in ticket 01 and before any Judge piece is written:
+
+1. Build the original (header or sources, plus the upstream test file) with the candidate compiler. On failure try
+   the next one and keep the error text: it is the "Why this build" row.
+2. Record the result in the RULEBOOK slot `Reference build` (`rulebook-template-cpp.md`): compiler, standard library,
+   `-std`, extra flags, optimisation level of the **driver**, and every patch to the upstream tests.
+3. A patch to an upstream test may make it compile; it may not change an expected value. A changed expectation is a
+   Deviation proposal.
+4. Every piece that runs the original (the original driver, the upstream tests, the planted mutant of §6) is built with
+   exactly that row. `run.py` prints the row's compiler version first, so a changed toolchain shows in the log.
+5. The reference build's results (for example "17 of 22 upstream tests pass") are a **measurement**: run them
+   yourself, record the command and the output in RUN-NOTES. A number reported by a subagent is unverified until then.
+
+If no available compiler builds the original, stop and tell the user: there is no reference behaviour to port.
+
 ## 7. Rules for untrusted Pilot code
 
 Upstream clones are untrusted. Never use a Pilot directory as the working directory of a build tool or

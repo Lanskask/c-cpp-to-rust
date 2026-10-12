@@ -292,3 +292,14 @@ Each entry: decision, reason, who/what it came from. Newest last.
     (`tier.py` already keeps them out of the Parts). _Reason:_ tinyjson ticket 01 (1564 of 1630 symbols from
     `test/catch.hpp`; 39 of 42 symbols "dead"). Measured on tinyjson with no `--exclude`: 69 symbols, 4 dead-code
     candidates (was 39 of 42).
+
+55. **C++ Pilots get their own branch: `rulebook-template-cpp.md`, `idiom-table-cpp.md`, judge.md §8, `tickets.py init
+    --lang cpp`.** The C++ template replaces the sections that assume C (§0 no C ABI, §3, §5 overload naming, §7
+    exceptions, §10) and adds a `Reference build` slot (compiler, standard library, flags, optimisation level of the
+    driver, upstream-test patches). judge.md §8 says how to pick it and that a measurement from a subagent is
+    unverified until run. The base template §8 gets the default rule "match the original as closely as possible; kept
+    bug over fixed; state what the original does first". The idiom table has 29 rows (X1-X29) generalised from
+    tinyjson's CPP1-CPP36 and is a **seed**: every row is `verified: no` until a test compiles both sides.
+    _Reason:_ tinyjson tickets 01 requests 4-7, the user's rule "Rust result must match the C++ origin as closely as
+    possible", and the user's approval of requests 4-7 (2026-10-11). Not done: the clang AST front end, `mapping.tsv`
+    and the semantic failure packet; they wait for the verification of their claims (WORK-LOG 47).

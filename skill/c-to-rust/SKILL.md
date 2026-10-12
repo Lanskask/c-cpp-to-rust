@@ -26,7 +26,8 @@ below whose condition holds. `verify` failing means a Part marked `done` has no 
 
 `make -C <ws>/migration status` (rulebook line, tickets, Parts per stage) and `make -C <ws>/migration tickets` (every
 ticket with its tasks); they wrap `tickets.py --ws <ws> status [--tasks]` and `workqueue.py status`. If
-`<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws> init` first: it writes the seven tickets of the run
+`<ws>/migration/tickets/` does not exist, run `tickets.py --ws <ws> init` (`--lang cpp` for a C++ Pilot: adds the
+reference-build and test-patch tasks) first: it writes the seven tickets of the run
 (Mapping, Stage 1 Judge, stress test, Stage 1 Faithful port, Stage 2 Judge, Stage 2 Idiomatic pass, report) with their
 blocking edges, and the Makefile. For a run started before the Makefile existed: `tickets.py --ws <ws> makefile`.
 
@@ -48,7 +49,9 @@ to.
 5. Build the Judge and prove it can fail: `references/judge.md`. The crate does not exist yet: validate the Stage 1
    Judge against a scratch crate (raw c2rust transpile per feature set, or a stub for C++), judge.md §4a.
 6. Draft `<ws>/migration/RULEBOOK.md` from `references/rulebook-template.md` and
-   `references/idiom-table-c.md` (Opus). Every `config-macro:` tag gets a §3 row; every UB or platform
+   `references/idiom-table-c.md` (Opus). **C++ Pilot:** also `references/rulebook-template-cpp.md` (replaces §0, §3,
+   §5, §7, §10 and adds the `Reference build` slot) and `references/idiom-table-cpp.md`; fill the reference build
+   first (`references/judge.md` §8), because the Judge and every Deviation depend on it. Every `config-macro:` tag gets a §3 row; every UB or platform
    behaviour gets a §8 Deviation row with status `proposed`.
 
 **Stop.** Show the user the Deviations table and wait. Done when every §8 row is `approved` or

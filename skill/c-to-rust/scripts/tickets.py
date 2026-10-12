@@ -23,7 +23,7 @@ import argparse
 import re
 import sys
 import textwrap
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 STATES = ("todo", "in_progress", "done")
@@ -300,6 +300,53 @@ CHAIN = (
 )
 
 
+CPP_REFERENCE_BUILD = Task(
+    "Pick and record the reference build",
+    (
+        "build the original C++ (headers and the upstream test file) with the compiler you will use for every Judge "
+        "piece; if the default compiler cannot build it, try another and record why",
+        "write the compiler, version, standard, flags and optimisation level in the RULEBOOK slot `Reference build` "
+        "(`references/rulebook-template-cpp.md`); the driver's `-O` level decides uninitialised reads",
+        "list the patches the upstream test file needs to compile and run them under the same build",
+    ),
+)
+CPP_RULEBOOK_STEP = (
+    "C++: also `references/rulebook-template-cpp.md` and `references/idiom-table-cpp.md`; fill the Reference build "
+    "slot first"
+)
+CPP_PATCH_TESTS = Task(
+    "Patch the upstream tests and the driver to build with the reference build",
+    (
+        "record each patch (file, line, reason) in RUN-NOTES.md; a patch that changes an expectation is a Deviation "
+        "proposal, not a patch",
+        "build the original driver and the upstream tests with the RULEBOOK `Reference build` flags (`references/"
+        "judge.md` §8)",
+    ),
+)
+
+
+def chain(lang: str = "c") -> tuple[Spec, ...]:
+    """The ticket chain; for C++ the Mapping and Stage 1 Judge tickets carry the reference-build tasks."""
+    if lang != "cpp":
+        return CHAIN
+    out: list[Spec] = []
+    for spec in CHAIN:
+        if spec.num == "01":
+            tasks = tuple(
+                replace(t, how=(*t.how, CPP_RULEBOOK_STEP)) if t.text.startswith("Draft RULEBOOK") else t
+                for t in spec.tasks
+            )
+            spec = replace(
+                spec,
+                tasks=(tasks[0], CPP_REFERENCE_BUILD, *tasks[1:]),
+                acceptance=(*spec.acceptance, "the RULEBOOK names the reference build (compiler, flags, -O level)"),
+            )
+        elif spec.num == "02":
+            spec = replace(spec, tasks=(CPP_PATCH_TESTS, *spec.tasks))
+        out.append(spec)
+    return tuple(out)
+
+
 def render(spec: Spec, pilot: str) -> str:
     names = {c.num: c.title for c in CHAIN}
     blocked = ", ".join(f"{b} {names[b]}" for b in spec.blocked_by) or "None (can start immediately)"
@@ -399,16 +446,17 @@ def cmd_tick(ws: Path, num: str, text: str) -> int:
     return 0
 
 
-def cmd_init(ws: Path, force: bool) -> int:
+def cmd_init(ws: Path, force: bool, lang: str = "c") -> int:
     out = ticket_dir(ws)
     if out.exists() and any(out.glob("*.md")) and not force:
         print(f"tickets: {out} exists (use --force to overwrite)", file=sys.stderr)
         return 1
     out.mkdir(parents=True, exist_ok=True)
-    for spec in CHAIN:
+    specs = chain(lang)
+    for spec in specs:
         (out / f"{spec.num}-{spec.slug}.md").write_text(render(spec, ws.name))
     mk = write_makefile(ws)
-    print(f"tickets: wrote {len(CHAIN)} tickets to {out} and {mk}", file=sys.stderr)
+    print(f"tickets: wrote {len(specs)} tickets to {out} and {mk}", file=sys.stderr)
     return 0
 
 
@@ -487,6 +535,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     i = sub.add_parser("init")
     i.add_argument("--force", action="store_true")
+    i.add_argument("--lang", choices=("c", "cpp"), default="c", help="cpp adds the reference-build tasks (decision 55)")
     st = sub.add_parser("status")
     st.add_argument("--tasks", action="store_true", help="also list each ticket's checkbox tasks with [x] / [ ]")
     sub.add_parser("makefile", help="(re)write <ws>/migration/Makefile with the status and tickets targets")
@@ -503,7 +552,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         if args.cmd == "init":
-            return cmd_init(args.ws, args.force)
+            return cmd_init(args.ws, args.force, args.lang)
         if args.cmd == "makefile":
             print(f"tickets: wrote {write_makefile(args.ws)}", file=sys.stderr)
             return 0

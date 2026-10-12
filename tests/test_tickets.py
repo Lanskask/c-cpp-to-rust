@@ -165,3 +165,19 @@ def test_legacy_ticket_without_tasks_or_brief_still_works(tmp_path: Path, capsys
     assert "== brief of 01 A\n(no brief yet)" in capsys.readouterr().out
     assert run(ws, "tick", "02", "two") == 0
     assert run(ws, "mark", "02", "done", "--brief", "did y") == 0
+
+
+def test_cpp_init_adds_reference_build_tasks(tmp_path: Path) -> None:
+    ws = tmp_path / "tinyjson"
+    assert run(ws, "init", "--lang", "cpp") == 0
+    tickets = ws / "migration" / "tickets"
+    first = (tickets / "01-mapping.md").read_text()
+    assert (
+        "Pick and record the reference build" in first
+        and "idiom-table-cpp.md" in first
+        and "rulebook-template-cpp.md" in first
+    )
+    assert "Patch the upstream tests" in (tickets / "02-stage1-judge.md").read_text()
+    c_ws = tmp_path / "cjson"
+    assert run(c_ws, "init") == 0
+    assert "reference build" not in (c_ws / "migration" / "tickets" / "01-mapping.md").read_text()
