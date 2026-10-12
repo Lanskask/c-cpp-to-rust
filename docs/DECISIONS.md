@@ -329,3 +329,13 @@ Each entry: decision, reason, who/what it came from. Newest last.
     passed both Parts in each). _Reason:_ decision 57 only catches `attempts 0`; a Part re-run while `in_progress`
     still undercounted unless the governor remembered to re-mark it. Known limit: a snapshot taken without an
     implementer run counts as a run; jsmn Stage 1 stays at 0 (accepted before the counter existed, not derivable).
+
+59. **The ticket script and Makefile are generalised into `skill/to-tickets/` and installed into the mattpocock
+    `to-tickets` skill.** `scripts/tickets.py` builds the tickets of a JSON spec (`init --spec`), writes one file per
+    ticket, a copy of itself and a Makefile (`status`, `tickets`, `show NUM=`), and keeps the state commands of the
+    c-to-rust script (`tick`, `mark` with blocker, open-task and `--brief` checks, `show`). `make install-to-tickets`
+    copies it and a SKILL.md section (between markers, idempotent) into the plugin's cache copy. _Reason:_ the
+    c-to-rust tickets lost track of work without checkboxes, how-steps and briefs (decisions 49, 52); the user asked
+    for that to be part of `to-tickets`. The plugin cache is replaced on a plugin update, so the canonical copy lives
+    in this repo and the installer is re-run after an update. Not done: a fork of the c-to-rust script is not merged
+    with it (two copies of the render and mark logic; the c-to-rust one keeps its fixed seven-ticket chain).

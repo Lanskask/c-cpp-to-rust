@@ -809,3 +809,14 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** jsmn Stage 1 attempts 0 and cJSON Stage 1 attempts 1/1 are unchanged: no per-run record exists for
   them (jsmn predates the counter; cJSON Stage 1 was one merged c2rust run, commit ee90077).
 - **Next:** none for the Skill.
+
+## 52. to-tickets: script and Makefile added to the mattpocock skill (user request)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `skill/to-tickets/{scripts/tickets.py,SKILL-addendum.md,install.py}`, `make install-to-tickets` (ran it:
+  `~/.claude/plugins/cache/mattpocock/mattpocock-skills/1.3.1/skills/engineering/to-tickets/` now has
+  `scripts/tickets.py` and the SKILL.md section); `tests/test_to_tickets_script.py` (5 tests). `make test` 124
+  passed, 1 skipped; lint clean (decision 59).
+- **Tells us:** the install target is the plugin cache of version 1.3.1 only (the marketplace clone is a git
+  checkout of upstream and was left alone); a plugin update drops the change until the installer is run again.
+- **Next:** try it on a real breakdown: `/mattpocock-skills:to-tickets` then check `make status` in the new folder.

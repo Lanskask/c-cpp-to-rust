@@ -1,7 +1,7 @@
 # Everyday commands. See README.md.
 SCRIPTS := skill/c-to-rust/scripts
 
-.PHONY: setup test idiom lint typecheck fmt check spend-now pilot-jsmn pilot-jsmn-snapshot
+.PHONY: setup test idiom lint typecheck fmt check install-to-tickets spend-now pilot-jsmn pilot-jsmn-snapshot
 
 setup:            ## create the uv environment with dev tools
 	uv sync
@@ -25,6 +25,9 @@ fmt:              ## auto-format Python
 	uvx ruff check --fix .
 
 check: test lint  ## everything CI would run
+
+install-to-tickets:  ## copy skill/to-tickets (script + SKILL.md section) into the mattpocock to-tickets skill; rerun after a plugin update
+	python3 -I skill/to-tickets/install.py
 
 PILOT ?= cjson
 tickets:          ## ticket status of a run: make tickets [PILOT=cjson] [TASKS=1 lists every task with [x]/[ ]]
