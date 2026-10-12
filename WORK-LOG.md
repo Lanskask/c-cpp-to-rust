@@ -883,3 +883,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   outside bodies alone; HARD RULE 9 from entry 53 was not in that prompt). B3 markers are thinner than B1 (COSMETIC).
 - **Next:** rerun group A once (R2b-A3, prompt with HARD RULE 9), check only `stoll`/`stod` against P5/P6 and the
   Judge, then set the RULEBOOK status to `stress-tested`.
+
+## 55. tinyjson ticket 03 round 2b: group A rerun (A3b)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 translator (a4259ce2b9c6c5c91)
+- **Done:** A3b (`work/stress/R2b-A3`, prompt with HARD RULE 9): `cargo check` clean, no `todo!()` left in `stoll`/`stod`.
+  Governor probe of `to_integer`/`to_double` (8 integer, 11 double inputs): all integer cases match the C++ probes of
+  review A-5. `stod` wrong on 3: `1e-310` returns `Ok` (D8/I8: out_of_range), `0x1p3` is `invalid_argument` (D8: 8.0),
+  `-inf` returns `+inf` (D8: `-inf`).
+- **Tells us:** the rules cover all three (D8, I8, P5/P6); the Haiku `strtod` scanner is the weak part, not a rule gap.
+- **Next:** user decides: escalate the strtod scanner to Sonnet / add a hint to I8, then accept `stress-tested`.
