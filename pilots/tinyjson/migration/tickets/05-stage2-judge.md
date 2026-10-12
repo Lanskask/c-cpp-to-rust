@@ -5,7 +5,7 @@
 
 **Blocked by:** 04 Stage 1 Faithful port
 
-**Status:** in_progress
+**Status:** done
 
 ## Tasks
 
@@ -26,3 +26,11 @@
 - [x] passes on the Faithful port in every feature set
 - [x] mutant goes red
 - [x] parts-stage2.tsv created
+
+-----------
+## Done
+
+- Stage 2 Judge: adapter_stage2.rs + stage2_shim.rs (section 6 over the Faithful port), run.py --stage 2.
+- Faithful port STAGE=2 GREEN: 22/22 tests, 0/5755 corpus diffs; STAGE=1 still GREEN.
+- Mutant D5 window 29->30: tests 22/22, corpus 13 diffs, RED; restored.
+- parts-stage2.tsv created; section 5a list in RUN-NOTES. Shim goes when the Stage 2 crate lands.
