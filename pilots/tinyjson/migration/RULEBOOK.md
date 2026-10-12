@@ -186,46 +186,101 @@ unrelated line (P11).
 
 ## 6. Stage 2 public API
 
-This section is `proposed` (the template asks for it before Stage 2; the user decides it with §8). Names are free; the
-observables are binding.
+Status: filled 2026-10-12 (governor, on the user's instruction; the user reviews it with the Stage 2 Judge, ticket 05).
+The names and signatures below are binding for the Stage 2 adapter (`rust/tests/adapter/mod.rs` is the only file
+that calls the crate) and for the Stage 2 implementer: never change a parameter type, return type, name or
+visibility. The Stage 2 crate is the same `rust/src/lib.rs`; Stage 1 names (§5) disappear. Stage 2 has zero `unsafe`.
 
 ```rust
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorKind { RuntimeError, InvalidArgument, OutOfRange }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Error { pub kind: ErrorKind, pub what: Vec<u8> }
+
 #[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JsonType { String = 0, NumberInteger = 1, NumberDouble = 2, Array = 3, Boolean = 4, Object = 5, Null = 6,
                     Invalid = 7 }
 pub type JsonObject = std::collections::BTreeMap<Vec<u8>, Json>;
 pub type JsonArray = Vec<Json>;
-pub enum Json { String(Vec<u8>), Integer(i64), Double(f64), Array(JsonArray), Boolean(bool), Object(JsonObject), Null }
-pub enum ErrorKind { RuntimeError, InvalidArgument, OutOfRange }
-pub struct Error { pub kind: ErrorKind, pub what: Vec<u8> }
+#[derive(Clone, Debug)]
+pub enum Json { String(Vec<u8>), Integer(i64), Double(f64), Array(JsonArray), Boolean(bool), Object(JsonObject),
+                Null }
 
 impl Json {
-    pub fn json_type(&self) -> JsonType;                  // type()
-    pub fn type_name(&self) -> &'static str;              // "number" for both number kinds (Q20)
-    pub fn get_string(&self) -> Result<&[u8], Error>;     // and get_integer, get_double, get_bool, get_null
-    pub fn get_object(&self) -> Result<&JsonObject, Error>;
-    pub fn get_array(&self) -> Result<&JsonArray, Error>;
-    pub fn size(&self) -> Result<usize, Error>;
-    pub fn has_member(&self, name: &[u8]) -> Result<bool, Error>;
-    pub fn add_member(&mut self, name: &[u8], value: Json) -> Result<(), Error>;  // overwrites (Q16)
-    pub fn add_element(&mut self, elem: Json) -> Result<(), Error>;
-    pub fn get_key_mut(&mut self, key: &[u8]) -> Result<&mut Json, Error>;      // operator[](const char*)
-    pub fn get_index_mut(&mut self, index: i32) -> Result<&mut Json, Error>;    // operator[](int)
-    pub fn to_string(&self) -> Vec<u8>;                   // infallible: no Invalid value exists (§7)
+    pub fn new() -> Json;                                  // json(): Null (also Default)
+    pub fn from_string(v: &[u8]) -> Json;                  // the three string constructors
+    pub fn from_double(v: f64) -> Json;
+    pub fn from_int(v: i32) -> Json;                       // stores Integer(i64) (Q17)
+    pub fn from_long_long(v: i64) -> Json;
+    pub fn from_bool(v: bool) -> Json;
+    pub fn from_array(v: JsonArray) -> Json;
+    pub fn from_object(v: JsonObject) -> Json;
+    pub fn json_type(&self) -> JsonType;                   // type()
+    pub fn type_name(&self) -> &'static str;               // "number" for both number kinds (Q20)
+    pub fn get_string(&self) -> Result<&[u8]>;
+    pub fn get_integer(&self) -> Result<i64>;
+    pub fn get_double(&self) -> Result<f64>;
+    pub fn get_bool(&self) -> Result<bool>;
+    pub fn get_null(&self) -> Result<()>;
+    pub fn get_object(&self) -> Result<&JsonObject>;
+    pub fn get_array(&self) -> Result<&JsonArray>;
+    pub fn size(&self) -> Result<usize>;
+    pub fn has_member(&self, name: &[u8]) -> Result<bool>;
+    pub fn add_member(&mut self, name: &[u8], value: Json) -> Result<()>;   // inserts or overwrites (Q16)
+    pub fn add_element(&mut self, elem: Json) -> Result<()>;
+    pub fn get_key(&self, key: &[u8]) -> Result<&Json>;                    // operator[](const char*)
+    pub fn get_key_mut(&mut self, key: &[u8]) -> Result<&mut Json>;
+    pub fn get_index(&self, index: i32) -> Result<&Json>;                  // operator[](int)
+    pub fn get_index_mut(&mut self, index: i32) -> Result<&mut Json>;
+    pub fn to_string(&self) -> Vec<u8>;                    // infallible: no Invalid value exists (§7)
 }
-// Clone (derive), PartialEq (hand-written, CPP17), Default (= Null), From<..> per CPP10,
-// TryFrom<&Json> for Vec<u8>, f64, i64, bool per CPP19.
-pub struct U32Stream { /* Vec<u32> + position */ }       // new(&[u32]), peek(), get(), EOF = u32::MAX
-pub struct Parser;                                        // parse(&[u8]), parse_value, parse_object, parse_member,
-                                                          // parse_array, parse_bool, parse_null, parse_string,
-                                                          // parse_number, parse_hex, escape_char, ... on &mut U32Stream
-pub fn u32_to_u8(s: &[u32]) -> Result<Vec<u8>, Error>;   // U32ToU8
-pub fn u8_to_u32(s: &[u8]) -> Result<Vec<u32>, Error>;   // U8ToU32
+// impl Default (= Null); impl PartialEq (hand-written, CPP17); impl Clone (derive);
+// impl From<&[u8]>, From<Vec<u8>>, From<f64>, From<i32>, From<i64>, From<bool>, From<JsonArray>, From<JsonObject>
+//     for Json, one per CPP10 constructor;
+// impl TryFrom<&Json> for Vec<u8>, f64, i64, bool (Error = Error), one per CPP19 conversion operator.
+
+pub struct U32Stream { /* Vec<u32> + position */ }
+impl U32Stream {
+    pub const EOF: u32 = u32::MAX;
+    pub fn new(s: &[u32]) -> U32Stream;
+    pub fn peek(&mut self) -> u32;
+    pub fn get(&mut self) -> u32;
+}
+
+pub struct Parser;                                         // CPP29: associated functions, no state
+impl Parser {
+    pub fn parse(s: &[u8]) -> Result<Json>;                // up to the first NUL (Q10), D5 decoder inside
+    pub fn parse_value(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_object(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_array(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_bool(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_null(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_string(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_number(strm: &mut U32Stream) -> Result<Json>;
+    pub fn parse_member(strm: &mut U32Stream) -> Result<Vec<u8>>;
+    pub fn parse_hex(strm: &mut U32Stream) -> Result<u32>;
+    pub fn escape_char(strm: &mut U32Stream) -> Result<u32>;
+    pub fn get_next_non_space(strm: &mut U32Stream) -> u32;
+    pub fn peek_next_non_space(strm: &mut U32Stream) -> i32;   // -1 at EOF
+    pub fn skip_char(strm: &mut U32Stream, expected: u32) -> Result<()>;
+    pub fn skip_space(strm: &mut U32Stream);
+    pub fn to_bool(s: &[u8]) -> Result<bool>;
+    pub fn to_integer(s: &[u8]) -> Result<i64>;
+    pub fn to_double(s: &[u8]) -> Result<f64>;
+}
+pub fn trim(s: &[u8]) -> Vec<u8>;                          // Q11 whitespace set
+pub fn u32_to_u8(s: &[u32]) -> Result<Vec<u8>>;            // U32ToU8
+pub fn u8_to_u32(s: &[u8]) -> Result<Vec<u32>>;            // U8ToU32
 ```
 
-- Every C++ error keeps its kind and exact `what()` bytes (§7, Q14).
+- Every C++ error keeps its kind and exact `what()` bytes (§7, Q14). `stoll`/`stod` stay private (I8, I9).
 - The parser functions stay public and keep their stream semantics, including the position left after an error (Q13).
 - `JsonType::Invalid` stays (it is part of the type's value set and `type_name` maps it), though no `Json` has it.
+- `get_string`, `get_object` and `get_array` return borrows where C++ returned copies: not observable (Q19, CPP20).
+- The Stage 1 `tellg` helper of the stream is not part of the API.
 
 ## 7. Error model
 
@@ -351,3 +406,4 @@ Accepted rule changes, applied between batches from `RUN-NOTES.md` `## Rule prop
 | 2026-10-12 | ticket 03 round 2b    | §2 I8, §8 D8  | subnormal underflow split into decimal (always out of range) and hex (exact accepted, inexact out of range unless it rounds up to 2^-1022); `nan(` consumes up to the first `)`; probes `1e-310`, `0x1p3`, `-inf` added (measured in R2c-A3) | applied; user informed, may veto |
 | 2026-10-12 | ticket 04 review      | §4            | markers: a marker goes on every statement that reproduces a QUIRK or implements a DEVIATION; `deviations=` in PORT STATUS equals the D ids marked in the file (review of 7115bf6, user approved)
 | 2026-10-12 | ticket 04 review      | §2.1 CPP26    | `u32_sstream` fields are `buf` and `_pos` (the skeleton and the Judge adapter use `_pos`; user approved)
+| 2026-10-12 | user (ticket 05)      | §6            | Stage 2 public API filled with binding signatures (names, types, errors); user review with the Stage 2 Judge |
