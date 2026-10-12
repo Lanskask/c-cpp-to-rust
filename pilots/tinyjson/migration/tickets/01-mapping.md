@@ -5,7 +5,7 @@ whose Deviations table the user can approve.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in_progress
+**Status:** done
 
 ## Tasks
 
@@ -29,3 +29,13 @@ whose Deviations table the user can approve.
 - [x] every config-macro has a RULEBOOK §3 row
 - [x] every UB or platform behaviour has a §8 Deviation row
 - [x] the user approved or vetoed every Deviation
+
+-----------
+## Done
+
+- Inventory (AST engine): 92 symbols, 187 edges, 0 cycles, 1 Part src/tinyjson (judgment).
+- facts.tsv 65 rows. RULEBOOK by Opus: CPP1-CPP36 (§2.1, proposed), §8 D1-D16.
+- User approved all Deviations 2026-10-11; status line deviations-approved.
+- D3 kept bug (U+0000, driver at -O0). D5 emulate the libstdc++ chunk rule (measure in 02).
+- Skill bugs 1-5 in RUN-NOTES, requests sent to the Skill session.
+- Commits ad9510e, 1fb7cd4, ca63f10, eaf43a7.
