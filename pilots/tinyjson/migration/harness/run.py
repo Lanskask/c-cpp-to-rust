@@ -6,7 +6,8 @@ Usage: python3 -I run.py [--stage 1|2] [--crate DIR] [--skip-tests] [--limit N] 
                        API the adapter calls (default: pilots/tinyjson/experiments/scratch-crate, the STUB of
                        ticket 02; ticket 04's crate is pilots/tinyjson/rust)
        --stage N       1 (default): the Stage 1 adapter (C++ names, RULEBOOK section 5); 2: adapter_stage2.rs
-                       (RULEBOOK section 6 API), installed together with stage2_shim.rs, a shim of the section 6 API
+                       (RULEBOOK section 6 API) calling the crate; with --shim it is installed together with
+                       stage2_shim.rs, a shim of the section 6 API over the Stage 1 crate (Judge validation)
                        over the Stage 1 crate (validation scaffolding, deleted when the Stage 2 crate exists)
        --skip-tests    skip `cargo test` (translated tests), run the Differential harness only
        --limit N       judge about N inputs, taken at an even stride over the sorted corpus (default: all)
@@ -73,21 +74,32 @@ def runner_error(msg: str) -> int:
 # step 3: install the Rust side into the crate
 # ---------------------------------------------------------------------------------------------------------------
 
-def install(crate: Path, stage: int = 1) -> None:
+SHIM_LINES = "mod stage2_shim;\nuse stage2_shim as tj;\n"
+
+
+def install(crate: Path, stage: int = 1, shim: bool = False) -> None:
+    """Stage 2 without `shim`: the adapter calls the real crate (`use tinyjson as tj;`); with `shim` it calls the
+    section 6 shim over the Stage 1 crate (validation of the Judge on the Faithful port)."""
     adapter = RUST_SRC / ("adapter_stage2.rs" if stage == 2 else "adapter.rs")
+    adapter_bytes = adapter.read_bytes()
+    if stage == 2 and not shim:
+        text = adapter_bytes.decode()
+        if SHIM_LINES not in text:
+            raise SystemExit("run: adapter_stage2.rs lost its two shim lines")
+        adapter_bytes = text.replace(SHIM_LINES, "use tinyjson as tj;\n").encode()
     pairs = [
-        (adapter, crate / "tests" / "adapter" / "mod.rs"),
+        (adapter_bytes, crate / "tests" / "adapter" / "mod.rs"),
         (RUST_SRC / "dump.rs", crate / "examples" / "dump.rs"),
         (RUST_SRC / "upstream.rs", crate / "tests" / "upstream.rs"),
     ]
     shim_dst = crate / "tests" / "adapter" / "stage2_shim.rs"
-    if stage == 2:
+    if stage == 2 and shim:
         pairs.append((RUST_SRC / "stage2_shim.rs", shim_dst))
     elif shim_dst.exists():
-        shim_dst.unlink()  # a Stage 1 adapter does not declare the shim
+        shim_dst.unlink()  # only the validation shim declares it
     for src, dst in pairs:
         dst.parent.mkdir(parents=True, exist_ok=True)
-        data = src.read_bytes()
+        data = src if isinstance(src, bytes) else src.read_bytes()
         if not dst.exists() or dst.read_bytes() != data:  # keep mtimes for incremental cargo builds
             dst.write_bytes(data)
 
@@ -186,6 +198,7 @@ def sample_inputs(limit: int) -> Path:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", type=int, choices=(1, 2), default=1)
+    ap.add_argument("--shim", action="store_true", help="stage 2 only: judge the Faithful port through the section 6 shim")
     ap.add_argument("--crate", type=Path, default=DEFAULT_CRATE)
     ap.add_argument("--skip-tests", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
@@ -222,7 +235,7 @@ def main() -> int:
     cpp_dump = WORK / "dump"
 
     # 3. Rust side
-    install(crate, args.stage)
+    install(crate, args.stage, args.shim)
     tdir = WORK / f"cargo-{crate.parent.name}-{crate.name}"
     t = time.time()
     r = sh(["cargo", "build", "-q", "--example", "dump", "--manifest-path", str(crate / "Cargo.toml"),
