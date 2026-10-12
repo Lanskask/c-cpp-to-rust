@@ -112,6 +112,23 @@ replacement is written **before** Stage 2 touches `src/`, and validated on the F
 - Commit the adapter, driver and tests in one commit before the Stage 2 implementer starts. From then on
   the deny-rules in `assets/settings.json` protect `tests/upstream.rs` and `examples/`.
 
+**Validating the adapter before the Stage 2 crate exists** (tinyjson ticket 05). The validation above assumes the
+Stage 2 adapter can run against the Faithful port, which holds only when Stage 1 already exposes the §6 names. For a
+C++ Pilot, or any Pilot whose Stage 1 names differ from §6, it cannot compile. Write a validation shim:
+
+- `stage2_shim.rs` implements the whole §6 API (same names, signatures, derives) on top of the Stage 1 crate. The
+  Stage 2 adapter starts with `mod stage2_shim; use stage2_shim as <crate>;`. `run.py --stage 2` installs the adapter
+  and the shim; Stage 1 runs delete the shim copy.
+- When the Stage 2 crate lands, those two lines become `use <crate> as <alias>;` and the shim is deleted (the
+  adapter stays the only test-side file Stage 2 may change).
+- The shim has no `unsafe`, and every method calls the Stage 1 function and takes Ok/Err and the error text from it,
+  so the verdict stays the Faithful port's. Where §6 returns a borrow and Stage 1 returns a clone, hold the data in
+  the §6 value and convert one level for scalar getters: a fully converting shim made a depth-400 corpus input time
+  out.
+- Validate as above: green on the Faithful port at both stages, red on a planted mutant, and record which Judge piece
+  caught it. In tinyjson the D5 window mutant (29 -> 30) passed 22/22 translated tests and was caught only by 13
+  corpus diffs.
+
 ## 5a. What the corpus never feeds (Stage 2 review lesson, cJSON)
 
 A corpus of parsed files only reaches states the parser builds. The cJSON Stage 2 review found five BLOCKs on paths
