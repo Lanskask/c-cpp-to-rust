@@ -106,6 +106,13 @@ Report: Parts done / stubbed / failed per stage; the Deviations table with statu
 count (`grep -rn "TODO(port)" <ws>/rust/src`); tokens from `SPEND.md` for this Pilot; one recommended
 next step.
 
+## Unattended run (`scripts/run.py`)
+
+Once tickets 01-03 are done and the rulebook is approved, one command runs a stage: `python3 -I
+skill/c-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempts 5] [--budget-output-tokens N] [--go]`.
+Without `--go` it only prints the plan. Preconditions, stops, resume and logs: `references/run-loop.md`. The model
+steps it does not do (mapping, Judge, rulebook, §6, stubs) stay with the governor.
+
 ## Models
 
 - Opus: rulebook, Deviations, Stage 2 API, stress-test diff review, first review per Pilot.

@@ -1057,3 +1057,13 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   `workqueue.py mark done` refuses a pass with excused checks (`--accept-excused`); denial wording. Test added.
 - **Not done:** (1a) the classifier allow rule is a permission edit: not made on a peer's request, see the reply to
   the user; (2) `scripts/run.py` is separate.
+
+## 68. Skill: scripts/run.py headless driver (tinyjson-translation-4 request, part 2)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** `scripts/run.py` (dry by default, `--go`, budget, stops), `references/run-loop.md`, SKILL.md section,
+  `tests/test_run_driver.py` (7 tests, fake `claude`: preconditions, dry run, accept, review BLOCK retry).
+- **Tells us:** `claude --help` lists `-p`, `--model`, `--settings`, `--allowed-tools`, `--max-turns`,
+  `--output-format`, `--permission-mode`, `--max-budget-usd`. The JSON `result` field is assumed, with a fallback to
+  raw stdout. No real `claude -p` run yet.
+- **Next:** one real `run.py ... --go` on tinyjson stage 2 with `--max-attempts 1` and a small budget.

@@ -391,3 +391,12 @@ Each entry: decision, reason, who/what it came from. Newest last.
     and Stage 1 and 2 printed PASS with excused fmt/unwrap/allow/test/harness. (a) changes decision 11 ("the user
     approves each row before fan-out") on that relay; the user has not confirmed it in this session. Limit of (b):
     a Part of a half-translated crate legitimately has an excused Judge failure and needs `--accept-excused`.
+
+66. **`scripts/run.py` drives a stage through scripts and `claude -p`; it is dry by default.** Without `--go` it
+    prints the plan and spends nothing; it stops (exit 3) for a missing precondition, a `proposed` deviation, a
+    `stubbed` Part, 70% of the output-token budget, review GAP/RULE entries or a refused `mark done`. The implementer
+    and reviewer are `claude -p --model sonnet --permission-mode acceptEdits --allowed-tools ...` runs (flags checked
+    against `claude --help`, not run). _Reason:_ tinyjson-translation-4's request (a fresh session runs without the
+    user between mechanical steps). Not done: tag-matched idiom rows, c2rust slot, §6 design, stubs. Limits: tested
+    only against a fake `claude`; a headless implementer has no `agent_id`, so decision 63's hashes are its guard. The
+    classifier allow rule asked for in the same request is a permission edit and was left to the user.
