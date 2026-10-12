@@ -92,14 +92,15 @@ Decided here once, before Stage 2 starts. Signatures, types, error enum, how eac
 
 ## 8. Deviations (decision 11)
 
-UB and platform-specific behaviour where Rust will not match the original. The user approves or vetoes
-each row before Stage 1 fan-out (SKILL.md step 1). Code sites carry `DEVIATION(port): D<n>`.
+UB and platform-specific behaviour where Rust will not match the original. A row that reproduces the origin is
+`approved (policy)` (SKILL.md step 1); the user approves or vetoes every other row before Stage 1 fan-out. Code
+sites carry `DEVIATION(port): D<n>`.
 
 Default rule: the Rust result matches the original as closely as possible. A row first states what the original
 (built as in §10, optimisation level included) does; "kept bug" is the default over "fixed".
 | id | Original behaviour | Rust behaviour | Reachable by Judge? | Status |
 |---|---|---|---|---|
-| D1 | [...] | [...] | [yes/no] | proposed / approved / vetoed |
+| D1 | [...] | [...] | [yes/no] | proposed / approved / approved (policy) / vetoed |
 
 ## 9. Kept quirks
 

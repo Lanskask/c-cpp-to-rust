@@ -19,7 +19,7 @@ Part's target_path and every `--also PATH` (relative to the workspace root, e.g.
 Cargo is called with `--manifest-path` (decision 25); pass `--toolchain nightly-2023-04-15` if needed.
 A `--snapshot` appends `part, stage, head, time` to `migration/attempts.tsv`: one row is one implementer run, the
 count `workqueue.py` uses for attempts. Snapshot only at the start of a run, never to "refresh" a baseline.
-A PASS appends `part, stage, head, features, time` to `migration/gate-passed.tsv`; `workqueue.py verify`
+A PASS appends `part, stage, head, features, time, excused` to `migration/gate-passed.tsv`; `workqueue.py verify`
 requires such a row for every `done` Part (decision 7: done = gate passed and commit exists).
 Output: TSV lines `check<TAB>features<TAB>pass|fail|skip<TAB>detail`, summary on stderr. Exit 0 pass, 1 fail.
 """
@@ -236,18 +236,26 @@ def changed_judge_files(before: dict[str, str], after: dict[str, str]) -> list[s
     return sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
 
 
-def record_pass(root: Path, part: str, stage: int, features: list[str]) -> None:
-    """Append one row to migration/gate-passed.tsv (tracked, unlike gate/*.json) for `workqueue.py verify`."""
+def record_pass(root: Path, part: str, stage: int, features: list[str], excused: list[str] | None = None) -> None:
+    """Append one row to migration/gate-passed.tsv (tracked, unlike gate/*.json) for `workqueue.py verify`.
+
+    `excused` lists the checks that failed but were excused by the baseline; `workqueue.py mark done` refuses a Part
+    whose latest pass has any (decision 65).
+    """
     path = root / "migration" / "gate-passed.tsv"
-    header = "part\tstage\thead\tfeatures\ttime\n"
+    header = "part\tstage\thead\tfeatures\ttime\texcused\n"
     if not path.is_file():
         path.write_text(header)
+    elif not path.read_text().split("\n", 1)[0].endswith("\texcused"):
+        first, _, rest = path.read_text().partition("\n")
+        path.write_text(first + "\texcused\n" + rest)  # older ledger: old rows read as "nothing excused"
     row = [
         part,
         str(stage),
         git(root, "rev-parse", "HEAD"),
         "|".join(features),
         datetime.now(UTC).isoformat(timespec="seconds"),
+        "|".join(excused or []),
     ]
     with path.open("a") as f:
         f.write("\t".join(row) + "\n")
@@ -386,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     ok = sum(r.status == "pass" for r in results)
     ran = sum(r.status != "skip" for r in results)
     excused = [r.key for r in results if r.status == "fail"]
-    record_pass(root, args.part, args.stage, feature_sets)
+    record_pass(root, args.part, args.stage, feature_sets, excused)
     note = f"; EXCUSED by the baseline, still failing: {', '.join(excused)}" if excused else ""
     print(f"gate: PASS {args.part} ({ok} of {ran} checks passed, stage {args.stage}{note})", file=sys.stderr)
     return 0

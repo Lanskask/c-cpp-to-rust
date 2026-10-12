@@ -381,3 +381,13 @@ Each entry: decision, reason, who/what it came from. Newest last.
     session) and its run: Haiku 5.5 gave 30 compile errors at the Stage 1 gate, needed three fix rounds on rules that
     were in the prompt, and reported done on a Stage 2 file with 12 errors; Sonnet's scanners were right first time.
     Supersedes the "default Haiku" wording of commit 8a13f8f; the Haiku 5.5 version choice stays for when Haiku is used.
+
+65. **Policy approval of deviations; `mark done` refuses a gate pass that excused failing checks.** (a) A §8 row that
+    reproduces the origin is `approved (policy)`; only rows with no origin answer, a fix instead of a kept bug, or a
+    public-API change stop for the user, who reviews the rest afterwards. (b) `gate-passed.tsv` has an `excused`
+    column; `workqueue.py mark done` refuses a Part whose latest pass at this stage has one unless `--accept-excused`.
+    (c) A denied Agent launch is not repeated verbatim: the governor writes the Part itself or stops. _Reason:_
+    tinyjson-translation-4 (relaying the user): fresh Translation sessions must run without the user between steps,
+    and Stage 1 and 2 printed PASS with excused fmt/unwrap/allow/test/harness. (a) changes decision 11 ("the user
+    approves each row before fan-out") on that relay; the user has not confirmed it in this session. Limit of (b):
+    a Part of a half-translated crate legitimately has an excused Judge failure and needs `--accept-excused`.

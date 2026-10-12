@@ -55,8 +55,15 @@ to.
    first (`references/judge.md` §8), because the Judge and every Deviation depend on it. Every `config-macro:` tag gets a §3 row; every UB or platform
    behaviour gets a §8 Deviation row with status `proposed`.
 
-**Stop.** Show the user the Deviations table and wait. Done when every §8 row is `approved` or
-`vetoed` by the user and the rulebook status line says `deviations-approved`.
+**Policy approval (decision 65).** A §8 row whose Rust behaviour reproduces what the original does (observed with
+the Reference build or on the C build, or defined by the language standard) follows the user's rule "match the origin
+as closely as possible": its status is `approved (policy)` and it does not wait. Every other row stays `proposed`:
+no single origin result (undefined behaviour, a platform dependency, an overload the compiler resolves
+differently), a fix instead of a kept bug, or a row that changes the public API.
+
+**Stop** only if a `proposed` row remains: show the user those rows and wait. Done when every §8 row is `approved`,
+`approved (policy)` or `vetoed` and the rulebook status line says `deviations-approved`. The user reviews the
+`approved (policy)` rows afterwards, not before; a veto becomes a change ticket.
 
 ### 2. Rulebook approved, no stress test recorded → stress test (Opus reviews)
 Translate the 3 hardest `judgment` Parts (fewer if the Pilot has fewer) **twice** each with
@@ -126,6 +133,9 @@ next step.
   the limit below reads it. `gate.py --snapshot` also appends a row to `migration/attempts.tsv` (one row = one
   implementer run: snapshot only at the start of a run); `mark done` raises `attempts` to that row count and refuses 0,
   `verify` flags a lower value.
+- A denied implementer launch is the user's or the classifier's answer: do not repeat the same call. Say so in
+  `RUN-NOTES.md`, then either write that Part in this session (the governor may) or stop and tell the user. The
+  allow rules in `assets/settings.json` (`Agent(model:sonnet)`) exist so this does not happen.
 - An implementer's `STATUS: done` is not evidence. Before the gate, run `cargo check` on the crate yourself; the
   gate decides acceptance, the report decides nothing.
 - Up to 5 attempts per Part; then `stubbed` (real signatures, `todo!()` bodies, RUN-NOTES entry).

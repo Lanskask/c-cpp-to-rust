@@ -71,6 +71,9 @@ Reference build does (observed, with the optimisation level), and the default de
 reproduces the original, marked `BUG(port)` or `QUIRK(port)`. A fix is proposed only when matching is impossible
 (undefined behaviour with no single result, a platform dependence) or the user asks for it.
 
+A row that keeps the original's behaviour is `approved (policy)` without waiting for the user. A row with no origin
+answer (overload resolution that differs between compilers, undefined behaviour) is `proposed` and stops for the user.
+
 ## 10. Judge (C++)
 
 - Stage 1: cargo check/test, the Differential harness against the original C++ driver built with the Reference build,

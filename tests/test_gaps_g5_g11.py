@@ -41,7 +41,7 @@ def test_record_pass_appends_a_tracked_row(tmp_path: Path) -> None:
     root = workspace(tmp_path)
     gate.record_pass(root, "p", 2, ["", "strict"])
     lines = (root / "migration" / "gate-passed.tsv").read_text().splitlines()
-    assert lines[0] == "part\tstage\thead\tfeatures\ttime"
+    assert lines[0] == "part\tstage\thead\tfeatures\ttime\texcused"
     cells = lines[1].split("\t")
     assert cells[:2] == ["p", "2"] and cells[2] == git(root, "rev-parse", "HEAD") and cells[3] == "|strict"
 

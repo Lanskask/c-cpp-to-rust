@@ -11,6 +11,9 @@ target is unchanged between the commit and the recorded HEAD. A `stubbed` Part m
 `attempts` is the larger of the `mark ... in_progress` count and the number of `gate.py --snapshot` rows of the
 Part in `migration/attempts.tsv`; `mark done` raises it to that number and `verify` flags a lower one.
 After MAX_ATTEMPTS failed attempts a Part becomes `stubbed` (PLAN.md §4 retry policy).
+`mark done` also refuses a Part whose latest gate pass at this stage excused a failing check (column `excused` of
+gate-passed.tsv: the baseline already failed it); `--accept-excused` is the governor's explicit override, for a Part
+of a half-translated crate whose Judge cannot be green yet.
 Exit code 0 on success, 1 on failure (verify: 1 if any done Part is not really done).
 """
 
@@ -222,6 +225,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument(
         "--no-attempt", action="store_true", help="with `done`: allow attempts 0 (Part accepted before the counter)"
     )
+    m.add_argument(
+        "--accept-excused", action="store_true", help="with `done`: allow a gate pass that excused failing checks"
+    )
     v = sub.add_parser("verify")
     v.add_argument(
         "--no-gate-record", action="store_true", help="do not require migration/gate-passed.tsv (legacy Parts)"
@@ -250,6 +256,18 @@ def main(argv: list[str] | None = None) -> int:
                 for r in rows:
                     if r["part_id"] == args.part and runs > int(r["attempts"] or "0"):
                         r["attempts"] = str(runs)
+            if args.state == "done" and not args.accept_excused:
+                mine = [
+                    x
+                    for x in gate_records(path.resolve().parent.parent)
+                    if x.get("part") == args.part and x.get("stage") == str(stage_of(path))
+                ]
+                if mine and mine[-1].get("excused"):
+                    excused = mine[-1]["excused"].replace("|", ", ")
+                    raise ValueError(
+                        f"{args.part}: the latest gate pass excused {excused} (failing in the baseline); "
+                        "make the Judge green and re-gate, or --accept-excused"
+                    )
             row = mark(rows, args.part, args.state, args.commit, args.error, args.no_attempt)
             write_parts(path, rows)
             print(f"workqueue: {row['part_id']} -> {row['state']} (attempts {row['attempts']})", file=sys.stderr)

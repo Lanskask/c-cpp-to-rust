@@ -1049,3 +1049,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Tells us:** WORK-LOG numbers 62 and 63 were used twice (this session and the Skill session wrote concurrently);
   entries 62/63 above and the Skill ones keep their titles, so they stay distinguishable.
 - **Next:** the Skill changes sent to the Skill-editing session.
+
+## 67. Skill: policy approval, excused refusal in mark done (tinyjson-translation-4 request, parts 1b-1d)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** SKILL.md and both rulebook templates: `approved (policy)`; `gate.py` records `excused` per pass;
+  `workqueue.py mark done` refuses a pass with excused checks (`--accept-excused`); denial wording. Test added.
+- **Not done:** (1a) the classifier allow rule is a permission edit: not made on a peer's request, see the reply to
+  the user; (2) `scripts/run.py` is separate.

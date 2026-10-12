@@ -98,3 +98,22 @@ def test_snapshot_log_raises_attempts_on_done_and_verify_flags_a_lower_value(tmp
     low = [row("a", "done", attempts="1", commit="abc")]
     problems = wq.verify(low, tmp_path, 2, require_gate_record=False)
     assert any("3 snapshot(s)" in p for p in problems)
+
+
+def test_mark_done_refuses_a_gate_pass_that_excused_checks(tmp_path: Path) -> None:
+    import gate
+
+    ws = tmp_path
+    (ws / "migration").mkdir()
+    parts = ws / "migration" / "parts.tsv"
+    parts.write_text(
+        "\t".join(wq.COLUMNS) + "\n" + "p\tfile\ta.c\tr.rs\tmechanical\t\tin_progress\t1\t\t\t\t\n"
+    )
+    subprocess.run(["git", "-C", str(ws), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(ws), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"],
+        check=True,
+    )
+    gate.record_pass(ws, "p", 1, [""], ["test[]", "harness[]"])
+    assert wq.main(["--parts", str(parts), "mark", "p", "done"]) == 1
+    assert wq.main(["--parts", str(parts), "mark", "p", "done", "--accept-excused"]) == 0
