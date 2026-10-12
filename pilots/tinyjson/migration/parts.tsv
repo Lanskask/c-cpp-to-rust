@@ -1,2 +1,2 @@
 part_id	kind	source_paths	target_path	tier	deps	state	attempts	model	last_error	commit	updated
-src/tinyjson	file	src/tinyjson.h	rust/src/lib.rs	judgment		todo	0				
+src/tinyjson	file	src/tinyjson.h	rust/src/lib.rs	judgment		in_progress	4		gate attempt 1: check fail, error x30, E0423 x6, E0061 x6; first: expected one of ',', ':' or '}', found '::'		2026-10-12T22:03:00+00:00

@@ -39,3 +39,11 @@ date	phase	model	input	output	cache_create	cache_read	messages
 2026-10-12 19:41	T3-round2-runs	claude-sonnet-5-5	122	34370	437839	10810248	57
 2026-10-12 19:50	T3-round2-review	claude-opus-5-5	2	2	233	155717	1
 2026-10-12 19:50	T3-round2-review	claude-sonnet-5-5	4	1058	2279	81002	1
+2026-10-12 20:21	E4-tinyjson-s1	claude-haiku-4-5-20251001	152	23	118835	1246714	18
+2026-10-12 20:21	E4-tinyjson-s1	claude-sonnet-5-5	40	14191	34589	2207276	19
+2026-10-12 20:32	E4-tinyjson-s1-scanners	claude-sonnet-5-5	58	8296	157222	3277542	27
+2026-10-12 20:40	E4-tinyjson-s1-a2	claude-haiku-4-5-20251001	384	74	76003	2419281	47
+2026-10-12 20:40	E4-tinyjson-s1-a2	claude-sonnet-5-5	16	4842	7486	1675161	7
+2026-10-12 22:16	E4-tinyjson-s1-attempts3-4	<synthetic>	0	0	0	0	2
+2026-10-12 22:16	E4-tinyjson-s1-attempts3-4	claude-haiku-4-5-20251001	1140	266	189861	8343226	141
+2026-10-12 22:16	E4-tinyjson-s1-attempts3-4	claude-sonnet-5-5	148	37041	256191	7956802	71

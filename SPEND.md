@@ -36,3 +36,7 @@ Written by `spend.py` from Claude Code transcripts (decision 16).
 | 2026-10-12 19:50 | T3-round2-review | - | 6 | 1060 | 2512 | 236719 | 2 | claude-opus-5-5:2, claude-sonnet-5-5:1058 | Opus review of A3,B3,C3 |
 | 2026-10-12 19:55 | T3-round2b-A | - | 0 | 0 | 0 | 0 | 0 |  | A3b Haiku rerun |
 | 2026-10-12 20:02 | T3-round2c-close | - | 0 | 0 | 0 | 0 | 0 |  | R2c-A3 Sonnet scanner, Opus rulebook close-out |
+| 2026-10-12 20:21 | E4-tinyjson-s1 | - | 192 | 14214 | 153424 | 3453990 | 37 | claude-haiku-4-5-20251001:23, claude-sonnet-5-5:14191 | ticket 04 attempt 1: Haiku 5.5 Part body |
+| 2026-10-12 20:32 | E4-tinyjson-s1-scanners | - | 58 | 8296 | 157222 | 3277542 | 27 | claude-sonnet-5-5:8296 | ticket 04 attempt 1: Sonnet stoll/stod scanner subagent |
+| 2026-10-12 20:40 | E4-tinyjson-s1-a2 | - | 400 | 4916 | 83489 | 4094442 | 54 | claude-haiku-4-5-20251001:74, claude-sonnet-5-5:4842 | ticket 04 attempt 2: Haiku 5.5 Part body (+ governor fix of u32_sstream skeleton) |
+| 2026-10-12 22:16 | E4-tinyjson-s1-attempts3-4 | - | 1288 | 37307 | 446052 | 16300028 | 214 | <synthetic>:0, claude-haiku-4-5-20251001:266, claude-sonnet-5-5:37041 | ticket 04 attempts 3-4: Haiku fix run (interrupted by rate limit), governor fixes eq/U32ToU8/D5/Q5/to_bool/%f; Judge GREEN |
