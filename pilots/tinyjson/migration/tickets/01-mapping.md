@@ -19,7 +19,7 @@ whose Deviations table the user can approve.
 - [x] Draft RULEBOOK.md (Opus)
   - start from `references/rulebook-template.md` and `references/idiom-table-c.md`
   - every `config-macro:` tag gets a §3 row, every UB or platform behaviour a §8 Deviation row with status `proposed`
-- [ ] Get the Deviations decided by the user
+- [x] Get the Deviations decided by the user
   - show the §8 table and stop; the user marks each row `approved` or `vetoed`
   - set the rulebook status line to `deviations-approved`
 
@@ -28,4 +28,4 @@ whose Deviations table the user can approve.
 - [x] inventory.tsv, edges.tsv, order.txt, parts.tsv exist
 - [x] every config-macro has a RULEBOOK §3 row
 - [x] every UB or platform behaviour has a §8 Deviation row
-- [ ] the user approved or vetoed every Deviation
+- [x] the user approved or vetoed every Deviation

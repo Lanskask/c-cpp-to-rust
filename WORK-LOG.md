@@ -791,3 +791,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   preceded by `mark in_progress`", two tests (decision 57). `make test` 117 passed, 1 skipped; lint clean.
 - **Tells us:** the existing cJSON ledgers (attempts 1 and 0) stay as they are; the rule applies to new runs.
 - **Next:** none for the Skill; the tinyjson session follows the rule from its next Part.
+
+## 47. tinyjson ticket 01 done: all Deviations approved
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor
+- **Done:** user answered "approve all": D1-D16 `approved`, RULEBOOK status `deviations-approved`; CPP21 got line
+  1022 and the `CHECK_TYPE_MISMATCH` use sites (CPP27 facet note not applied). Ticket 01 marked done.
+- **Tells us:** §2.1 and §6 rows are still `proposed`; they are not Deviations and the user has not reviewed them.
+- **Next:** ticket 02 (Judge): pin the reference toolchain (GCC 16, `-O0`, `-include locale`), measure the D5 chunk rule.
