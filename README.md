@@ -1,4 +1,4 @@
-# settlers_to_rust
+# c-cpp-to-rust skill
 
 A Claude Code **Skill** (`skill/c-cpp-to-rust/`) that translates C/C++ projects into Rust in two
 stages (Faithful port, then Idiomatic pass), resumable after a crash. It is proven on small
