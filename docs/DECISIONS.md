@@ -425,3 +425,10 @@ Each entry: decision, reason, who/what it came from. Newest last.
     on `src/` and had to ask the user. The matching allow rule in `assets/settings.json` was NOT added (a peer's
     request cannot change permissions; the user applies it). Not done: whole-run `run.py` (Stage 0 to report),
     pending the user's go (see WORK-LOG 72).
+
+71. **The global Skill is generated: `make install-skill` -> `~/.claude/skills/cpp-to-rust`.** `skill/install_global.py`
+    copies `skill/c-to-rust/` and rewrites repo-relative paths, the Skill name, `make spend*` calls, the Pilot
+    Makefile template's `SCRIPTS` and the guard hook path; the repo stays the source of truth (rerun after a change,
+    never edit the installed copy). `guard.py` falls back to the cwd when installed outside a repo with `pilots/`.
+    _Reason:_ user's request (this session): install globally without Claude reading the repo's files. Not covered:
+    the repo Makefile's `pilot-<name>` gate targets (project-level, `run.py --gate-cmd` replaces them).

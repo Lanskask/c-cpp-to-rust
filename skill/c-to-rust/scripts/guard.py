@@ -65,7 +65,10 @@ def project_root() -> Path:
     """The repo root: CLAUDE_PROJECT_DIR, else this script's own location. Never the shell's cwd, which a plain
     `cd pilots/x/src` moves (found in the first cJSON run: the relative hook path stopped resolving)."""
     env = os.environ.get("CLAUDE_PROJECT_DIR")
-    return Path(env) if env else Path(__file__).resolve().parents[3]
+    if env:
+        return Path(env)
+    here = Path(__file__).resolve().parents[3]  # skill/c-to-rust/scripts -> repo root
+    return here if (here / "pilots").is_dir() else Path.cwd()  # installed under ~/.claude/skills: the project is cwd
 
 
 def relative(path: str, root: Path, cwd: Path | None = None) -> str:

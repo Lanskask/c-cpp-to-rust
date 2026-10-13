@@ -1093,3 +1093,9 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Who:** c-to-rust Skill-editing session
 - scripts/refbuild.py, tests/test_refbuild.py (2), judge.md §8, tickets.py ticket 01 how-step. Decision 70.
 - settings.json allow rule left to the user; request 2 (run.py for every ticket) not started, scope in reply.
+
+## 73. Skill: global install (cpp-to-rust)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- skill/install_global.py, `make install-skill`, tests/test_install_global.py, guard.py cwd fallback. Decision 71.
+- Installed to ~/.claude/skills/cpp-to-rust (27 files, 11 rewritten); make test 148 passed 1 skipped, lint clean.

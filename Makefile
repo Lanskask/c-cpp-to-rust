@@ -29,6 +29,9 @@ check: test lint  ## everything CI would run
 install-to-tickets:  ## copy skill/to-tickets (script + SKILL.md section) into the mattpocock to-tickets skill; rerun after a plugin update
 	python3 -I skill/to-tickets/install.py
 
+install-skill:    ## install skill/c-to-rust as the global Skill ~/.claude/skills/cpp-to-rust (rerun after a change)
+	python3 -I skill/install_global.py
+
 PILOT ?= cjson
 tickets:          ## ticket status of a run: make tickets [PILOT=cjson] [TASKS=1 lists every task with [x]/[ ]]
 	@python3 -I $(SCRIPTS)/tickets.py --ws pilots/$(PILOT) status $(if $(TASKS),--tasks)
