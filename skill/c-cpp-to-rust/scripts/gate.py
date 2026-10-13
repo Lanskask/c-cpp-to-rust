@@ -37,6 +37,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import layout  # noqa: E402
+
 # At Stage 2 the Judge checks are never excused by the baseline: a snapshot taken while the Judge already
 # fails would otherwise let a still-failing attempt print PASS (found in E3 Stage 2 attempt 2). Stage 1 keeps
 # the baseline for them, because a half-translated crate may not compile while other Parts are `todo`.
@@ -202,7 +206,7 @@ def target_of(parts: Path, part: str) -> str:
 
 
 def git(root: Path, *args: str) -> str:
-    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(layout.git_dir(root)), *args], capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout.strip()
@@ -282,12 +286,15 @@ def rollback(root: Path, head: str, paths: list[str]) -> None:
     would destroy work that no commit holds.
     """
     for path in paths:
-        probe = subprocess.run(["git", "-C", str(root), "cat-file", "-e", f"{head}:./{path}"], capture_output=True)
+        rel = layout.in_repo(root, path)
+        probe = subprocess.run(
+            ["git", "-C", str(layout.git_dir(root)), "cat-file", "-e", f"{head}:./{rel}"], capture_output=True
+        )
         if probe.returncode != 0:
             print(f"gate: {path} is not in {head[:8]}: left as is (commit it to have it restored)", file=sys.stderr)
             continue
-        git(root, "checkout", head, "--", path)
-        git(root, "clean", "-fdq", "--", path)
+        git(root, "checkout", head, "--", rel)
+        git(root, "clean", "-fdq", "--", rel)
 
 
 def build_parser() -> argparse.ArgumentParser:

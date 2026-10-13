@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +66,44 @@ def write(ws: Path, kind: str) -> Layout:
     (ws / "migration").mkdir(parents=True, exist_ok=True)
     (ws / "migration" / "layout.json").write_text(json.dumps({"kind": kind, **KINDS[kind]}, indent=2) + "\n")
     return load(ws)
+
+
+def git_dir(ws: Path) -> Path:
+    """Directory to run git in: `<ws>/migration` when it is its own repository (decision 73), else `<ws>`."""
+    m = ws / "migration"
+    return m if (m / ".git").exists() else ws
+
+
+def in_repo(ws: Path, rel: str) -> str:
+    """`rel` (relative to `<ws>`) as a path relative to `git_dir(ws)`."""
+    if git_dir(ws) != ws and rel.startswith("migration/"):
+        return rel.removeprefix("migration/")
+    return rel
+
+
+def init_repo(ws: Path) -> bool:
+    """`git init` in `<ws>/migration` unless `<ws>` or `migration/` is already a repository root. True if created."""
+    m = ws / "migration"
+    if (m / ".git").exists():
+        return False
+    r = subprocess.run(["git", "-C", str(m), "init", "-q", "-b", "main"], capture_output=True, text=True)
+    return r.returncode == 0
+
+
+def commit(ws: Path, message: str) -> str:
+    """Commit everything under `<ws>/migration` in its own repository; "" when there is nothing or no repository."""
+    m = ws / "migration"
+    if not (m / ".git").exists():
+        return ""
+    subprocess.run(["git", "-C", str(m), "add", "-A"], capture_output=True)
+    if subprocess.run(["git", "-C", str(m), "diff", "--cached", "--quiet"]).returncode == 0:
+        return ""
+    r = subprocess.run(["git", "-C", str(m), "commit", "-q", "-m", message], capture_output=True, text=True)
+    if r.returncode != 0:
+        return f"commit failed: {r.stderr.strip()[:200]}"
+    return subprocess.run(
+        ["git", "-C", str(m), "rev-parse", "--short", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
 
 
 def main(argv: list[str] | None = None) -> int:

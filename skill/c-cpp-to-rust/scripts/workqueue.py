@@ -27,6 +27,10 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import layout  # noqa: E402
+
 COLUMNS = [
     "part_id",
     "kind",
@@ -111,7 +115,9 @@ def mark(
 
 
 def git_has_commit(root: Path, commit: str) -> bool:
-    r = subprocess.run(["git", "-C", str(root), "cat-file", "-e", f"{commit}^{{commit}}"], capture_output=True)
+    r = subprocess.run(
+        ["git", "-C", str(layout.git_dir(root)), "cat-file", "-e", f"{commit}^{{commit}}"], capture_output=True
+    )
     return r.returncode == 0
 
 
@@ -138,14 +144,25 @@ def stage_of(parts: Path) -> int:
 
 def git_is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
     r = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant], capture_output=True
+        ["git", "-C", str(layout.git_dir(root)), "merge-base", "--is-ancestor", ancestor, descendant],
+        capture_output=True,
     )
     return r.returncode == 0
 
 
 def commit_touches(root: Path, commit: str, target: str) -> bool:
     r = subprocess.run(
-        ["git", "-C", str(root), "show", "--name-only", "--format=", commit, "--", target],
+        [
+            "git",
+            "-C",
+            str(layout.git_dir(root)),
+            "show",
+            "--name-only",
+            "--format=",
+            commit,
+            "--",
+            layout.in_repo(root, target),
+        ],
         capture_output=True,
         text=True,
     )
@@ -154,7 +171,10 @@ def commit_touches(root: Path, commit: str, target: str) -> bool:
 
 def unchanged_since(root: Path, commit: str, head: str, target: str) -> bool:
     """`target` has the same content at `head` as at `commit` (a gate re-run after the fact still counts)."""
-    r = subprocess.run(["git", "-C", str(root), "diff", "--quiet", commit, head, "--", target], capture_output=True)
+    r = subprocess.run(
+        ["git", "-C", str(layout.git_dir(root)), "diff", "--quiet", commit, head, "--", layout.in_repo(root, target)],
+        capture_output=True,
+    )
     return r.returncode == 0
 
 

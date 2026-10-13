@@ -13,10 +13,13 @@ PARTS     := $(MIGRATION)/parts$(if $(filter 2,$(STAGE)),-stage2).tsv
 # gate.mk is written by ticket 02 (the Judge): GATE_ARGS = --features "" --harness-cmd "..." --also migration/rust/tests/adapter
 -include $(MIGRATION)/gate.mk
 
-.PHONY: help status tickets next verify gate snapshot inventory depmap tier parts refbuild run run-go spend-now spend
+.PHONY: help commit status tickets next verify gate snapshot inventory depmap tier parts refbuild run run-go spend-now spend
 
 help:     ## list the targets
 	@grep -E '^[a-z-]+:.*##' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
+
+commit:   ## commit everything in migration/ (its own git repository): make commit MSG="what changed"
+	@git -C $(MIGRATION) add -A && git -C $(MIGRATION) commit -q -m "$(or $(MSG),migration checkpoint)" && git -C $(MIGRATION) log --oneline -1 || true
 
 status:   ## where the migration stands: rulebook, tickets, Parts per stage
 	@echo "== rulebook: $$(grep -m1 '^Status:' $(MIGRATION)/RULEBOOK.md 2>/dev/null || echo 'no RULEBOOK.md yet')"

@@ -447,3 +447,14 @@ Each entry: decision, reason, who/what it came from. Newest last.
     source root, and `run.py` read them from `<ws>`; fixed. Not done: write-protecting the original source in the new
     layout (settings.json deny rules name `pilots/*/src`), `xmltest.cpp`-style test files are still inventoried as
     Parts (use `--exclude`).
+
+73. **`<ws>/migration/` is its own git repository; the original project's git is never touched.** `tickets.py init`
+    runs `git init` there and commits; `tickets.py mark` commits ticket state; `run.py` commits each accepted Part
+    (`git add -A` of migration/) and the stage summary; `make commit MSG=..` for the governor. `gate.py`,
+    `workqueue.py` and `run.py` run git in `<ws>/migration` and address paths relative to it (`layout.git_dir`,
+    `layout.in_repo`). Also: test drivers by name (`xmltest.cpp`, `unit_tests.c`) are not Parts (tier.py,
+    inventory.py); `guard.py` refuses subagent writes outside `migration/` in a workspace at the project root, so the
+    original is read-only without a settings.json rule. `pilot_repo.py`, its test and decision 69's flow are removed:
+    69 is superseded (pilots/ workspaces made earlier keep their own repositories). _Reason:_ user's requirement
+    (this session): everything in migration/ committed in the git inside migration/; the three leftovers of
+    decision 72 fixed on request.

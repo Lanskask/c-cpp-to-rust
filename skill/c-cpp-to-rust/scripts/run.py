@@ -73,8 +73,11 @@ class Config:
 
     @property
     def repo(self) -> Path:
-        """Where Part commits go: the Pilot's own repository when `ws` is one (decision 69), else the repo root."""
-        return self.ws if (self.ws / ".git").exists() else self.root
+        """Where Part commits go: `<ws>/migration` when it is its own repository (decision 73), the Pilot's own
+        repository when `ws` is one (decision 69), else the repo root."""
+        return (
+            layout.git_dir(self.ws) if (self.ws / ".git").exists() or layout.git_dir(self.ws) != self.ws else self.root
+        )
 
     @property
     def name(self) -> str:
@@ -494,7 +497,12 @@ def run(cfg: Config) -> int:
                 workqueue(cfg, "mark", pid, "failed", "--error", previous)
                 continue
             target = str(cfg.ws / part["target_path"])
-            git(cfg, "add", "--", target)
+            git(
+                cfg,
+                "add",
+                "-A" if cfg.repo == cfg.ws / "migration" else "--",
+                *([] if cfg.repo == cfg.ws / "migration" else [target]),
+            )
             subprocess.run(
                 ["git", "-C", str(cfg.repo), "commit", "-q", "-m", f"{cfg.name}: {pid} stage {cfg.stage} (run.py)"],
                 capture_output=True,
@@ -516,6 +524,8 @@ def stop(cfg: Config, done: list[str], notes: list[str], reason: str, code: int 
     if reason:
         summary.append(f"STOPPED: {reason}")
     log_work(cfg, summary)
+    if cfg.repo == cfg.ws / "migration":
+        layout.commit(cfg.ws, f"run.py stage {cfg.stage}: " + (reason or "stage complete"))
     say("summary")
     print("run.py summary:\n  " + "\n  ".join(summary))
     return code

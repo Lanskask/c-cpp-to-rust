@@ -38,9 +38,18 @@ TEST_DIRS = {"test", "tests", "unittest", "unittests", "fuzz", "fuzzing"}
 EXAMPLE_DIRS = {"example", "examples", "sample", "samples", "demo", "bench", "benchmark"}
 
 
+NOT_TESTS = {"latest", "greatest", "contest", "protest", "attest", "detest", "manifest", "harvest"}
+
+
+def is_test_stem(stem: str) -> bool:
+    """`test_x`, `testmain`, `xmltest`, `unit_tests`: a test driver by name (same rule in inventory.py)."""
+    s = stem.lower()
+    return s.startswith("test") or (s.endswith(("test", "tests")) and s not in NOT_TESTS)
+
+
 def is_excluded(rel: str) -> bool:
     p = Path(rel)
-    return bool((TEST_DIRS | EXAMPLE_DIRS) & set(p.parts[:-1])) or p.stem.lower().startswith("test")
+    return bool((TEST_DIRS | EXAMPLE_DIRS) & set(p.parts[:-1])) or is_test_stem(p.stem)
 
 
 def part_of(rel: str) -> str:

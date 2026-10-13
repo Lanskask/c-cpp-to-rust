@@ -23,8 +23,8 @@ working directory of a build tool or interpreter (untrusted code).
 
 **First call in a folder without `migration/`:** this is a new run. Tell the user the folder you will work in, check
 it contains C or C++ sources and is a git repository (`git init` if the user agrees; gate rollback needs one), then run
-`python3 -I $S/tickets.py --ws <ws> init --lang c|cpp`: it creates `migration/` with the seven tickets, the Makefile,
-`layout.json` and `.gitignore`. Then follow the first READY ticket below.
+`python3 -I $S/tickets.py --ws <ws> init --lang c|cpp`: it creates `migration/` (a git repository of its own) with the seven
+tickets, the Makefile, `layout.json` and `.gitignore`, and makes the first commit. Then follow the first READY ticket below.
 
 ## Start of every session: find where you are
 
@@ -52,9 +52,13 @@ task is `[ ]` and needs `--brief "<what was produced, commit, numbers; max 8 lin
 briefs of its blockers; `mark NN in_progress` prints the same briefs. The ticket state and `parts.tsv` are the resume points; commit ticket changes with the step they belong
 to.
 
-**Repository.** Part commits (`run.py`, gate rollback, `workqueue`) go to the git repository that contains `<ws>`.
-The work log of an unattended run is `<ws>/migration/WORK-LOG.md`. A legacy Pilot is its own repository with `src/` as
-a submodule (decision 69, `pilot_repo.py`); a new workspace needs nothing of that.
+**Repository (decision 73).** `<ws>/migration/` is its own git repository (`tickets.py init` runs `git init` there and
+commits). Everything the Skill produces is committed there and nowhere else: `tickets.py mark` commits the ticket
+state, `run.py` commits each accepted Part and the stage summary, and the governor commits its own steps with
+`make -C <ws>/migration commit MSG="..."` (or `git -C <ws>/migration add -A && git -C <ws>/migration commit`). The
+original project's own git is never touched. Gate rollback, `workqueue verify` and `run.py` address that repository.
+`migration/.gitignore` keeps `rust/target/`, `harness/work/` and `gate/` out. A legacy Pilot (`pilots/<name>`) keeps
+its old rule: commits go to the repository that contains it (decision 69).
 
 ### 1. `<ws>/migration/parts.tsv` is absent → Stage 0 Mapping (map and rules)
 1. `make -C <ws>/migration spend-now`; note the timestamp.

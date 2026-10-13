@@ -88,7 +88,25 @@ def relative(path: str, root: Path, cwd: Path | None = None) -> str:
         return Path(os.path.normpath(p)).as_posix()
 
 
-def refusal(root: Path, rel: str) -> str | None:
+SOURCE_EXT = (".c", ".h", ".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx", ".inl")
+
+
+def source_refusal(root: Path, rel: str, bash: bool = False) -> str | None:
+    """A subagent never writes outside `migration/` in a workspace at the project root (decision 73): the original
+    is read-only. Paths outside the project (absolute, `..`) and non-workspace projects are not this rule's business;
+    for Bash only C/C++ source names are checked (a crude command check must not refuse `> out.log`)."""
+    f = root / "migration" / "layout.json"
+    if not f.is_file() or '"source": "."' not in f.read_text():
+        return None
+    if rel.startswith(("/", "..", "migration/")) or (bash and not rel.endswith(SOURCE_EXT)):
+        return None
+    return f"guard: {rel} belongs to the original project, which is read-only; write under migration/ only."
+
+
+def refusal(root: Path, rel: str, bash: bool = False) -> str | None:
+    msg = source_refusal(root, rel, bash)
+    if msg:
+        return msg
     pilot = protected_pilot(rel)
     if pilot is not None and fanout_active(root, pilot):
         return (
@@ -107,7 +125,7 @@ def check_call(root: Path, tool: str, tool_input: dict[str, object], cwd: Path |
         # words with a slash or a protected file name, resolved from the shell's cwd (`../migration/RULEBOOK.md`)
         candidates += [relative(w, root, cwd) for w in re.findall(r"[^\s'\"`;|&<>()]+", cmd) if "/" in w or "." in w]
         for cand in candidates:
-            msg = refusal(root, cand)
+            msg = refusal(root, cand, bash=True)
             if msg:
                 return msg
         return None

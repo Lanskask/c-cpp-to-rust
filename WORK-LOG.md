@@ -1107,3 +1107,9 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   inventory, depmap, run, refbuild, guard, SKILL.md, run-loop.md, install_global.py (name fixed). Decision 72.
 - End-to-end on a copy of the tinyxml2 sources in the scratchpad: init -> migration/ only; `make parts` gave
   2 Parts with `migration/rust/src/*.rs` targets. make test 155 passed 1 skipped (see commit).
+
+## 75. Skill: migration/ is its own git repository; test-name Parts; source read-only by guard
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- layout.git_dir/in_repo/init_repo/commit; gate.py, workqueue.py, run.py, tickets.py use them; Makefile `commit`;
+  tier/inventory `is_test_stem`; guard.py `source_refusal`; pilot_repo.py and its test removed. Decision 73.

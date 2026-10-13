@@ -496,6 +496,9 @@ def cmd_init(ws: Path, force: bool, lang: str = "c", kind: str = "auto") -> int:
     for spec in specs:
         (out / f"{spec.num}-{spec.slug}.md").write_text(render(spec, ws.name, lay))
     mk = write_makefile(ws, lang)
+    if lay.kind == "inplace":
+        layout.init_repo(ws)
+        layout.commit(ws, "migration: tickets, Makefile, layout")
     print(
         f"tickets: wrote {len(specs)} tickets to {out}, {mk} and layout.json ({lay.kind}: source {lay.source}, "
         f"crate {lay.crate})",
@@ -559,6 +562,9 @@ def cmd_mark(ws: Path, num: str, new: str, tick_all: bool = False, brief: str | 
         text = f"{body.rstrip()}\n\n{BRIEF_RULE}\n{formatted}\n"
     path.write_text(re.sub(r"^(\*\*Status:\*\* )\w+", rf"\g<1>{new}", text, count=1, flags=re.M))
     print(f"tickets: {num} -> {new}", file=sys.stderr)
+    sha = layout.commit(ws.resolve(), f"ticket {num} -> {new}")  # a no-op unless migration/ is its own repository
+    if sha:
+        print(f"tickets: committed {sha} in {ws / 'migration'}", file=sys.stderr)
     if new == "in_progress":
         print_blocker_briefs(ws, tickets, num)
     return 0

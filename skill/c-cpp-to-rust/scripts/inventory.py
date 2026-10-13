@@ -505,6 +505,15 @@ def merge_regex(clang_syms: list[Symbol], rx: list[Symbol]) -> list[Symbol]:
     return macros + sorted([*clang_syms, *extra], key=lambda s: (s.start, s.end))
 
 
+NOT_TESTS = {"latest", "greatest", "contest", "protest", "attest", "detest", "manifest", "harvest"}
+
+
+def is_test_stem(stem: str) -> bool:
+    """`test_x`, `xmltest`, `unit_tests`: a test driver by name (same rule in tier.py)."""
+    s = stem.lower()
+    return s.startswith("test") or (s.endswith(("test", "tests")) and s not in NOT_TESTS)
+
+
 TEST_LIKE_DIRS = {"test", "tests", "unittest", "unittests", "example", "examples", "sample", "samples", "demo", "bench"}
 AST_OUTPUTS = ("ast-symbols.tsv", "calls.tsv", "facts.tsv")
 
@@ -574,7 +583,7 @@ def inventory(
             str(f.relative_to(root))
             for f in files
             if not (TEST_LIKE_DIRS & set(f.relative_to(root).parts[:-1]))
-            and not f.stem.lower().startswith("test")
+            and not is_test_stem(f.stem)
             and str(f.resolve()) not in entries
             and str(f) not in entries
         ]
