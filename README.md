@@ -51,3 +51,16 @@ Before the first run, check these (each one has bitten a session in E3):
   `rust/` (the crate), `migration/` (rulebook, `parts.tsv`, run notes, harness).
 - `experiments/` — one script per question, docstring states the question and the answer.
 - `tests/` — pytest for the scripts.
+
+## License
+
+This project is dual-licensed under either:
+
+- **Apache License, Version 2.0** ([`LICENSE-APACHE`](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+- **MIT License** ([`LICENSE-MIT`](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
+
+at your option.
+
+Upstream pilot sources and reference test suites (`pilots/*/`) remain governed by their respective upstream licenses,
+as recorded in their corresponding `UPSTREAM` metadata files (e.g. `pilots/tinyjson` is GPL-3.0).
+
