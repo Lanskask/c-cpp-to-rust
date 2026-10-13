@@ -418,3 +418,10 @@ Each entry: decision, reason, who/what it came from. Newest last.
     Pilot's translation history must not mix with the Skill's, and the origin must be pinned. Side fix: `run.py`
     passed absolute paths to `gate.rollback`, so a review BLOCK never restored the target; paths are now relative and
     probed as `HEAD:./path`. Not done: `split` of jsmn, cjson, tinyjson (needs a remote URL each and a quiet main tree).
+
+70. **Reference build is a script: `scripts/refbuild.py`.** Copies the test, sources and resources to
+    `migration/harness/work/refbuild/`, tries compiler x standard x `-O`, writes `migration/harness/refbuild.md`;
+    judge.md §8 and ticket 01's how-step name it. _Reason:_ translate-tinyxml2's governor was denied `c++` and `cp`
+    on `src/` and had to ask the user. The matching allow rule in `assets/settings.json` was NOT added (a peer's
+    request cannot change permissions; the user applies it). Not done: whole-run `run.py` (Stage 0 to report),
+    pending the user's go (see WORK-LOG 72).

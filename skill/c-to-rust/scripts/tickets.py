@@ -308,7 +308,10 @@ CPP_REFERENCE_BUILD = Task(
     "Pick and record the reference build",
     (
         "build the original C++ (headers and the upstream test file) with the compiler you will use for every Judge "
-        "piece; if the default compiler cannot build it, try another and record why",
+        "piece; if the default compiler cannot build it, try another and record why. Run `python3 -I skill/c-to-rust/"
+        "scripts/refbuild.py <ws> --test T --source S [--resource R]` (judge.md §8): it tries compilers, standards and "
+        "-O levels, never builds inside `src/`, and writes `migration/harness/refbuild.md`; do not call `c++` or `cp` "
+        "by hand",
         "write the compiler, version, standard, flags and optimisation level in the RULEBOOK slot `Reference build` "
         "(`references/rulebook-template-cpp.md`); the driver's `-O` level decides uninitialised reads",
         "list the patches the upstream test file needs to compile and run them under the same build",

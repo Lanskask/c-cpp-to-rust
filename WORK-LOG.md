@@ -1087,3 +1087,9 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - tests/test_pilot_repo.py (3), one run.py test; make test 144 passed 1 skipped, ruff and ty clean. Decision 69.
 - Ran `pilot_repo.py new tinyxml2` (own repo, commit be0887a, src pinned 8224e42, no remote yet). jsmn, cjson,
   tinyjson not split.
+
+## 72. Skill: refbuild.py (translate-tinyxml2 request 1)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- scripts/refbuild.py, tests/test_refbuild.py (2), judge.md §8, tickets.py ticket 01 how-step. Decision 70.
+- settings.json allow rule left to the user; request 2 (run.py for every ticket) not started, scope in reply.

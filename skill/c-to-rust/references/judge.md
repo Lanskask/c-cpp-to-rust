@@ -173,7 +173,14 @@ another standard library and an `-include`, and its upstream test file needs two
 undefined behaviour changes with the optimisation level. So, in ticket 01 and before any Judge piece is written:
 
 1. Build the original (header or sources, plus the upstream test file) with the candidate compiler. On failure try
-   the next one and keep the error text: it is the "Why this build" row.
+   the next one and keep the error text: it is the "Why this build" row. **Use the script, not ad-hoc compiler
+   calls:** `python3 -I skill/c-to-rust/scripts/refbuild.py <ws> --test xmltest.cpp --source tinyxml2.cpp
+   --resource resources [--std c++17 --opt=-O2 --cc clang++]`. It copies the named files from `<ws>/src` to
+   `<ws>/migration/harness/work/refbuild/` (never builds in `src/`), tries compiler x standard x `-O` in order, runs
+   the test and writes `<ws>/migration/harness/refbuild.md` (chosen row for the slot below, plus every attempt with the
+   last lines of its error). A single command with fixed paths is what lets the governor run the step without a
+   permission question; the allow rule `Bash(python3 -I skill/c-to-rust/scripts/refbuild.py:*)` belongs in the
+   user's `settings.json` (the Skill does not edit it).
 2. Record the result in the RULEBOOK slot `Reference build` (`rulebook-template-cpp.md`): compiler, standard library,
    `-std`, extra flags, optimisation level of the **driver**, and every patch to the upstream tests.
 3. A patch to an upstream test may make it compile; it may not change an expected value. A changed expectation is a
