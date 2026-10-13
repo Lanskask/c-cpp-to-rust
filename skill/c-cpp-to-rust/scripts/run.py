@@ -60,6 +60,9 @@ class Config:
     gate_cmd: str
     snapshot_cmd: str
     deviations: str = "ask"  # ask | policy
+    planner_model: str = "opus"  # --all: rulebook, deviations, Judge, section 6 (tickets 01, 02, 05)
+    lang: str = ""  # --all: c | cpp for `tickets.py init` (empty: detect from the sources)
+    governor_turns: int = 120  # --all: --max-turns of a governor run
 
     @property
     def lay(self) -> layout.Layout:
@@ -549,6 +552,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--claude", default="claude", help="the claude executable (tests pass a fake)")
     p.add_argument("--settings", default=str(SKILL / "assets" / "settings.json"))
     p.add_argument("--max-turns", type=int, default=60)
+    p.add_argument("--all", action="store_true", help="work every ticket from an empty workspace to the report")
+    p.add_argument("--lang", choices=("c", "cpp"), default="", help="with --all: language (default: detect)")
+    p.add_argument("--planner-model", default="opus", help="with --all: model of tickets 01, 02, 05")
+    p.add_argument("--governor-turns", type=int, default=120, help="with --all: --max-turns of a governor run")
     p.add_argument("--root", help="repo root (default: parent of pilots/)")
     p.add_argument("--gate-cmd", help="template; {root} {ws} {name} {stage} {part} (default: make pilot-<name>)")
     p.add_argument("--snapshot-cmd", help="template, as --gate-cmd (default: make pilot-<name>-snapshot)")
@@ -558,7 +565,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
     ws = Path(a.pilot).resolve()
-    new_layout = (ws / "migration" / "layout.json").is_file()  # decision 72: the workspace is the root
+    new_layout = a.all or (ws / "migration" / "layout.json").is_file()  # decision 72: the workspace is the root
     root = Path(a.root).resolve() if a.root else (ws if new_layout else ws.parent.parent)
     base = "make -C {ws}/migration" if new_layout else "make -C {root} pilot-{name}"
     gate_default = base + (" gate" if new_layout else "") + " STAGE={stage} PART={part}"
@@ -578,8 +585,15 @@ def main(argv: list[str] | None = None) -> int:
         gate_cmd=a.gate_cmd or gate_default,
         snapshot_cmd=a.snapshot_cmd or snap_default,
         deviations=a.deviations,
+        planner_model=a.planner_model,
+        lang=a.lang,
+        governor_turns=a.governor_turns,
     )
     try:
+        if a.all:
+            import run_all  # noqa: PLC0415 (run_all imports this module)
+
+            return run_all.run_all(cfg)
         return run(cfg)
     except (ValueError, OSError, StopIteration) as e:
         print(f"run.py: {e}", file=sys.stderr)

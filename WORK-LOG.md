@@ -1113,3 +1113,9 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Who:** c-to-rust Skill-editing session
 - layout.git_dir/in_repo/init_repo/commit; gate.py, workqueue.py, run.py, tickets.py use them; Makefile `commit`;
   tier/inventory `is_test_stem`; guard.py `source_refusal`; pilot_repo.py and its test removed. Decision 73.
+
+## 76. Skill: run.py --all (whole-run driver)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- scripts/run_all.py, run.py --all/--lang/--planner-model/--governor-turns, Makefile run-all(-go), SKILL.md
+  "Unattended run", run-loop.md. tests/test_run_all.py (3, fake claude). Decision 74. Not run against real `claude -p`.

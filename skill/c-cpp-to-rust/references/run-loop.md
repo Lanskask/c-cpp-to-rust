@@ -78,3 +78,26 @@ by `tickets.py init` since decision 72) the root of git operations and of `claud
 snapshot commands default to `make -C <ws>/migration gate|snapshot STAGE=.. PART=..` (the Judge's `gate.mk` supplies
 `GATE_ARGS`), and the work log is `<ws>/migration/WORK-LOG.md`. Without `layout.json` the legacy conventions of the
 rest of this file apply. `make -C <ws>/migration run` and `run-go RUN_ARGS="..."` call the driver.
+
+## Whole run: `run.py <ws> --all` (decision 74)
+
+`scripts/run_all.py` loops: first ticket that is not `done` with every blocker `done` -> one step -> re-read the ticket
+files. Steps: no `migration/` -> `tickets.py init --lang` (`--lang`, else detected from the file suffixes); ticket 01
+with no `parts.tsv` -> `make parts`; 01, 02, 05 -> governor run on `--planner-model` (default `opus`); 03, 07 ->
+governor on `--model`; 04, 06 -> this file's Part loop for stage 1 or 2, then a governor run on `--model` that
+verifies, ticks and marks the ticket. A governor run is `claude -p --model M --permission-mode acceptEdits
+--allowed-tools "Read,Edit,Write,Grep,Glob,Bash(python3 -I:*),Bash(make:*),Bash(cargo:*),Bash(git:*),Bash(ls:*)"
+--max-turns --governor-turns`, with the ticket text and the Skill path in the prompt. It ticks tasks and marks its
+ticket itself; the driver checks the file afterwards, never the reply. After each step `migration/` is committed.
+
+| stop (exit 3)                                          | what the user does                                |
+|--------------------------------------------------------|---------------------------------------------------|
+| `migration/QUESTIONS.md` is not empty                  | answer in RULEBOOK or the ticket, delete the file |
+| a deviation row is `proposed`                          | approve, or rerun with `--deviations policy`      |
+| a ticket is open after `--max-attempts` governor runs  | read the last lines of its transcript, fix, rerun |
+| a Part is `stubbed`                                    | write the stub (section 6), rerun                 |
+| output tokens passed 70% of `--budget-output-tokens`   | raise the budget, rerun                           |
+
+The budget counts the whole run (governor and Part steps). Not covered: the answer to a question is not fed back
+automatically; the governor runs have no `agent_id`, so only `gate.py`'s hash check guards the Judge (decision 63).
+

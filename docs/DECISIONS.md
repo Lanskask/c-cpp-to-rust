@@ -458,3 +458,12 @@ Each entry: decision, reason, who/what it came from. Newest last.
     69 is superseded (pilots/ workspaces made earlier keep their own repositories). _Reason:_ user's requirement
     (this session): everything in migration/ committed in the git inside migration/; the three leftovers of
     decision 72 fixed on request.
+
+74. **`run.py --all` drives every ticket, from an empty workspace to the report.** `scripts/run_all.py`: `tickets.py
+    init`, `make parts`, a headless governor `claude -p` per ticket (Opus for 01, 02, 05; Sonnet for 03, 07 and the
+    close-out of 04, 06), the Part loop for 04, 06; resumes from ticket files; stops on QUESTIONS.md, `proposed`
+    deviation, open ticket after `--max-attempts`, stubbed Part, 70% of the whole-run budget. Makefile `run-all`,
+    `run-all-go`. _Reason:_ translate-tinyxml2 request 2 and the user's go (this session). Tested only against a fake
+    `claude`: no real governor run has happened, so the quality of an unattended Mapping, rulebook and Judge is
+    unmeasured; the first real run should use `--max-attempts 1` and a small budget.
+

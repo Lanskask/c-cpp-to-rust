@@ -130,10 +130,19 @@ next step.
 
 ## Unattended run (`scripts/run.py`)
 
-Once tickets 01-03 are done and the rulebook is approved, one command runs a stage: `python3 -I
-$S/run.py <ws> --stage 1 [--max-attempts 5] [--budget-output-tokens N] [--go]`.
-Without `--go` it only prints the plan. Preconditions, stops, resume and logs: `references/run-loop.md`. The model
-steps it does not do (mapping, Judge, rulebook, §6, stubs) stay with the governor.
+Two modes, both dry unless `--go` (`make -C <ws>/migration run|run-go|run-all|run-all-go RUN_ARGS="..."`):
+
+- `run.py <ws> --stage 1|2`: the Part fan-out of one stage. Needs tickets before it done and the rulebook approved.
+- `run.py <ws> --all` (decision 74): every ticket from an empty folder to the report. It runs `tickets.py init` if
+  there is no `migration/`, `make parts`, then one headless governor run per ticket (`claude -p`; Opus for tickets
+  01, 02, 05: mapping, rulebook and deviations, Judge and section 6; Sonnet for 03, 07 and the close-out of 04 and 06),
+  and the Part fan-out for 04 and 06. It resumes from the ticket files, stops on `migration/QUESTIONS.md` (a decision
+  only the user can make), a `proposed` deviation (`--deviations policy` lets the governor use `approved (policy)`),
+  a stubbed Part, a ticket still open after `--max-attempts` governor runs, or 70% of `--budget-output-tokens` over
+  the whole run. A governor run that gets a user decision writes the question there and stops; it never answers it.
+
+Details, stops and resume: `references/run-loop.md`. Mapping and Judge quality is only as good as one headless run;
+read `RULEBOOK.md`, `QUESTIONS.md` and each ticket's brief afterwards.
 
 ## Models
 

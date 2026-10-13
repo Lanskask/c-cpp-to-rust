@@ -13,7 +13,7 @@ PARTS     := $(MIGRATION)/parts$(if $(filter 2,$(STAGE)),-stage2).tsv
 # gate.mk is written by ticket 02 (the Judge): GATE_ARGS = --features "" --harness-cmd "..." --also migration/rust/tests/adapter
 -include $(MIGRATION)/gate.mk
 
-.PHONY: help commit status tickets next verify gate snapshot inventory depmap tier parts refbuild run run-go spend-now spend
+.PHONY: help commit run-all-go status tickets next verify gate snapshot inventory depmap tier parts refbuild run run-go run-all spend-now spend
 
 help:     ## list the targets
 	@grep -E '^[a-z-]+:.*##' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -67,6 +67,12 @@ run:      ## dry run of the headless driver: prints the plan, spends nothing: ma
 
 run-go:   ## the same, spending tokens: make run-go RUN_ARGS="--deviations policy --max-attempts 2 --budget-output-tokens 300000"
 	$(PY)/run.py $(WORK_DIR) --stage $(STAGE) --go $(RUN_ARGS)
+
+run-all:  ## whole run, every ticket from 01 to the report; dry (plan only): make run-all [RUN_ARGS="..."]
+	$(PY)/run.py $(WORK_DIR) --all $(RUN_ARGS)
+
+run-all-go: ## the same, spending tokens: make run-all-go RUN_ARGS="--deviations policy --max-attempts 2 --budget-output-tokens 500000"
+	$(PY)/run.py $(WORK_DIR) --all --go $(RUN_ARGS)
 
 spend-now: ## print a UTC timestamp to mark the start of a phase
 	@$(PY)/spend.py now
