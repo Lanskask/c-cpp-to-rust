@@ -1,0 +1,5 @@
+# installed by migration/harness/run.py from migration/harness/rust/
+examples/
+tests/
+Cargo.lock
+target/

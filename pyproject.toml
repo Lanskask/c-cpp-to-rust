@@ -1,7 +1,7 @@
 [project]
 name = "settlers-to-rust"
 version = "0.1.0"
-description = "c-to-rust Claude Code Skill: scripts and tests"
+description = "c-cpp-to-rust Claude Code Skill: scripts and tests"
 requires-python = ">=3.12"
 dependencies = []
 
@@ -12,7 +12,7 @@ dev-dependencies = ["pytest>=8"]
 testpaths = ["tests"]
 # the idiom suite compiles C and Rust snippets (about 4 minutes): `make idiom`
 addopts = "--ignore=tests/idiom"
-pythonpath = ["skill/c-to-rust/scripts"]
+pythonpath = ["skill/c-cpp-to-rust/scripts"]
 
 [tool.ruff]
 line-length = 120
@@ -23,7 +23,7 @@ extend-exclude = ["pilots", "articles"]
 select = ["E", "F", "I", "UP", "B", "ANN"]
 
 [tool.ty.environment]
-extra-paths = ["skill/c-to-rust/scripts"]
+extra-paths = ["skill/c-cpp-to-rust/scripts"]
 
 [tool.ty.src]
 exclude = ["pilots", "articles"]

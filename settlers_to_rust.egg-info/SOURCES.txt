@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-settlers_to_rust.egg-info/PKG-INFO
-settlers_to_rust.egg-info/SOURCES.txt
-settlers_to_rust.egg-info/dependency_links.txt
-settlers_to_rust.egg-info/top_level.txt
-tests/test_cli.py
-tests/test_spend.py

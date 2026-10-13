@@ -8,11 +8,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parent.parent / "skill" / "c-to-rust" / "scripts" / "guard.py"
+GUARD = Path(__file__).resolve().parent.parent / "skill" / "c-cpp-to-rust" / "scripts" / "guard.py"
 
 
 def call(root: Path, tool: str, cwd: Path | None = None, **tool_input: str) -> subprocess.CompletedProcess[str]:
-    payload = json.dumps({"cwd": str(cwd or root), "tool_name": tool, "tool_input": tool_input})
+    """A tool call made by a subagent (`agent_id` set), which is the one the guard protects the Judge from."""
+    return hook(root, tool, cwd, {"agent_id": "sub-1", "agent_type": "implementer"}, **tool_input)
+
+
+def hook(
+    root: Path, tool: str, cwd: Path | None, extra: dict[str, str], **tool_input: str
+) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps({"cwd": str(cwd or root), "tool_name": tool, "tool_input": tool_input, **extra})
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
     return subprocess.run([sys.executable, "-I", str(GUARD)], input=payload, capture_output=True, text=True, env=env)
 
@@ -98,3 +105,11 @@ def test_settings_hook_uses_an_absolute_project_path() -> None:
     settings = json.loads((GUARD.parent.parent / "assets" / "settings.json").read_text())
     cmd = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
     assert "$CLAUDE_PROJECT_DIR" in cmd and "guard.py" in cmd
+
+
+def test_main_session_may_edit_the_judge_during_fanout(tmp_path: Path) -> None:
+    ticket(tmp_path, "04", "in_progress")
+    target = str(tmp_path / "pilots/p/migration/RULEBOOK.md")
+    assert hook(tmp_path, "Edit", None, {}, file_path=target).returncode == 0  # governor: no agent_id
+    assert hook(tmp_path, "Bash", None, {}, command="echo x >> pilots/p/migration/RULEBOOK.md").returncode == 0
+    assert call(tmp_path, "Edit", file_path=target).returncode == 2  # subagent: refused

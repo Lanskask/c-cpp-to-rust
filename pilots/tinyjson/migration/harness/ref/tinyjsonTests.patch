@@ -1,0 +1,8 @@
+5c5
+< #include "..\src\tinyjson.h"
+---
+> #include "tinyjson.h"
+70c70
+<     o1.add_member("p3", 9876543210);
+---
+>     o1.add_member("p3", 9876543210LL);

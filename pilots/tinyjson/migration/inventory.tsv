@@ -1,0 +1,95 @@
+# engine: clang-ast+regex
+# cmd: inventory.py pilots/tinyjson/src --lang cpp --cxx /private/tmp/claude-501/-Users-a1-Programming-My-Projects-settlers-to-rust/00c5ec8c-cbfa-427b-9101-b5d144a805ec/scratchpad/clangxx11.sh --out pilots/tinyjson/migration/inventory.tsv
+symbol	kind	file	lines	tags
+main	function	samples/main.cpp	6-163	
+u32_istream	typedef	src/tinyjson.h	14-14	
+u32_sstream	typedef	src/tinyjson.h	15-15	
+trim	function	src/tinyjson.h	29-40	
+U32ToU8	function	src/tinyjson.h	42-54	
+U8ToU32	function	src/tinyjson.h	56-68	
+json_t	enum	src/tinyjson.h	70-80	
+json_object	typedef	src/tinyjson.h	84-84	
+json_array	typedef	src/tinyjson.h	85-85	
+json	record	src/tinyjson.h	87-153	long
+json::json	function	src/tinyjson.h	158-158	
+json::json	function	src/tinyjson.h	160-161	malloc
+json::json	function	src/tinyjson.h	163-164	malloc
+json::json	function	src/tinyjson.h	166-167	malloc
+json::json	function	src/tinyjson.h	169-170	malloc
+json::json	function	src/tinyjson.h	172-173	malloc,long
+json::json	function	src/tinyjson.h	175-176	malloc,long
+json::json	function	src/tinyjson.h	178-179	malloc
+json::json	function	src/tinyjson.h	181-182	malloc
+json::json	function	src/tinyjson.h	184-185	malloc
+json::json	function	src/tinyjson.h	187-188	malloc
+json::json	function	src/tinyjson.h	190-191	malloc
+json::type	function	src/tinyjson.h	193-193	
+json::type_name	function	src/tinyjson.h	195-222	
+json::json	function	src/tinyjson.h	227-256	malloc,long
+json::operator=	function	src/tinyjson.h	261-291	malloc,long
+json::operator==	function	src/tinyjson.h	293-354	long
+json::operator!=	function	src/tinyjson.h	356-359	
+json::get_string	function	src/tinyjson.h	364-368	
+json::get_integer	function	src/tinyjson.h	370-374	long
+json::get_double	function	src/tinyjson.h	376-380	
+json::get_bool	function	src/tinyjson.h	382-386	
+json::get_object	function	src/tinyjson.h	388-392	
+json::get_array	function	src/tinyjson.h	394-398	
+json::get_null	function	src/tinyjson.h	400-404	
+json::has_member	function	src/tinyjson.h	406-411	
+json::add_member	function	src/tinyjson.h	413-418	
+json::add_element	function	src/tinyjson.h	420-425	
+json::size	function	src/tinyjson.h	427-441	
+json::operator[]	function	src/tinyjson.h	444-455	
+json::operator[]	function	src/tinyjson.h	458-469	
+json::~json	function	src/tinyjson.h	472-497	malloc,long
+json::operator basic_string	function	src/tinyjson.h	500-509	
+json::operator const double	function	src/tinyjson.h	511-520	
+json::operator const long long	function	src/tinyjson.h	522-531	long
+json::operator const bool	function	src/tinyjson.h	533-542	
+json::to_string	function	src/tinyjson.h	544-572	
+json::object_to_string	function	src/tinyjson.h	574-596	
+json::array_to_string	function	src/tinyjson.h	598-617	
+parser	record	src/tinyjson.h	622-1077	ctype,long
+parser::parse	function	src/tinyjson.h	626-658	
+parser::parse_value	function	src/tinyjson.h	660-700	
+parser::parse_object	function	src/tinyjson.h	702-740	
+parser::parse_member	function	src/tinyjson.h	742-770	
+parser::parse_array	function	src/tinyjson.h	772-808	
+parser::parse_bool	function	src/tinyjson.h	810-827	ctype
+parser::parse_null	function	src/tinyjson.h	829-851	ctype
+parser::parse_string	function	src/tinyjson.h	853-883	
+parser::parse_number	function	src/tinyjson.h	885-909	
+parser::to_bool	function	src/tinyjson.h	911-927	ctype
+parser::operator()	function	src/tinyjson.h	915-918	ctype
+parser::to_integer	function	src/tinyjson.h	929-941	long
+parser::to_double	function	src/tinyjson.h	943-954	
+parser::escape_char	function	src/tinyjson.h	956-1005	
+parser::get_next_non_space	function	src/tinyjson.h	1007-1011	
+parser::peek_next_non_space	function	src/tinyjson.h	1013-1017	
+parser::skip_char	function	src/tinyjson.h	1019-1039	
+parser::skip_space	function	src/tinyjson.h	1041-1049	ctype
+parser::parse_hex	function	src/tinyjson.h	1051-1075	ctype
+CATCH_CONFIG_MAIN	macro	test/tinyjsonTests.cpp	2-2	
+TEST_CASE	function	test/tinyjsonTests.cpp	13-82	
+TEST_CASE	function	test/tinyjsonTests.cpp	84-107	
+TEST_CASE	function	test/tinyjsonTests.cpp	109-116	
+TEST_CASE	function	test/tinyjsonTests.cpp	118-126	
+TEST_CASE	function	test/tinyjsonTests.cpp	128-145	
+TEST_CASE	function	test/tinyjsonTests.cpp	147-160	
+TEST_CASE	function	test/tinyjsonTests.cpp	163-204	
+TEST_CASE	function	test/tinyjsonTests.cpp	206-220	
+TEST_CASE	function	test/tinyjsonTests.cpp	223-288	
+TEST_CASE	function	test/tinyjsonTests.cpp	290-317	
+TEST_CASE	function	test/tinyjsonTests.cpp	319-352	
+TEST_CASE	function	test/tinyjsonTests.cpp	354-390	
+TEST_CASE	function	test/tinyjsonTests.cpp	392-460	
+TEST_CASE	function	test/tinyjsonTests.cpp	462-478	
+TEST_CASE	function	test/tinyjsonTests.cpp	480-487	
+TEST_CASE	function	test/tinyjsonTests.cpp	489-502	
+TEST_CASE	function	test/tinyjsonTests.cpp	504-523	
+TEST_CASE	function	test/tinyjsonTests.cpp	525-544	
+TEST_CASE	function	test/tinyjsonTests.cpp	546-550	
+TEST_CASE	function	test/tinyjsonTests.cpp	552-562	
+TEST_CASE	function	test/tinyjsonTests.cpp	564-598	
+TEST_CASE	function	test/tinyjsonTests.cpp	601-606	

@@ -1,6 +1,6 @@
 """Shared lab for the idiom-table tests: compile a C snippet and a Rust snippet, run both, compare stdout.
 
-Every test in `tests/idiom/` verifies one row of `skill/c-to-rust/references/idiom-table-c.md`: the row's
+Every test in `tests/idiom/` verifies one row of `skill/c-cpp-to-rust/references/idiom-table-c.md`: the row's
 Stage 1 or Stage 2 mapping must print the same bytes as the C it replaces, and the row's `trap` must be shown
 (a naive mapping prints something else, or panics). Test names are `test_<ROWID>_<slug>`; the docstring starts
 with the row id and quotes the trap. Skipped when `cc` or `rustc` is missing.

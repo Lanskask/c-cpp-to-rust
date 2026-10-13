@@ -705,3 +705,417 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
   Spend row and ticket 06 closing pending.
 - **Skill gaps:** guard.py blocks `cargo` Bash lines that name the crate's Cargo.toml together with `>` or `2>&1` (the
   implementer could not run its tests); `workqueue mark` / `git add` of parts-stage2.tsv in one line with a write marker.
+
+## 44. tinyjson ticket 01: Mapping, RULEBOOK drafted, waiting for Deviations approval
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor (inventory, depmap, tier, tickets); Opus 5.5 subagent (RULEBOOK, a942025159912bd0f)
+- **Done:** `tickets.py init`; inventory with `--exclude 'test/*' --exclude 'samples/*'` gave 42 symbols, 1 Part
+  (`src/tinyjson`, judgment), 0 cycles. RULEBOOK drafted: C++ rows CPP1-CPP36 (each with header line numbers), §8
+  D1-D16 all `proposed`. Spend row T1-mapping.
+- **Tells us:** the C++ route has template gaps (RUN-NOTES "Skill bugs" 1-4). The subagent's measured claims (GCC 16
+  test pass count, clang failure) are not re-verified.
+- **Next:** user approves or vetoes D1-D16 (D3 and D5 first: they decide what the Differential harness may compare);
+  then ticket 02.
+
+## 45. tinyjson: D3 and D5 decided by the user's rule "match C++ origin as closely as possible"
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor
+- **Done:** RULEBOOK §8 rows D3 (kept bug: `\u` gives U+0000, driver built at `-O0`) and D5 (emulate the libstdc++
+  chunk rule, measured in ticket 02) set to `approved`; table re-aligned. Seven Skill change requests sent to the
+  Skill-editing session. No Skill file touched.
+- **Tells us:** the status line stays `drafted`; D1, D2, D4, D6-D16 still `proposed`. The `-O0` choice for D3 is the
+  governor's reading of the rule, not measured.
+- **Next:** user decides D1, D2, D4, D6-D16 (or says "same rule for all"), then ticket 02.
+
+## 46. Skill: C++ inventory fixes for tinyjson requests 1-3 (Skill-editing session)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `inventory.py` skips vendored test headers and names operators; `depmap.py` resolves qualified methods by
+  bare call name, roots examples, ignores operators/ctors/dtors for dead code (decision 54,
+  `tests/test_cpp_inventory.py`). `make test` 106 passed, 1 skipped; `make lint` clean.
+- **Tells us:** tinyjson without `--exclude`: 69 symbols, 4 dead-code candidates. The Translation session can re-run
+  `inventory.py` without the two `--exclude` flags. Requests 4-7 (C++ rulebook template, idiom table, judge.md
+  toolchain slot, §8 default rule, C++ ticket text) are design work and wait for the user.
+- **Next:** user decides the shape of requests 4-7 (see the reply in the session).
+
+## 47. Skill: C++ branch (tinyjson requests 4-7) (Skill-editing session)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `references/rulebook-template-cpp.md`, `references/idiom-table-cpp.md` (29 seed rows), judge.md §8
+  (reference build), §8 default rule in `rulebook-template.md`, SKILL.md pointers, `tickets.py init --lang cpp`
+  (reference-build and test-patch tasks; `tests/test_tickets.py`). `make test` 107 passed, 1 skipped; `make lint`
+  clean (decision 55).
+- **Tells us:** the idiom rows are generalised from tinyjson's unapproved RULEBOOK §2.1 and not compiled: seed, not
+  evidence. The tinyjson ticket files were written before `--lang cpp`; the Translation session can re-render them
+  with `tickets.py init --lang cpp --force` only if it has ticked nothing, otherwise add the two tasks by hand.
+- **Next:** read the verification report on the five literature ideas before building any of them.
+
+## 48. Skill: ast_facts.py, CJSON_PUBLIC fix, five idiom rows (Skill-editing session)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session; verification of the literature ideas by an Opus subagent (read-only)
+- **Done:** `scripts/ast_facts.py` (`ast-symbols.tsv`, `calls.tsv`, `facts.tsv`), wired into `inventory.py` (`--cxx`,
+  `--cxx-flag`, `--no-ast`) and `depmap.py` (clang call edges, `main` files are dead-code roots);
+  `declarator_prefix` fixes the cJSON `CJSON_PUBLIC` naming (97 rows); idiom rows X30-X34; `tests/test_ast_facts.py`.
+  `make test` 114 passed, 1 skipped; `make lint` clean (decision 56).
+- **Tells us:** the committed `pilots/cjson/migration/inventory.tsv` still has 97 `CJSON_PUBLIC` function rows (a
+  Translation-owned file; Parts are file-based so the Parts are unaffected, `edges.tsv` and `dead.txt` are not).
+  Parts attempt counters undercount: `workqueue.py mark in_progress` is the only thing that increments them, and
+  cJSON Stage 2 attempts 2-3 ran with the Part already `in_progress` (cJSON: 1, cJSON_Utils: 0, WORK-LOG: 3).
+- **Next:** tinyjson Translation session re-runs `inventory.py` and `depmap.py`; user decides on the attempts counter.
+
+## 46. tinyjson: inventory re-run with the AST engine, facts.tsv compared with the CPP rows
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor
+- **Done:** `inventory.py --lang cpp` and `depmap.py` without `--exclude`: 92 symbols, 187 edges, 2 dead candidates;
+  `facts.tsv` 65 rows. `--cxx-flag=-std=c++11` fails in the Skill (argparse rejects the forwarded value), run
+  through a `--cxx` wrapper instead. Comparison against the 36 CPP rows in RUN-NOTES: CPP8 29 of 30, CPP21 22 of 32,
+  CPP19 0 of 3, no missing construct.
+- **Tells us:** the hand-written rows are complete except one throw line (1022) and one hidden facet `new`; the AST
+  facts confirm what the rows cite.
+- **Next:** user answers the D1, D2, D4, D6-D16 question; CPP21 gets line 1022.
+
+## 49. Skill: `--cxx-flag` with a dash-leading value (tinyjson Skill bug 5)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `inventory.py` passes `--cxx-flag=<flag>` to `ast_facts.py` (argparse refused a separate `-std=c++11`, so
+  every documented use fell back to regex); a failed `ast_facts.py` now prints a warning line. Test
+  `test_dash_leading_cxx_flag_reaches_the_ast_engine`. `make test` 115 passed, 1 skipped; lint clean. Re-run on
+  tinyjson with `--cxx-flag=-std=c++11`: 92 symbols, engine `clang-ast+regex`, 65 fact rows.
+- **Tells us:** my own tests used no dash-leading flag, so the bug shipped (decision 56). The test now covers it.
+- **Next:** tinyjson session can drop its `clang++` wrapper script and use `--cxx-flag=-std=c++11`.
+
+## 50. Skill: attempt counter rule (user decision)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `mark done` refuses `attempts 0` (`--no-attempt` overrides), SKILL.md rule "every implementer run is
+  preceded by `mark in_progress`", two tests (decision 57). `make test` 117 passed, 1 skipped; lint clean.
+- **Tells us:** the existing cJSON ledgers (attempts 1 and 0) stay as they are; the rule applies to new runs.
+- **Next:** none for the Skill; the tinyjson session follows the rule from its next Part.
+
+## 47. tinyjson ticket 01 done: all Deviations approved
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 governor
+- **Done:** user answered "approve all": D1-D16 `approved`, RULEBOOK status `deviations-approved`; CPP21 got line
+  1022 and the `CHECK_TYPE_MISMATCH` use sites (CPP27 facet note not applied). Ticket 01 marked done.
+- **Tells us:** §2.1 and §6 rows are still `proposed`; they are not Deviations and the user has not reviewed them.
+- **Next:** ticket 02 (Judge): pin the reference toolchain (GCC 16, `-O0`, `-include locale`), measure the D5 chunk rule.
+
+## 51. Skill: attempt counting made automatic; cJSON Stage 2 ledger corrected (user decision)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `gate.py --snapshot` writes `migration/attempts.tsv`; `workqueue.py mark done` and `verify` use it
+  (decision 58, 3 tests). `pilots/cjson/migration/parts-stage2.tsv` attempts 1/0 -> 3/3 at the user's request
+  ("fix all counting"), `verify` ok. `make test` 119 passed, 1 skipped; lint clean.
+- **Tells us:** jsmn Stage 1 attempts 0 and cJSON Stage 1 attempts 1/1 are unchanged: no per-run record exists for
+  them (jsmn predates the counter; cJSON Stage 1 was one merged c2rust run, commit ee90077).
+- **Next:** none for the Skill.
+
+## 52. to-tickets: script and Makefile added to the mattpocock skill (user request)
+- **Date:** 2026-10-11
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `skill/to-tickets/{scripts/tickets.py,SKILL-addendum.md,install.py}`, `make install-to-tickets` (ran it:
+  `~/.claude/plugins/cache/mattpocock/mattpocock-skills/1.3.1/skills/engineering/to-tickets/` now has
+  `scripts/tickets.py` and the SKILL.md section); `tests/test_to_tickets_script.py` (5 tests). `make test` 124
+  passed, 1 skipped; lint clean (decision 59).
+- **Tells us:** the install target is the plugin cache of version 1.3.1 only (the marketplace clone is a git
+  checkout of upstream and was left alone); a plugin update drops the change until the installer is run again.
+- **Next:** try it on a real breakdown: `/mattpocock-skills:to-tickets` then check `make status` in the new folder.
+
+## 48. tinyjson ticket 02 part 1: reference build, C++ driver, corpus, D5 rule
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (a34e52b48cd016cc3, cut by a rate limit, resumed)
+- **Done:** reference build GCC 16.1 + libstdc++, `-std=c++17 -include locale -O0` (Apple clang and g++-11 fail,
+  texts in RUN-NOTES). Upstream tests: 22 cases, 17 passed, 5 failed, re-run by the governor. `dump.cpp`, corpus 5534
+  inputs (seed 20261012), twice-run filter 0 unstable. D5 chunk rule: windows of at most 29 bytes, model agrees on
+  20160 of 20160 inputs. Governor probe: unpinned `\u` is U+0001 in 72 of 100 processes, never U+0000, so D3 was
+  corrected (RULEBOOK §12).
+- **Tells us:** a per-process uninitialised read makes the twice-run filter flaky; the driver pins it by re-exec.
+- **Next:** part 2: Rust driver, stub crate, translated tests, run.py, mutant proof.
+
+## 49. tinyjson ticket 02 done: Stage 1 Judge built and shown able to fail
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (a95b935eb250011bc)
+- **Done:** scratch crate (stub, `todo!()` bodies), adapter, Rust driver (literal-order port check 138 of 138), 22
+  translated tests, `run.py`. Governor re-ran: stub RED, 22 of 22 translated tests fail, 5534 of 5534 corpus diffs,
+  58.8 s. Mutants re-run by the governor: 11 of 11 caught by the corpus; upstream tests alone 8 of 11 (miss m05, m07,
+  m10). A throwaway rough port (subagent, not committed) went GREEN 22/22 and 0 of 5534, 63.7 s.
+- **Tells us:** D3's unpinned value varies even inside the reference's Catch binary (19 of 22 pass with U+0001);
+  RULEBOOK §8 D3 says so. Feature matrix is `""` only.
+- **Next:** ticket 03 (stress test, Opus reviews), then 04.
+
+## 50. tinyjson ticket 03: stress test run, 10 rule proposals, rulebook not yet changed
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; 5 Haiku translators (A1, A2, B1, B2, C1); Opus 5.5 reviewer (a1960ca45a6798193)
+- **Done:** 3 groups (parser, `operator==`/copy/destructor, `to_string`) as the 3 hardest, 2 runs each planned; C2 not run
+  (the auto-mode classifier refused the launch twice). `cargo check` clean on A1, A2, B1, B2, C1 (governor). B1 vs B2
+  `eq` matrix over 147 rows: only `array == null` and `object == null` differ (B2 wrong). Opus review: A 6 BEHAVIOUR,
+  B 1, C1 1 unfaithful (Q5 not coded); P1-P10 proposed (RUN-NOTES "Rule proposals").
+- **Tells us:** the C4 row's "explicit chain" wording was read as `match` arms; both A agents invented bodies for helpers
+  they were not given (prompt slot gap); D3 and the strtod scanners were missed by both.
+- **Next:** user accepts or edits P1-P10, Opus applies them, a second A/B round, then status `stress-tested`.
+
+## 51. tinyjson ticket 03: P1-P10 applied, C2 reviewed, corpus 5561
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Opus 5.5 subagent (abdb025924418f5cf); C2 run by the user in a separate session
+- **Done:** user accepted P1-P10 and P6 underflow; RULEBOOK has them with §12 rows and a §4 marker rule; Opus added P11
+  (stacked markers, applied pending veto). C1 vs C2: only the Q5 NUL cut differs (C2 faithful, P10 covers it).
+  Corpus 5534 to 5561 (27 `broken_` inputs for P3/P4), twice-run filter 0 unstable, generator byte-identical on re-run
+  (governor re-ran it into a stray `--help/` dir by mistake; identical, deletion pending). Judge change committed apart.
+- **Tells us:** D8 still says the underflow boundary is "to measure" and conflicts with P6; stub `json` lacks `_value`.
+- **Next:** decide P11 and the D8 wording; round 2 (A, B, C once) with the updated rulebook; then `stress-tested`.
+
+## 53. Skill: private helpers in the implementer prompts (tinyjson round-2 stress test)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 Skill-editing session
+- **Done:** `stage1-prompt.md` HARD RULE 9 and `stage2-prompt.md` HARD RULE 8: a helper that is not in the stub is
+  the implementer's to add and implement fully. Reported by the tinyjson-translation session (a Haiku agent left
+  `stoll`/`stod` as `todo!()` after a "leave every other body todo!()" instruction).
+- **Not done:** the classifier-refusal request (settings.json allow rule for Agent) is a permission change and was
+  put to the user instead of being applied.
+
+## 54. tinyjson ticket 03 round 2: A3, B3, C3 run and reviewed
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 translators A3, B3 (a160c4f02e797406f); Opus 5.5 reviewer (a5ec89f16886ed59e)
+- **Done:** B3 run (A3, C3 existed); `cargo check` clean on all three (governor). Opus review appended to
+  `experiments/stress_test_diff_review.md` ("Round 2"): B3 and C3 agree with their faithful round 1 run on every
+  BEHAVIOUR item; A3 fixed A-1..A-4, A-7, S-1. No P12.
+- **Tells us:** the one open BEHAVIOUR item is A3 leaving `stoll`/`stod` as `todo!()` (the group prompt said to leave
+  outside bodies alone; HARD RULE 9 from entry 53 was not in that prompt). B3 markers are thinner than B1 (COSMETIC).
+- **Next:** rerun group A once (R2b-A3, prompt with HARD RULE 9), check only `stoll`/`stod` against P5/P6 and the
+  Judge, then set the RULEBOOK status to `stress-tested`.
+
+## 55. tinyjson ticket 03 round 2b: group A rerun (A3b)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 translator (a4259ce2b9c6c5c91)
+- **Done:** A3b (`work/stress/R2b-A3`, prompt with HARD RULE 9): `cargo check` clean, no `todo!()` left in `stoll`/`stod`.
+  Governor probe of `to_integer`/`to_double` (8 integer, 11 double inputs): all integer cases match the C++ probes of
+  review A-5. `stod` wrong on 3: `1e-310` returns `Ok` (D8/I8: out_of_range), `0x1p3` is `invalid_argument` (D8: 8.0),
+  `-inf` returns `+inf` (D8: `-inf`).
+- **Tells us:** the rules cover all three (D8, I8, P5/P6); the Haiku `strtod` scanner is the weak part, not a rule gap.
+- **Next:** user decides: escalate the strtod scanner to Sonnet / add a hint to I8, then accept `stress-tested`.
+
+## 56. tinyjson ticket 03 done: scanner tier rule, RULEBOOK stress-tested
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (a4815866164658559); Opus 5.5 subagent (aa96988bf5b38373f)
+- **Done:** R2c-A3: Sonnet rewrote only `stoll`/`stod`; governor re-probe 19 of 19 equal, agent 5257 inputs 0
+  mismatches vs g++ 16.1. RULEBOOK: §0 tier rule (scanners to Sonnet), I8/D8 subnormal and `nan(` wording, §12 rows,
+  status `stress-tested (2026-10-12)`; ticket 03 done.
+- **Tells us:** the tier rule overrides HARD RULE 9 for the two scanners: the Haiku group prompt must say "do not
+  write `stoll`/`stod` bodies, signatures only" (the Skill session should reflect that in stage1-prompt.md).
+- **Next:** ticket 04, Stage 1 faithful port (scanners as a separate Sonnet task, rest Haiku).
+
+## 57. tinyjson ticket 04: skeleton, guard check, Haiku attempt 1 (Part body)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 subagent (a8c7615b367d1ada7)
+- **Done:** guard refused an Edit of RULEBOOK.md (ticket 04 in_progress). Crate skeleton `pilots/tinyjson/rust`
+  (stub signatures + private `stoll`/`stod` stubs, no features) and `make pilot-tinyjson[-snapshot]`, commit 0fd94f5.
+  Snapshot recorded (2 baseline failures: test, harness). Haiku filled every body except `stoll`/`stod` (STATUS done,
+  TODOS 0, 1140 lines); the Sonnet scanner task launch was denied by the auto-mode classifier, waiting on the user.
+- **Tells us:** `gate.py` fails for a part id with a slash (`src/tinyjson`): it needs `migration/gate/src/` created by
+  hand (mkdir without parents, gate.py:269). The guard blocks any Bash command that names a protected path, reads
+  included, so Judge files were installed by the gate's harness step, not copied.
+- **Next:** Sonnet scanner task, then gate, review, commit.
+
+## 58. tinyjson ticket 04: gate attempt 1 failed, attempt 2 Haiku body, Sonnet launch denied again
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 scanner subagent (a831164132ea9475f); Haiku 5.5 subagent (a4fbead2bc1ac3d74)
+- **Done:** attempt 1 (Haiku a8c7615b + Sonnet a831164) FAILED at `cargo check` (30 errors: E0423 x6, E0061 x6); the gate
+  rollback restored the skeleton and both outputs were lost. Attempt 2: Haiku body saved to scratchpad. Haiku had put
+  the `u32_sstream` buffer in a `thread_local!` because the skeleton struct had only `_pos` (governor's mistake: the
+  stub struct was copied; CPP26 says buf + pos). Governor fixed the struct (`buf: Vec<u32>`) in the target.
+- **Tells us:** (1) `gate.py` crashes on rollback when an `--also` path is untracked: commit the Judge files first.
+  (2) Save the target file before every gate run: a failed gate discards the outputs. (3) A skeleton must carry the
+  real struct fields, not the Judge stub's. (4) The auto-mode classifier denied the Sonnet Agent launch again after one
+  success; no setting I may edit changes that.
+- **Next:** Sonnet scanner task (attempt 2), gate, review, commit.
+
+## 59. tinyjson ticket 04: Sonnet scanners, vacuous gate PASS, fixes, Judge GREEN
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 scanner subagent (af6c0a97f9ba57865); Haiku 5.5 fix subagent (a62cdf5ced8342645,
+  killed by a rate limit); the governor wrote the remaining fixes itself (the Haiku launch for attempt 4 was denied by
+  the auto-mode classifier; the user said to run the work here if a subagent is impossible)
+- **Done:** Sonnet wrote `stoll`/`stod` (`cargo check` clean). The first gate printed PASS only because the Stage 1
+  baseline (the stub) already failed `test` and `harness` (5/22 tests red, 5561/5561 corpus diffs); that row was
+  removed from `gate-passed.tsv`. Fixes: `operator==` as the C4 result table (same type returns its compare at once,
+  D2 `from_bits`), `U32ToU8`/`U8ToU32` kind `RuntimeError` + libstdc++ texts (incomplete tail dropped), D5 window
+  decoder for `parse`, Q5 `c_str` in object/array to_string and in the key-not-found text, `to_bool` lowercases, D9
+  `nan`/`inf`. Final: `make pilot-tinyjson` PASS (check, test, harness), 22/22 tests, 0/5561 corpus diffs.
+- **Tells us:** (1) The Stage 1 gate PASS is vacuous when the baseline fails the Judge checks: read the
+  `make pilot-tinyjson-test` output (`JUDGE: GREEN`), not the gate line; the Skill should refuse `mark done` unless
+  the harness is green. (2) Tier split: the Sonnet scanner half worked first try (82 s, 0 TODOs, no scanner diff in
+  the corpus). The Haiku half needed three rounds of fixes on error texts, `==`, D5 and Q5, all stated in the
+  rulebook; the prompt carried the rows but they were not applied. (3) The guard blocks even reading the harness work
+  files via Bash; a make target that prints them is the way.
+- **Next:** review, commit the Part, `workqueue mark done`, tick ticket 04.
+
+## 60. tinyjson ticket 04: independent review of 7115bf6 and attempt 5
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 reviewer subagent (a6f12a13c115b598e); Sonnet 5.5 governor wrote the fixes
+- **Done:** review verdict `fix`: 4 behaviour BLOCKs the Judge could not see (`c as u8` in `parse_value`, `assign`
+  leak, `index_key` NUL, `U32ToU8` at five sites) plus marker and trailer findings. All fixed; `make pilot-tinyjson`
+  PASS, 22/22 tests, 0/5561 corpus diffs. Corpus GAPs and RULE proposals are in RUN-NOTES.
+- **Tells us:** the corpus did not contain code points > U+00FF with a start-char low byte, so a faithful Haiku body
+  passed 5561 inputs with a P2 violation: the review found what the Judge could not. The reviewer's three marker
+  BLOCKs show §4 is not mechanically checkable (RULE proposal). Attempts used: 5 of 5.
+- **Next:** add the corpus GAP inputs (Judge commit), re-gate; Opus applies the RULE proposals to RULEBOOK §12.
+
+## 61. tinyjson ticket 04: Judge gaps closed, rulebook amendments, ticket 04 closed
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor (user approved the §4 marker wording and the Judge changes)
+- **Done:** RULEBOOK commit 619b412 (§4 marker rule: every statement that reproduces a QUIRK or implements a
+  DEVIATION; `deviations=` equals the marked D ids; CPP26 fields `buf`/`_pos`; two §12 rows). Judge commit b9d53af:
+  corpus 5561 -> 5755 inputs (P2 value-start code points, D5 window-edge sequences and restarts, `%f` ties) and
+  `stream_probes` on the `wide` stream in both drivers. Ticket 04 `todo` -> `in_progress` cycle, re-gate PASS with
+  baseline 0 failures (check, test, harness), 22/22 tests, 0/5755 corpus diffs.
+- **Tells us:** the red run of the stronger Judge on the pre-review Part (7115bf6) was not done: the permission
+  classifier denied both a file swap and a scratch-crate copy, so the new inputs are proven green on the fixed Part
+  but not shown to fail on the P2 bug. A new Part-level fix therefore rests on the reviewer's reading.
+- **Next:** ticket 05 (Stage 2 Judge).
+
+## 63. Skill: gate.py findings from tinyjson ticket 04 (four items), Stage 2 shim paragraph
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (report from tinyjson-translation-4)
+- **Done:** `gate.py`: PASS line `N of M checks passed` plus the excused checks, `--strict-judge`, `mkdir` with parents
+  for part ids with a slash, rollback leaves paths absent at HEAD alone, `--min-tests` now reaches the checks (found
+  while editing: it was parsed and never passed). `judge.md` §3 item 5 (every narrowing site needs a code point above
+  0xFF at its own position); `stage1-prompt.md` HARD RULE 10 (row checklist reply). Three new tests in `test_gate.py`.
+- **Tells us:** finding 1 is a design tension, not a bug: the Stage 1 baseline exists for half-translated crates.
+  Rule 10 is untested: whether it cuts fix rounds needs a Haiku run with and without it.
+- **Also:** `judge.md` §5 "Validating the adapter before the Stage 2 crate exists" (validation shim), from tinyjson
+  ticket 05 (WORK-LOG 62). Evidence there: D5 mutant 29 -> 30 passed 22/22 translated tests, caught by 13 corpus diffs.
+- **Next:** tinyjson governor adds `--strict-judge` to the final Stage 1 gate of each Part.
+
+## 62. tinyjson ticket 05: §6 filled, Stage 2 Judge built and validated
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Sonnet 5.5 subagent (ad1b2c60576d6022a) wrote the shim, adapter and `run.py --stage 2`
+- **Done:** RULEBOOK §6 filled with binding signatures (193569d plus the `tellg` follow-up; I first wrote that `tellg`
+  was not part of the API, and the driver reads it for Q13, so it is). Stage 2 adapter over a §6 shim on the Faithful
+  port: STAGE=2 GREEN (22/22, 0/5755), STAGE=1 GREEN. Mutant D5 window 29 -> 30: 22/22 tests, 13 corpus diffs, RED;
+  restored. `parts-stage2.tsv` created. RUN-NOTES has the §5a coverage list.
+- **Tells us:** a Stage 2 Judge for a rewrite needs a §6 shim over the Stage 1 port; the Skill's judge.md §5 assumes a
+  C ABI adapter and says nothing about validating a §6-API adapter before the Stage 2 crate exists. The translated
+  tests did not see the mutant; only the corpus did.
+- **Next:** commit the Judge, then ticket 06 (Stage 2 implementer, Haiku, up to 5 attempts, `--stage 2` gate).
+
+## 64. Skill: Agent allow rule in assets/settings.json
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (file edited by the user, commit 47742b3)
+- **Done:** `permissions.allow` = `Agent(model:haiku)`, `Agent(model:sonnet)`, `Agent(model:opus)` before `deny`.
+- **Tells us:** untested: whether the classifier skips a launch that matches. First tinyjson Sonnet launch with
+  `--settings` shows it.
+- **Next:** tinyjson-translation restarts with `claude --name tinyjson-translation --settings skill/c-to-rust/assets/settings.json`.
+
+## 65. Skill: guard.py protects the Judge from subagents only
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (user rule: in a Translation session the whole Pilot except the original
+  code is editable, only Skill files are blocked; docs lookup by a claude-code-guide agent for the `agent_id` field)
+- **Done:** `guard.py` checks a call only when the hook input has `agent_id`; SKILL.md Stage 1 step 1 verifies with
+  `guard.py check`; test `test_main_session_may_edit_the_judge_during_fanout`.
+- **Tells us:** the static deny of `Edit(pilots/*/migration/gate-passed.tsv)` stays: `gate.py` writes the file through
+  Python, so the governor is not hindered. Not verified live: `agent_id` on a real subagent call.
+- **Next:** first tinyjson fan-out after restart: governor edits RULEBOOK.md (allowed), an implementer attempt on it
+  must be refused; if it is not, `agent_id` is missing and decision 62 must be reverted.
+
+## 66. Skill: Judge hash check in gate.py, implementer default Sonnet 5.5 (tinyjson-translation-4 requests)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** request 1 was already met by decision 62; added the detective layer: `gate.py` stores hashes in the
+  snapshot and fails an attempt that changed the Rulebook or Judge files (`--accept-judge-change`). Request 2:
+  SKILL.md Models, stage1/stage2 prompts: Sonnet 5.5 implementer, "STATUS: done is not evidence". Two tests.
+- **Tells us:** the hash check initially fired on `--also` paths and broke an existing test; they are exempt now. The
+  Sonnet default rests on one Pilot's run, not on a controlled comparison.
+- **Next:** the tinyjson governor restarts with `--settings` (allow rule `Agent(model:sonnet)` is in).
+
+## 63. tinyjson ticket 06: Stage 2 rewrite, attempt 1
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor; Haiku 5.5 implementer (a7a41ec7f0d736937); Sonnet 5.5 reviewer (a7dc33c2a1f542bca)
+- **Done:** Judge prep: `run.py --stage 2` judges the real crate, `--shim` the Faithful port; formatting-only Judge
+  commit (the gate's fmt check covers the installed Judge files). Haiku wrote a 1300-line Stage 2 `lib.rs` and reported
+  `done`; `cargo check` showed 12 errors (match-arm types, duplicate `PartialEq`, missing `TryFrom`/`From` impls), then
+  clippy (derivable Default, identity op, if-same-then-else, snake case), then the gate excused `fmt`, `unwrap` and
+  `allow` through the baseline. The governor repaired all of it; the gate then passed 8 of 8, 22/22 tests, corpus 0 DIFF
+  of 5755. The review found D8 and Q5 markers lost, a `peek` signature drift and a `skip_char` D4 gap; fixed, re-gated.
+- **Tells us:** (1) a Haiku report `STATUS: done` was false: always run `cargo check` first. The user moved the
+  implementer default to Sonnet 5.5. (2) the Stage 2 gate also prints PASS with excused checks: read `N of M`.
+  (3) the gate's `fmt` check formats the Judge files too: format the harness sources when the Judge is built.
+  (4) `get_key`/`get_index` (const forms) are in §6 but not in the adapter: unexercised.
+- **Next:** commit the Part, mark done, close ticket 06.
+
+## 64. tinyjson ticket 07: report
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5 governor
+- **Done:** `pilots/tinyjson/migration/REPORT.md` written; spend rows E5-tinyjson-s2-judge and E5-tinyjson-s2-review
+  logged (a first row without `--until` overlapped the attempt-1 row and was replaced).
+- **Tells us:** WORK-LOG numbers 62 and 63 were used twice (this session and the Skill session wrote concurrently);
+  entries 62/63 above and the Skill ones keep their titles, so they stay distinguishable.
+- **Next:** the Skill changes sent to the Skill-editing session.
+
+## 67. Skill: policy approval, excused refusal in mark done (tinyjson-translation-4 request, parts 1b-1d)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** SKILL.md and both rulebook templates: `approved (policy)`; `gate.py` records `excused` per pass;
+  `workqueue.py mark done` refuses a pass with excused checks (`--accept-excused`); denial wording. Test added.
+- **Not done:** (1a) the classifier allow rule is a permission edit: not made on a peer's request, see the reply to
+  the user; (2) `scripts/run.py` is separate.
+
+## 68. Skill: scripts/run.py headless driver (tinyjson-translation-4 request, part 2)
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session
+- **Done:** `scripts/run.py` (dry by default, `--go`, budget, stops), `references/run-loop.md`, SKILL.md section,
+  `tests/test_run_driver.py` (7 tests, fake `claude`: preconditions, dry run, accept, review BLOCK retry).
+- **Tells us:** `claude --help` lists `-p`, `--model`, `--settings`, `--allowed-tools`, `--max-turns`,
+  `--output-format`, `--permission-mode`, `--max-budget-usd`. The JSON `result` field is assumed, with a fallback to
+  raw stdout. No real `claude -p` run yet.
+- **Next:** one real `run.py ... --go` on tinyjson stage 2 with `--max-attempts 1` and a small budget.
+
+## 69. Skill: --deviations ask|policy in run.py
+- **Date:** 2026-10-12
+- **Who:** Sonnet 5.5, Skill-editing session (user request)
+- **Done:** flag in `run.py` (default `ask`), SKILL.md and run-loop.md wording, one test (8 in the file).
+- **Next:** none.
+
+## 70. Skill: run.py progress output
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- `say()`, `progress()`, `timed()` in scripts/run.py: per-step lines with elapsed time, Part i/N and % finished.
+- Test run (fake claude) prints 13 lines for one Part; make test unchanged, ruff and ty clean. Decision 68.
+
+## 71. Skill: Pilot repositories (pilot_repo.py)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- scripts/pilot_repo.py (new, split), Config.repo in run.py, gate.rollback probes `HEAD:./path`, SKILL.md paragraph.
+- tests/test_pilot_repo.py (3), one run.py test; make test 144 passed 1 skipped, ruff and ty clean. Decision 69.
+- Ran `pilot_repo.py new tinyxml2` (own repo, commit be0887a, src pinned 8224e42, no remote yet). jsmn, cjson,
+  tinyjson not split.
+
+## 72. Skill: refbuild.py (translate-tinyxml2 request 1)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- scripts/refbuild.py, tests/test_refbuild.py (2), judge.md §8, tickets.py ticket 01 how-step. Decision 70.
+- settings.json allow rule left to the user; request 2 (run.py for every ticket) not started, scope in reply.
+
+## 73. Skill: global install (cpp-to-rust)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- skill/install_global.py, `make install-skill`, tests/test_install_global.py, guard.py cwd fallback. Decision 71.
+- Installed to ~/.claude/skills/cpp-to-rust (27 files, 11 rewritten); make test 148 passed 1 skipped, lint clean.
+
+## 74. Skill: rename to c-cpp-to-rust, workspace layout in migration/
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- git mv skill/c-to-rust skill/c-cpp-to-rust (+ symlink), scripts/layout.py, tickets.py init layout/Makefile, tier,
+  inventory, depmap, run, refbuild, guard, SKILL.md, run-loop.md, install_global.py (name fixed). Decision 72.
+- End-to-end on a copy of the tinyxml2 sources in the scratchpad: init -> migration/ only; `make parts` gave
+  2 Parts with `migration/rust/src/*.rs` targets. make test 155 passed 1 skipped (see commit).
+
+## 75. Skill: migration/ is its own git repository; test-name Parts; source read-only by guard
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- layout.git_dir/in_repo/init_repo/commit; gate.py, workqueue.py, run.py, tickets.py use them; Makefile `commit`;
+  tier/inventory `is_test_stem`; guard.py `source_refusal`; pilot_repo.py and its test removed. Decision 73.
+
+## 76. Skill: run.py --all (whole-run driver)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- scripts/run_all.py, run.py --all/--lang/--planner-model/--governor-turns, Makefile run-all(-go), SKILL.md
+  "Unattended run", run-loop.md. tests/test_run_all.py (3, fake claude). Decision 74. Not run against real `claude -p`.

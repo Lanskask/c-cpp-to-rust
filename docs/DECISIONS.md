@@ -282,3 +282,188 @@ Each entry: decision, reason, who/what it came from. Newest last.
     follows a fixed order (ledger, `mark todo`, RULEBOOK + §12, Judge, red run), and a crash counts as red.
     _Reason:_ the cJSON Stage 2 review found five BLOCKs on paths the 3881-input corpus never reached, and the first
     recorded gate runs showed `allow fail` hidden by the baseline (WORK-LOG 39, `stage2_review_patch.md`).
+
+54. **C++ inventory: vendored test frameworks are skipped, operators get one name, test/example dirs stay in as dead-code
+    roots.** `inventory.py` skips `catch.hpp`, `doctest.h` and friends by file name (`VENDORED_FILES`) and names
+    `operator bool`, `operator==`, `operator()` as one symbol (`json::operator bool`) instead of the conversion type.
+    `depmap.py` matches `json::get` by its bare call name, treats samples/examples as roots next to tests, and never
+    lists operators, constructors or destructors as dead (they are called by syntax). Not done: `test/` and
+    `samples/` are **not** skipped by default, because they are the callers that make a header-only API live
+    (`tier.py` already keeps them out of the Parts). _Reason:_ tinyjson ticket 01 (1564 of 1630 symbols from
+    `test/catch.hpp`; 39 of 42 symbols "dead"). Measured on tinyjson with no `--exclude`: 69 symbols, 4 dead-code
+    candidates (was 39 of 42).
+
+55. **C++ Pilots get their own branch: `rulebook-template-cpp.md`, `idiom-table-cpp.md`, judge.md §8, `tickets.py init
+    --lang cpp`.** The C++ template replaces the sections that assume C (§0 no C ABI, §3, §5 overload naming, §7
+    exceptions, §10) and adds a `Reference build` slot (compiler, standard library, flags, optimisation level of the
+    driver, upstream-test patches). judge.md §8 says how to pick it and that a measurement from a subagent is
+    unverified until run. The base template §8 gets the default rule "match the original as closely as possible; kept
+    bug over fixed; state what the original does first". The idiom table has 29 rows (X1-X29) generalised from
+    tinyjson's CPP1-CPP36 and is a **seed**: every row is `verified: no` until a test compiles both sides.
+    _Reason:_ tinyjson tickets 01 requests 4-7, the user's rule "Rust result must match the C++ origin as closely as
+    possible", and the user's approval of requests 4-7 (2026-10-11). Not done: the clang AST front end, `mapping.tsv`
+    and the semantic failure packet; they wait for the verification of their claims (WORK-LOG 47).
+
+56. **`ast_facts.py`: for `--lang cpp` without a compile database, clang's JSON AST is the inventory engine; the regex
+    pass is the per-file fallback.** `inventory.py` runs it as a subprocess over the library files (tests and
+    examples stay regex), and `depmap.py` reads its `calls.tsv` for every function clang parsed instead of matching
+    call names. The dump is filtered by namespace (`-ast-dump-filter`) because an unfiltered dump of a unit that
+    includes libc++ was 489 MB on tinyjson (measured); a project with no namespace is capped at 150 MB and falls back.
+    `inventory.py` also deletes a stale `calls.tsv` before a regex run. Not done: tests and examples through the AST
+    (their global functions fall outside the namespace filter), constructor calls as edges, templates.
+    _Reason:_ measured on tinyjson (regex 45 symbols and 25 call edges, AST 61 function bodies and 61 call edges,
+    35 throws, 24 `new`, 6 `delete`, 13 `json::json` overloads told apart) and tinyxml2 (regex 205 functions, AST
+    416). Also five more idiom rows (X30-X34, tinyjson constructs no row covered) and a fix for the cJSON inventory
+    naming 97 functions `CJSON_PUBLIC` (a macro wrapping the return type).
+
+57. **`workqueue.py mark <part> done` refuses `attempts 0`; every implementer run is preceded by `mark in_progress`.**
+    `--no-attempt` allows it for a Part accepted before the counter existed. _Reason:_ the counter only moves on
+    `mark in_progress`, and cJSON Stage 2 ended with attempts 1 (cJSON) and 0 (cJSON_Utils) after three implementer
+    runs, so the 5-attempt limit could never fire (WORK-LOG 48). Not done: counting runs in `gate.py` (it cannot tell
+    an implementer run from a re-gate of the same attempt).
+
+58. **Attempts are counted from `gate.py --snapshot` rows (`migration/attempts.tsv`), not only from `mark in_progress`.**
+    `mark done` sets `attempts` to the larger of the counter and the recorded runs; `verify` flags a done Part whose
+    counter is lower. A snapshot means "an implementer run starts" (stage prompts already pair them). The cJSON
+    Stage 2 ledger was corrected to 3 and 3 from the three implementer commits (01845a3, e67e701, 3e23a08; the gate
+    passed both Parts in each). _Reason:_ decision 57 only catches `attempts 0`; a Part re-run while `in_progress`
+    still undercounted unless the governor remembered to re-mark it. Known limit: a snapshot taken without an
+    implementer run counts as a run; jsmn Stage 1 stays at 0 (accepted before the counter existed, not derivable).
+
+59. **The ticket script and Makefile are generalised into `skill/to-tickets/` and installed into the mattpocock
+    `to-tickets` skill.** `scripts/tickets.py` builds the tickets of a JSON spec (`init --spec`), writes one file per
+    ticket, a copy of itself and a Makefile (`status`, `tickets`, `show NUM=`), and keeps the state commands of the
+    c-to-rust script (`tick`, `mark` with blocker, open-task and `--brief` checks, `show`). `make install-to-tickets`
+    copies it and a SKILL.md section (between markers, idempotent) into the plugin's cache copy. _Reason:_ the
+    c-to-rust tickets lost track of work without checkboxes, how-steps and briefs (decisions 49, 52); the user asked
+    for that to be part of `to-tickets`. The plugin cache is replaced on a plugin update, so the canonical copy lives
+    in this repo and the installer is re-run after an update. Not done: a fork of the c-to-rust script is not merged
+    with it (two copies of the render and mark logic; the c-to-rust one keeps its fixed seven-ticket chain).
+
+60. **`gate.py`: a PASS prints `N of M checks passed` and lists the checks the baseline excused; `--strict-judge` makes
+    Stage 1 behave like Stage 2 for `test`/`harness`.** Snapshot dirs are created with parents (part id `src/x`),
+    rollback skips a path that does not exist at the snapshot HEAD (an untracked `--also` Judge file), and
+    `--min-tests` is now passed to the checks (it was parsed and ignored). _Reason:_ tinyjson ticket 04 printed
+    `gate: PASS (1 checks passed)` with 5/22 tests red and 5561 corpus diffs because the stub baseline failed both
+    Judge checks (WORK-LOG 59). Default Stage 1 still excuses them: a half-translated crate may not compile while
+    other Parts are `todo` (decision 29). Not done: refusing `mark done` when a Judge check was excused; the governor
+    runs the last Stage 1 gate with `--strict-judge`.
+
+61. **`assets/settings.json` allows `Agent(model:haiku|sonnet|opus)`; the user applied it.** _Reason:_ the auto-mode
+    classifier denied implementer subagent launches (tinyjson WORK-LOG 58: "Sonnet launch denied again"); allow rules
+    are evaluated before it (Claude Code docs, via the claude-code-guide agent, not yet seen working). The edit was
+    refused twice for this session ([Auto-Mode Bypass], [Self-Modification]) and was not worked around. A session must
+    start with `--settings skill/c-to-rust/assets/settings.json` to get it. Open: whether the classifier honours it.
+
+62. **`guard.py` refuses only tool calls made by subagents; the main (governor) session may edit everything under
+    `pilots/P/` except what the static deny-rules hold.** The hook input's `agent_id` (documented PreToolUse field,
+    present when the hook fires inside a subagent) selects the calls to check; without it the call passes. The
+    static deny-rules are unchanged (upstream `src/**`, `UPSTREAM`, `gate-passed.tsv`, which only `gate.py` writes, and
+    the Skill files). Step 1 of the Stage 1 loop verifies with `guard.py check PATH` (REFUSE), not by an `Edit`.
+    _Reason:_ the user's rule (WORK-LOG 65): in a Translation session everything in the Pilot except the original code
+    is editable, only Skill files are blocked. The Judge still needs protection from the Haiku implementers, which is
+    what `agent_id` buys; the 04/06 `mark todo` ritual now applies to subagents only. Unverified in practice: that
+    `agent_id` arrives on real hook calls of Agent-tool subagents (docs only); first fan-out must show an implementer
+    `Edit` of `RULEBOOK.md` refused. A subagent that is not launched through the Agent tool (a separate `claude -p`) has
+    no `agent_id` and is not protected.
+
+63. **`gate.py` hashes the Rulebook and the Judge at `--snapshot` and fails an attempt that changed them.** Hashed:
+    `migration/RULEBOOK.md`, `migration/harness/**` (not `inputs/`), the crate's `Cargo.toml`, `tests/**`, `examples/**`.
+    A changed file fails the attempt and rolls back the target only; `--accept-judge-change` passes a governor edit;
+    `--also` paths are exempt (they are restored, not judged). _Reason:_ decision 62 stops subagents that carry
+    `agent_id`; this is the detective layer that also catches a subagent the hook does not see, and it leaves a
+    record in the gate output (tinyjson-translation-4 proposal; the lock cost five `mark todo` cycles). Limit: it
+    sees only changes between snapshot and gate; a Judge edit committed before the snapshot is the governor's.
+
+64. **The implementer default is Sonnet 5.5, Haiku only on request; a reported `STATUS: done` is not evidence.**
+    SKILL.md Models, stage1-prompt and stage2-prompt say `model: sonnet`; the governor runs `cargo check` before the
+    gate. _Reason:_ the user's decision of 2026-10-12 as relayed by tinyjson-translation-4 (not seen directly in this
+    session) and its run: Haiku 5.5 gave 30 compile errors at the Stage 1 gate, needed three fix rounds on rules that
+    were in the prompt, and reported done on a Stage 2 file with 12 errors; Sonnet's scanners were right first time.
+    Supersedes the "default Haiku" wording of commit 8a13f8f; the Haiku 5.5 version choice stays for when Haiku is used.
+
+65. **Policy approval of deviations; `mark done` refuses a gate pass that excused failing checks.** (a) A §8 row that
+    reproduces the origin is `approved (policy)`; only rows with no origin answer, a fix instead of a kept bug, or a
+    public-API change stop for the user, who reviews the rest afterwards. (b) `gate-passed.tsv` has an `excused`
+    column; `workqueue.py mark done` refuses a Part whose latest pass at this stage has one unless `--accept-excused`.
+    (c) A denied Agent launch is not repeated verbatim: the governor writes the Part itself or stops. _Reason:_
+    tinyjson-translation-4 (relaying the user): fresh Translation sessions must run without the user between steps,
+    and Stage 1 and 2 printed PASS with excused fmt/unwrap/allow/test/harness. (a) changes decision 11 ("the user
+    approves each row before fan-out") on that relay; the user has not confirmed it in this session. Limit of (b):
+    a Part of a half-translated crate legitimately has an excused Judge failure and needs `--accept-excused`.
+
+66. **`scripts/run.py` drives a stage through scripts and `claude -p`; it is dry by default.** Without `--go` it
+    prints the plan and spends nothing; it stops (exit 3) for a missing precondition, a `proposed` deviation, a
+    `stubbed` Part, 70% of the output-token budget, review GAP/RULE entries or a refused `mark done`. The implementer
+    and reviewer are `claude -p --model sonnet --permission-mode acceptEdits --allowed-tools ...` runs (flags checked
+    against `claude --help`, not run). _Reason:_ tinyjson-translation-4's request (a fresh session runs without the
+    user between mechanical steps). Not done: tag-matched idiom rows, c2rust slot, §6 design, stubs. Limits: tested
+    only against a fake `claude`; a headless implementer has no `agent_id`, so decision 63's hashes are its guard. The
+    classifier allow rule asked for in the same request is a permission edit and was left to the user.
+
+67. **Who approves deviations is a switch: `run.py --deviations ask|policy`, default `ask`.** `ask` stops on every §8
+    row that is not `approved`, including `approved (policy)`; `policy` accepts those rows and the user reviews them
+    afterwards. SKILL.md allows policy status only when the user chose it. _Reason:_ decision 65 changed decision 11 on
+    a peer's relay; the user asked for a flag to choose (this session). Default is the conservative one.
+
+68. **run.py prints one flushed line per step: `[h:mm:ss] Part i/N [k/N finished, p%]`, attempt, snapshot,
+    implementer, gate, review verdict, ACCEPTED.** Each model or script step prints its start and its duration.
+    _Reason:_ the user's first real run showed a silent driver; a headless stage runs for hours and needs a visible
+    heartbeat. Progress counts Parts of the whole queue, not tokens.
+
+69. **Each `pilots/<name>` is its own git repository; the upstream source is its submodule `src/`, the Pilot is a
+    submodule of the Skill repo.** `scripts/pilot_repo.py new|split`; `run.py` commits Parts in `Config.repo` (the
+    Pilot's repository when `ws/.git` exists, else the root); `WORK-LOG.md`, `DECISIONS.md`, spend stay in the Skill
+    repo. Existing Pilots are split with history (`git subtree split`). _Reason:_ user's requirement (this session): a
+    Pilot's translation history must not mix with the Skill's, and the origin must be pinned. Side fix: `run.py`
+    passed absolute paths to `gate.rollback`, so a review BLOCK never restored the target; paths are now relative and
+    probed as `HEAD:./path`. Not done: `split` of jsmn, cjson, tinyjson (needs a remote URL each and a quiet main tree).
+
+70. **Reference build is a script: `scripts/refbuild.py`.** Copies the test, sources and resources to
+    `migration/harness/work/refbuild/`, tries compiler x standard x `-O`, writes `migration/harness/refbuild.md`;
+    judge.md §8 and ticket 01's how-step name it. _Reason:_ translate-tinyxml2's governor was denied `c++` and `cp`
+    on `src/` and had to ask the user. The matching allow rule in `assets/settings.json` was NOT added (a peer's
+    request cannot change permissions; the user applies it). Not done: whole-run `run.py` (Stage 0 to report),
+    pending the user's go (see WORK-LOG 72).
+
+71. **The global Skill is generated: `make install-skill` -> `~/.claude/skills/cpp-to-rust`.** `skill/install_global.py`
+    copies `skill/c-to-rust/` and rewrites repo-relative paths, the Skill name, `make spend*` calls, the Pilot
+    Makefile template's `SCRIPTS` and the guard hook path; the repo stays the source of truth (rerun after a change,
+    never edit the installed copy). `guard.py` falls back to the cwd when installed outside a repo with `pilots/`.
+    _Reason:_ user's request (this session): install globally without Claude reading the repo's files. Not covered:
+    the repo Makefile's `pilot-<name>` gate targets (project-level, `run.py --gate-cmd` replaces them).
+
+72. **Renamed to `c-cpp-to-rust`; a workspace is the folder the Skill is called in, everything under
+    `<ws>/migration/`.** `scripts/layout.py` + `migration/layout.json` (`inplace`: source = `<ws>`, crate =
+    `migration/rust`; `legacy`: `src/` and `rust/`, the default without the file); `tickets.py init --layout
+    auto|inplace|legacy` writes it with `.gitignore`, the tickets (absolute paths in place of `<ws>`) and a Makefile
+    that holds `WORK_DIR`, the absolute `SCRIPTS` and the common commands (`gate`, `snapshot`, `next`, `verify`,
+    `inventory`, `depmap`, `tier`, `refbuild`, `run`, `run-go`, `spend*`; the Judge's `gate.mk` supplies
+    `GATE_ARGS`). `tier.py` emits `<crate>/src/..`; `inventory`/`depmap` skip `migration/`; `run.py` reads sources
+    from the layout, uses `<ws>` as root and `migration/WORK-LOG.md`; `guard.py` also protects `migration/..` at the
+    project root. _Reason:_ user's requirement (this session): invoke `/c-cpp-to-rust` in the project folder, create
+    nothing outside `migration/`, run scripts from the global Skill with the work dir as a parameter. `skill/c-to-rust`
+    stays as a symlink so existing Pilot Makefiles keep working. Side finding: `source_paths` are relative to the
+    source root, and `run.py` read them from `<ws>`; fixed. Not done: write-protecting the original source in the new
+    layout (settings.json deny rules name `pilots/*/src`), `xmltest.cpp`-style test files are still inventoried as
+    Parts (use `--exclude`).
+
+73. **`<ws>/migration/` is its own git repository; the original project's git is never touched.** `tickets.py init`
+    runs `git init` there and commits; `tickets.py mark` commits ticket state; `run.py` commits each accepted Part
+    (`git add -A` of migration/) and the stage summary; `make commit MSG=..` for the governor. `gate.py`,
+    `workqueue.py` and `run.py` run git in `<ws>/migration` and address paths relative to it (`layout.git_dir`,
+    `layout.in_repo`). Also: test drivers by name (`xmltest.cpp`, `unit_tests.c`) are not Parts (tier.py,
+    inventory.py); `guard.py` refuses subagent writes outside `migration/` in a workspace at the project root, so the
+    original is read-only without a settings.json rule. `pilot_repo.py`, its test and decision 69's flow are removed:
+    69 is superseded (pilots/ workspaces made earlier keep their own repositories). _Reason:_ user's requirement
+    (this session): everything in migration/ committed in the git inside migration/; the three leftovers of
+    decision 72 fixed on request.
+
+74. **`run.py --all` drives every ticket, from an empty workspace to the report.** `scripts/run_all.py`: `tickets.py
+    init`, `make parts`, a headless governor `claude -p` per ticket (Opus for 01, 02, 05; Sonnet for 03, 07 and the
+    close-out of 04, 06), the Part loop for 04, 06; resumes from ticket files; stops on QUESTIONS.md, `proposed`
+    deviation, open ticket after `--max-attempts`, stubbed Part, 70% of the whole-run budget. Makefile `run-all`,
+    `run-all-go`. _Reason:_ translate-tinyxml2 request 2 and the user's go (this session). Tested only against a fake
+    `claude`: no real governor run has happened, so the quality of an unattended Mapping, rulebook and Judge is
+    unmeasured; the first real run should use `--max-attempts 1` and a small budget.
+

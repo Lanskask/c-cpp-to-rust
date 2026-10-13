@@ -60,3 +60,58 @@ def test_verify_checks_output_and_commit(tmp_path: Path) -> None:
     problems = wq.verify(rows, tmp_path, require_gate_record=False)
     assert len(problems) == 3  # b empty, c missing file, c missing commit
     assert not any(p.startswith("a:") for p in problems)
+
+
+def test_done_without_a_recorded_attempt_is_refused() -> None:
+    rows = [row("a")]
+    with pytest.raises(ValueError, match="attempts is 0"):
+        wq.mark(rows, "a", "done", "abc", None)
+    wq.mark(rows, "a", "done", "abc", None, allow_unattempted=True)
+    assert rows[0]["state"] == "done"
+
+
+def test_retry_while_in_progress_counts_again() -> None:
+    rows = [row("a")]
+    wq.mark(rows, "a", "in_progress", None, None)
+    wq.mark(rows, "a", "in_progress", None, None)
+    assert wq.mark(rows, "a", "done", "abc", None)["attempts"] == "2"
+
+
+def test_snapshot_log_raises_attempts_on_done_and_verify_flags_a_lower_value(tmp_path: Path) -> None:
+    (tmp_path / "migration").mkdir()
+    (tmp_path / "migration" / "attempts.tsv").write_text(
+        "part\tstage\thead\ttime\n"
+        "a\t2\th1\tt\n"
+        "a\t2\th2\tt\n"
+        "a\t2\th3\tt\n"
+        "a\t1\th0\tt\n"  # another stage: not counted
+        "b\t2\th4\tt\n"
+    )
+    assert wq.snapshot_count(tmp_path, "a", 2) == 3
+    assert wq.snapshot_count(tmp_path, "a", 1) == 1
+    assert wq.snapshot_count(tmp_path, "missing", 2) == 0
+    parts = tmp_path / "migration" / "parts-stage2.tsv"
+    rows = [row("a", "in_progress", attempts="1")]
+    wq.write_parts(parts, rows)
+    assert wq.main(["--parts", str(parts), "mark", "a", "done", "--commit", "abc"]) == 0
+    assert wq.read_parts(parts)[0]["attempts"] == "3"  # 1 marked, 3 snapshots
+    low = [row("a", "done", attempts="1", commit="abc")]
+    problems = wq.verify(low, tmp_path, 2, require_gate_record=False)
+    assert any("3 snapshot(s)" in p for p in problems)
+
+
+def test_mark_done_refuses_a_gate_pass_that_excused_checks(tmp_path: Path) -> None:
+    import gate
+
+    ws = tmp_path
+    (ws / "migration").mkdir()
+    parts = ws / "migration" / "parts.tsv"
+    parts.write_text("\t".join(wq.COLUMNS) + "\n" + "p\tfile\ta.c\tr.rs\tmechanical\t\tin_progress\t1\t\t\t\t\n")
+    subprocess.run(["git", "-C", str(ws), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(ws), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"],
+        check=True,
+    )
+    gate.record_pass(ws, "p", 1, [""], ["test[]", "harness[]"])
+    assert wq.main(["--parts", str(parts), "mark", "p", "done"]) == 1
+    assert wq.main(["--parts", str(parts), "mark", "p", "done", "--accept-excused"]) == 0
