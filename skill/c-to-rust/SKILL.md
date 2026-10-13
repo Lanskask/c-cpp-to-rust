@@ -39,6 +39,13 @@ task is `[ ]` and needs `--brief "<what was produced, commit, numbers; max 8 lin
 briefs of its blockers; `mark NN in_progress` prints the same briefs. The ticket state and `parts.tsv` are the resume points; commit ticket changes with the step they belong
 to.
 
+**Pilot repository (decision 69).** Every `pilots/<name>` is its own git repository; the upstream C source is the
+submodule `src/`, pinned to the `commit=` of `UPSTREAM`. A new Pilot: clone upstream into `<ws>/src`, write `UPSTREAM`,
+then `python3 -I skill/c-to-rust/scripts/pilot_repo.py new <name> [--remote URL]`. Part commits (`run.py`, gate
+rollback, `workqueue`) happen in that repository; `WORK-LOG.md`, `DECISIONS.md` and spend rows stay in the Skill repo,
+which records the Pilot as a submodule gitlink (commit the bumped pointer after a stage). An existing tracked Pilot:
+`pilot_repo.py split <name> --remote URL`.
+
 ### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
 1. `make spend-now`; note the timestamp.
 2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] [--exclude GLOB]... --out <ws>/migration/inventory.tsv`

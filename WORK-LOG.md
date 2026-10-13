@@ -1079,3 +1079,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Who:** c-to-rust Skill-editing session
 - `say()`, `progress()`, `timed()` in scripts/run.py: per-step lines with elapsed time, Part i/N and % finished.
 - Test run (fake claude) prints 13 lines for one Part; make test unchanged, ruff and ty clean. Decision 68.
+
+## 71. Skill: Pilot repositories (pilot_repo.py)
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- scripts/pilot_repo.py (new, split), Config.repo in run.py, gate.rollback probes `HEAD:./path`, SKILL.md paragraph.
+- tests/test_pilot_repo.py (3), one run.py test; make test 144 passed 1 skipped, ruff and ty clean. Decision 69.
+- Ran `pilot_repo.py new tinyxml2` (own repo, commit be0887a, src pinned 8224e42, no remote yet). jsmn, cjson,
+  tinyjson not split.

@@ -145,3 +145,17 @@ def test_rulebook_sections_keeps_only_the_named_ones() -> None:
     text = "# R\n\nStatus: x\n\n## 0. a\n\nzero\n\n## 6. b\n\nsix\n\n## 8. c\n\neight\n"
     got = run.rulebook_sections(text, (0, 8))
     assert "zero" in got and "eight" in got and "six" not in got and "Status: x" in got
+
+
+def test_part_commit_lands_in_the_pilots_own_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ws = make_ws(tmp_path)
+    for cmd in (["init", "-q"], ["add", "."], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "pilot"]):
+        subprocess.run(["git", "-C", str(ws), *cmd], check=True, capture_output=True)
+    main_head = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"], capture_output=True, text=True)
+    monkeypatch.setenv("FAKE_LOG", str(tmp_path / "calls"))
+    monkeypatch.setenv("FAKE_TARGET", str(ws / "rust" / "src" / "lib.rs"))
+    assert run.main(argv(ws, fake_claude(tmp_path), "--go", "--deviations", "policy")) == 0
+    log = subprocess.run(["git", "-C", str(ws), "log", "--format=%s"], capture_output=True, text=True).stdout
+    assert "p: p stage 1 (run.py)" in log
+    after = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"], capture_output=True, text=True)
+    assert after.stdout == main_head.stdout  # the main repo got no commit

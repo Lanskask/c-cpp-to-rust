@@ -282,7 +282,7 @@ def rollback(root: Path, head: str, paths: list[str]) -> None:
     would destroy work that no commit holds.
     """
     for path in paths:
-        probe = subprocess.run(["git", "-C", str(root), "cat-file", "-e", f"{head}:{path}"], capture_output=True)
+        probe = subprocess.run(["git", "-C", str(root), "cat-file", "-e", f"{head}:./{path}"], capture_output=True)
         if probe.returncode != 0:
             print(f"gate: {path} is not in {head[:8]}: left as is (commit it to have it restored)", file=sys.stderr)
             continue

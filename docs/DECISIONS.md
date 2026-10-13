@@ -410,3 +410,11 @@ Each entry: decision, reason, who/what it came from. Newest last.
     implementer, gate, review verdict, ACCEPTED.** Each model or script step prints its start and its duration.
     _Reason:_ the user's first real run showed a silent driver; a headless stage runs for hours and needs a visible
     heartbeat. Progress counts Parts of the whole queue, not tokens.
+
+69. **Each `pilots/<name>` is its own git repository; the upstream source is its submodule `src/`, the Pilot is a
+    submodule of the Skill repo.** `scripts/pilot_repo.py new|split`; `run.py` commits Parts in `Config.repo` (the
+    Pilot's repository when `ws/.git` exists, else the root); `WORK-LOG.md`, `DECISIONS.md`, spend stay in the Skill
+    repo. Existing Pilots are split with history (`git subtree split`). _Reason:_ user's requirement (this session): a
+    Pilot's translation history must not mix with the Skill's, and the origin must be pinned. Side fix: `run.py`
+    passed absolute paths to `gate.rollback`, so a review BLOCK never restored the target; paths are now relative and
+    probed as `HEAD:./path`. Not done: `split` of jsmn, cjson, tinyjson (needs a remote URL each and a quiet main tree).

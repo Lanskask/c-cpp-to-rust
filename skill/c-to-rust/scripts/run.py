@@ -61,6 +61,11 @@ class Config:
     deviations: str = "ask"  # ask | policy
 
     @property
+    def repo(self) -> Path:
+        """Where Part commits go: the Pilot's own repository when `ws` is one (decision 69), else the repo root."""
+        return self.ws if (self.ws / ".git").exists() else self.root
+
+    @property
     def name(self) -> str:
         return self.ws.name
 
@@ -238,7 +243,7 @@ def fill(template: str, slots: dict[str, str]) -> str:
 
 def review_prompt(cfg: Config, part: dict[str, str], head: str, gate_output: str) -> str:
     diff = subprocess.run(
-        ["git", "-C", str(cfg.root), "diff", head, "--", str(cfg.ws / part["target_path"])],
+        ["git", "-C", str(cfg.repo), "diff", head, "--", str(cfg.ws / part["target_path"])],
         capture_output=True,
         text=True,
     ).stdout
@@ -327,7 +332,7 @@ def note(cfg: Config, heading: str, lines: list[str]) -> None:
 
 
 def git(cfg: Config, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(cfg.root), *args], capture_output=True, text=True).stdout.strip()
+    return subprocess.run(["git", "-C", str(cfg.repo), *args], capture_output=True, text=True).stdout.strip()
 
 
 def log_work(cfg: Config, summary: list[str]) -> None:
@@ -473,14 +478,14 @@ def run(cfg: Config) -> int:
                 notes += [f"{pid}: {ln}" for ln in others]
                 note(cfg, f"Review findings {pid} stage {cfg.stage}", others)
             if rcode != 0 or blocks or verdict not in ("accept",):
-                gate.rollback(cfg.root, head, [str(cfg.ws / part["target_path"])])
+                gate.rollback(cfg.repo, head, [str((cfg.ws / part["target_path"]).relative_to(cfg.repo))])
                 previous = ("review BLOCK: " + " | ".join(blocks))[:1500] if blocks else f"review verdict {verdict}"
                 workqueue(cfg, "mark", pid, "failed", "--error", previous)
                 continue
             target = str(cfg.ws / part["target_path"])
             git(cfg, "add", "--", target)
             subprocess.run(
-                ["git", "-C", str(cfg.root), "commit", "-q", "-m", f"{cfg.name}: {pid} stage {cfg.stage} (run.py)"],
+                ["git", "-C", str(cfg.repo), "commit", "-q", "-m", f"{cfg.name}: {pid} stage {cfg.stage} (run.py)"],
                 capture_output=True,
             )
             if workqueue(cfg, "mark", pid, "done", "--commit", git(cfg, "rev-parse", "HEAD")) != 0:
