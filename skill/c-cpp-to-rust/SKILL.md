@@ -1,17 +1,30 @@
 ---
-name: c-to-rust
+name: c-cpp-to-rust
 description: Port a C or C++ project to Rust in two gated stages (Faithful port, then Idiomatic pass), resumable from files and git. Use when translating, porting or migrating C/C++ code to Rust, or when resuming such a port from a `migration/` directory.
 ---
 
-# c-to-rust
+# c-cpp-to-rust
 
 Translate a Source project into Rust **Part by Part**, each Part accepted only when the **Judge**
 passes. Vocabulary (Part, Faithful port, Idiomatic pass, Same behaviour, Judge, Differential harness):
 the project's `CONTEXT.md`. State lives on disk; this session's memory is never the source of truth.
 
-Paths below are relative to the repository root; `<ws>` is the Pilot workspace (`pilots/<name>`),
-`S` is `skill/c-to-rust/scripts`. Run every script as `python3 -I $S/<script>.py`; every script has
-`--help`. Never make `<ws>` the working directory of a build tool or interpreter (untrusted code).
+**Where things are (decision 72).** `<source>` is the original's source directory and `<crate>` the Rust crate
+(`<ws>` and `<ws>/migration/rust` in a new workspace; `layout.py` prints both). `<ws>` is the folder the Skill works in: the directory the session was opened in
+(the project itself, e.g. `~/Programming/CppToRust_Translations/tinyxml2`), or the path the user names. `S` is the
+Skill's `scripts/` directory (installed: `~/.claude/skills/c-cpp-to-rust/scripts`). **Everything the Skill creates is
+under `<ws>/migration/`** (tickets, Makefile, `layout.json`, inventory, parts, RULEBOOK, harness, the Rust crate in
+`migration/rust/`); nothing is created elsewhere, and no Python file is copied there: scripts run from `S`, either
+directly (`python3 -I $S/<script>.py`, every script has `--help`) or through `make -C <ws>/migration <target>` (the
+Makefile holds `WORK_DIR` and the absolute path of `S`; `make help` lists the targets). The original source is read in
+place and never edited; `layout.py <ws>` prints where the source and crate are (a workspace made before decision 72,
+`pilots/<name>` with `src/` and `rust/`, has no `layout.json` and keeps the legacy layout). Never make `<ws>` the
+working directory of a build tool or interpreter (untrusted code).
+
+**First call in a folder without `migration/`:** this is a new run. Tell the user the folder you will work in, check
+it contains C or C++ sources and is a git repository (`git init` if the user agrees; gate rollback needs one), then run
+`python3 -I $S/tickets.py --ws <ws> init --lang c|cpp`: it creates `migration/` with the seven tickets, the Makefile,
+`layout.json` and `.gitignore`. Then follow the first READY ticket below.
 
 ## Start of every session: find where you are
 
@@ -39,20 +52,17 @@ task is `[ ]` and needs `--brief "<what was produced, commit, numbers; max 8 lin
 briefs of its blockers; `mark NN in_progress` prints the same briefs. The ticket state and `parts.tsv` are the resume points; commit ticket changes with the step they belong
 to.
 
-**Pilot repository (decision 69).** Every `pilots/<name>` is its own git repository; the upstream C source is the
-submodule `src/`, pinned to the `commit=` of `UPSTREAM`. A new Pilot: clone upstream into `<ws>/src`, write `UPSTREAM`,
-then `python3 -I skill/c-to-rust/scripts/pilot_repo.py new <name> [--remote URL]`. Part commits (`run.py`, gate
-rollback, `workqueue`) happen in that repository; `WORK-LOG.md`, `DECISIONS.md` and spend rows stay in the Skill repo,
-which records the Pilot as a submodule gitlink (commit the bumped pointer after a stage). An existing tracked Pilot:
-`pilot_repo.py split <name> --remote URL`.
+**Repository.** Part commits (`run.py`, gate rollback, `workqueue`) go to the git repository that contains `<ws>`.
+The work log of an unattended run is `<ws>/migration/WORK-LOG.md`. A legacy Pilot is its own repository with `src/` as
+a submodule (decision 69, `pilot_repo.py`); a new workspace needs nothing of that.
 
-### 1. `<ws>/migration/` is absent → Stage 0 Mapping (map and rules)
-1. `make spend-now`; note the timestamp.
-2. `inventory.py <ws>/src --lang c|cpp [--compile-commands ...] [--exclude GLOB]... --out <ws>/migration/inventory.tsv`
+### 1. `<ws>/migration/parts.tsv` is absent → Stage 0 Mapping (map and rules)
+1. `make -C <ws>/migration spend-now`; note the timestamp.
+2. `inventory.py <source> --lang c|cpp [--compile-commands ...] [--exclude GLOB]... --out <ws>/migration/inventory.tsv`
    (C++ without a compile database: clang's AST gives exact overloads, `calls.tsv` and `facts.tsv`, falling back to the
    regex pass per file; `--cxx-flag` passes `-std=` or `-include`, `--no-ast` forces regex. Vendored directories such as `fuzzing/`, `unity/`, `vendor/`, `third_party/` are skipped; add `--exclude` globs for
    anything else that is not library code. Test and example files are never Parts.)
-3. `depmap.py <ws>/migration/inventory.tsv --source-root <ws>/src --out-dir <ws>/migration`
+3. `depmap.py <ws>/migration/inventory.tsv --source-root <source> --out-dir <ws>/migration`
 4. `tier.py <ws>/migration/inventory.tsv <ws>/migration/order.txt --out <ws>/migration/parts.tsv`
 5. Build the Judge and prove it can fail: `references/judge.md`. The crate does not exist yet: validate the Stage 1
    Judge against a scratch crate (raw c2rust transpile per feature set, or a stub for C++), judge.md §4a.
@@ -82,7 +92,7 @@ Done when the rulebook status line says `stress-tested (<date>)` and RUN-NOTES r
 
 ### 3. `parts.tsv` has `todo`, `in_progress` or `failed` Parts → Stage 1 (Faithful port)
 1. Protect the Rulebook and the Judge for the fan-out (decision 44). The session was started from the repo root with
-   `claude --settings skill/c-to-rust/assets/settings.json`, which loads the static deny-rules and the `guard.py`
+   `claude --settings skill/c-cpp-to-rust/assets/settings.json`, which loads the static deny-rules and the `guard.py`
    hook. Run `tickets.py mark 04 in_progress` (Stage 2: ticket 06), then **verify**: `guard.py check
    <ws>/migration/RULEBOOK.md` must print REFUSE. The hook refuses only tool calls of subagents (decision 62): you
    may still edit the Rulebook and the Judge yourself, and the implementers may not. If `check` prints ALLOW, stop and
@@ -93,7 +103,7 @@ Done when the rulebook status line says `stress-tested (<date>)` and RUN-NOTES r
 2. `workqueue.py next --batch N`; for each Part run the loop in `references/stage1-prompt.md`
    (snapshot → implementer → gate → review with `references/review-prompt.md` → commit → mark).
    Parts with no unfinished deps may run in parallel; each Part writes only its own `target_path`.
-3. After each batch: `make spend PHASE=<phase> SINCE=<timestamp> NOTE="..."`.
+3. After each batch: `make -C <ws>/migration spend PHASE=<phase> SINCE=<timestamp> NOTE="..."`.
 
 Done when every row is `done` or `stubbed` and `verify` passes.
 
@@ -111,13 +121,13 @@ Done when every Stage 2 row is `done` and the gate passes at Stage 2 for every f
 
 ### 5. Everything `done` → report
 Report: Parts done / stubbed / failed per stage; the Deviations table with statuses; open `TODO(port)`
-count (`grep -rn "TODO(port)" <ws>/rust/src`); tokens from `SPEND.md` for this Pilot; one recommended
+count (`grep -rn "TODO(port)" <crate>/src`); tokens from `SPEND.md` for this Pilot; one recommended
 next step.
 
 ## Unattended run (`scripts/run.py`)
 
 Once tickets 01-03 are done and the rulebook is approved, one command runs a stage: `python3 -I
-skill/c-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempts 5] [--budget-output-tokens N] [--go]`.
+$S/run.py <ws> --stage 1 [--max-attempts 5] [--budget-output-tokens N] [--go]`.
 Without `--go` it only prints the plan. Preconditions, stops, resume and logs: `references/run-loop.md`. The model
 steps it does not do (mapping, Judge, rulebook, §6, stubs) stay with the governor.
 

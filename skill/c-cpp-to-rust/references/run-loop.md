@@ -8,7 +8,7 @@ against the real one**, so the first real run is the test of the `claude -p` fla
 ## Command
 
 ```bash
-python3 -I skill/c-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempts 5] [--budget-output-tokens N]
+python3 -I skill/c-cpp-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempts 5] [--budget-output-tokens N]
 ```
 
 Without `--go` nothing is spent: the driver checks the preconditions, prints the `claude -p` commands, the snapshot and
@@ -27,7 +27,7 @@ by you, `policy` also accepts `approved (policy)`. Other options: `--model sonne
 | No §8 row `proposed`; `approved (policy)` only with `--deviations policy` | the status cell of each `D<n>` row |
 | Mapping, Judge, crate skeleton with every Part's module         | by the tickets (01-03); not checked separately       |
 | `make pilot-<name>` and `make pilot-<name>-snapshot` targets    | or pass `--gate-cmd` / `--snapshot-cmd`              |
-| `--settings skill/c-to-rust/assets/settings.json` allow rules   | the implementer runs with `--permission-mode acceptEdits` |
+| `--settings skill/c-cpp-to-rust/assets/settings.json` allow rules   | the implementer runs with `--permission-mode acceptEdits` |
 
 ## What it does per Part
 
@@ -70,3 +70,11 @@ is `done`; run `workqueue.py verify` next.
 - The prompt's idiom rows are the whole table, not the tag-matched rows; `{c2rust}` is `none`.
 - A `claude -p` implementer carries no `agent_id`, so `guard.py` does not see it; the gate's hash check does.
 - It never writes the Rulebook, the Judge, §6 or a stub: those stop for the model or the user.
+
+## Workspace layout (decision 72)
+
+`run.py <ws>` works on any workspace that has `<ws>/migration/`. With a `migration/layout.json` (every workspace made
+by `tickets.py init` since decision 72) the root of git operations and of `claude -p` is `<ws>` itself, the gate and
+snapshot commands default to `make -C <ws>/migration gate|snapshot STAGE=.. PART=..` (the Judge's `gate.mk` supplies
+`GATE_ARGS`), and the work log is `<ws>/migration/WORK-LOG.md`. Without `layout.json` the legacy conventions of the
+rest of this file apply. `make -C <ws>/migration run` and `run-go RUN_ARGS="..."` call the driver.

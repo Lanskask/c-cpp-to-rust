@@ -16,7 +16,7 @@ batches.
 # RULEBOOK: <pilot> (<upstream url> @ <short commit>)
 
 Status: draft | deviations-approved (<date>) | stress-tested (<date>)
-Idiom table: skill/c-to-rust/references/idiom-table-c.md (rows apply unless §2 overrides them)
+Idiom table: skill/c-cpp-to-rust/references/idiom-table-c.md (rows apply unless §2 overrides them)
 [C++ Pilot: also idiom-table-cpp.md; replace the sections listed in rulebook-template-cpp.md]
 
 ## 0. Scope and posture

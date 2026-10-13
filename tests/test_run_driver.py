@@ -47,7 +47,7 @@ def make_ws(tmp: Path, rulebook_status: str = "deviations-approved (2026-10-12)"
         "| id | a | b | c | Status |\n|---|---|---|---|---|\n| D1 | a | b | no | approved (policy) |\n"
     )
     (ws / "migration" / "parts.tsv").write_text(
-        PARTS_HEADER + "\n" + "p\tfile\tsrc/a.c\trust/src/lib.rs\tmechanical\t\ttodo\t0\t\t\t\t\n"
+        PARTS_HEADER + "\n" + "p\tfile\ta.c\trust/src/lib.rs\tmechanical\t\ttodo\t0\t\t\t\t\n"
     )
     for num, status in (("01", "done"), ("02", "done"), ("03", "done"), ("04", ticket4)):
         (ws / "migration" / "tickets" / f"{num}-x.md").write_text(f"# {num}\n\n**Status:** {status}\n")

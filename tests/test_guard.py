@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parent.parent / "skill" / "c-to-rust" / "scripts" / "guard.py"
+GUARD = Path(__file__).resolve().parent.parent / "skill" / "c-cpp-to-rust" / "scripts" / "guard.py"
 
 
 def call(root: Path, tool: str, cwd: Path | None = None, **tool_input: str) -> subprocess.CompletedProcess[str]:

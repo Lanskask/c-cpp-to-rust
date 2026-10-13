@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "skill" / "c-to-rust" / "scripts"
+SCRIPTS = Path(__file__).resolve().parent.parent / "skill" / "c-cpp-to-rust" / "scripts"
 ALL = sorted(p.name for p in SCRIPTS.glob("*.py"))
 STUB_ARGS: dict[str, list[str]] = {}
 STUBS = sorted(STUB_ARGS)

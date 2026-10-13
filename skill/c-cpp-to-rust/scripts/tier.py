@@ -9,7 +9,8 @@ Tiers, from the risky-construct tags of the Part's symbols:
              strtod qsort asm signal thread, or any config-macro
              (needs a cargo feature, decision 24)
   mechanical everything else (POD, enums, constants, pure helpers)
-`target_path`: a single Part is `rust/src/lib.rs`; otherwise `rust/src/<stem>.rs`, and Parts that share a
+`target_path` (relative to `<ws>`; `<crate>` is the workspace layout's crate dir, layout.py): a single Part is
+`<crate>/src/lib.rs`; otherwise `<crate>/src/<stem>.rs`, and Parts that share a
 stem get a module name derived from the path (`a/util` -> `a_util.rs`). `--crate-root-part NAME` makes the
 named Part `lib.rs` in a multi-Part crate (the orchestrator must then declare the other modules).
 `deps` come from edges.tsv. Rows are written in leaf-first order, state=todo, attempts=0.
@@ -22,6 +23,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import layout  # noqa: E402
 
 HEADER = "part_id\tkind\tsource_paths\ttarget_path\ttier\tdeps\tstate\tattempts\tmodel\tlast_error\tcommit\tupdated"
 JUDGMENT = {
@@ -50,25 +55,25 @@ def tier_of(tags: set[str]) -> str:
     return "mechanical"
 
 
-def target_paths(parts: list[str], crate_root: str | None) -> dict[str, str]:
+def target_paths(parts: list[str], crate_root: str | None, crate: str = "rust") -> dict[str, str]:
     """Map each Part id to its Rust file (G12). Raises ValueError if crate_root names no Part."""
     if crate_root is not None and crate_root not in parts:
         raise ValueError(f"--crate-root-part {crate_root!r} is not a Part")
     if len(parts) == 1:
-        return {parts[0]: "rust/src/lib.rs"}
+        return {parts[0]: f"{crate}/src/lib.rs"}
     stems = [Path(p).name for p in parts]
     out: dict[str, str] = {}
     for p, stem in zip(parts, stems, strict=True):
         if p == crate_root:
-            out[p] = "rust/src/lib.rs"
+            out[p] = f"{crate}/src/lib.rs"
         else:
             name = re.sub(r"\W", "_", p) if stems.count(stem) > 1 else stem
-            out[p] = f"rust/src/{name}.rs"
+            out[p] = f"{crate}/src/{name}.rs"
     return out
 
 
 def main_logic(
-    inv: Path, order: Path, edges: Path | None, include_tests: bool, crate_root: str | None = None
+    inv: Path, order: Path, edges: Path | None, include_tests: bool, crate_root: str | None = None, crate: str = "rust"
 ) -> list[list[str]]:
     tags: dict[str, set[str]] = {}
     files: dict[str, set[str]] = {}
@@ -95,7 +100,7 @@ def main_logic(
     for ln in order.read_text().splitlines():
         ordered += [p for p in ln.split() if p in files]
     ordered += sorted(set(files) - set(ordered))
-    targets = target_paths(ordered, crate_root)
+    targets = target_paths(ordered, crate_root, crate)
     rows = []
     for p in ordered:
         src = ",".join(sorted(files[p]))
@@ -129,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     edges = Path(args.edges) if args.edges else order.parent / "edges.tsv"
     try:
-        rows = main_logic(inv, order, edges, args.include_tests, args.crate_root_part)
+        crate = layout.load(Path(args.out).resolve().parent.parent).crate_rel  # <ws>/migration/parts.tsv
+        rows = main_logic(inv, order, edges, args.include_tests, args.crate_root_part, crate)
     except ValueError as e:
         print(f"tier: {e}", file=sys.stderr)
         return 1

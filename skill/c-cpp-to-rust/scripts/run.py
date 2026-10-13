@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Headless driver for one stage of a Pilot: queue -> snapshot -> implementer -> gate -> review -> commit -> mark.
 
-    python3 -I skill/c-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempts 5] [--budget-output-tokens N]
+    python3 -I skill/c-cpp-to-rust/scripts/run.py pilots/<name> --stage 1 [--max-attempts 5] [--budget-output-tokens N]
                                                                [--go] [--model sonnet] [--reviewer-model sonnet]
 
 Mechanical steps call the Skill's scripts (workqueue.py, gate.py via the Pilot's `make pilot-<name>` targets,
@@ -34,6 +34,7 @@ SKILL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gate  # noqa: E402
+import layout  # noqa: E402
 import workqueue as wq  # noqa: E402
 
 STOP = 3
@@ -59,6 +60,16 @@ class Config:
     gate_cmd: str
     snapshot_cmd: str
     deviations: str = "ask"  # ask | policy
+
+    @property
+    def lay(self) -> layout.Layout:
+        return layout.load(self.ws)
+
+    @property
+    def work_log(self) -> Path:
+        """`<ws>/migration/WORK-LOG.md` for a workspace with a layout.json (decision 72), else `<root>/WORK-LOG.md`."""
+        new = (self.ws / "migration" / "layout.json").is_file()
+        return self.ws / "migration" / "WORK-LOG.md" if new else self.root / "WORK-LOG.md"
 
     @property
     def repo(self) -> Path:
@@ -212,12 +223,12 @@ def implementer_prompt(cfg: Config, part: dict[str, str], rows: list[wq.Row], pr
         idiom += "\n\n" + (SKILL / "references" / "idiom-table-cpp.md").read_text()
     structs, sigs = translated_context(cfg, part, rows)
     sources = [s for s in part["source_paths"].split(",") if s]
-    source = "\n\n".join(f"// {s}\n{numbered(cfg.ws / s)}" for s in sources)
+    source = "\n\n".join(f"// {s}\n{numbered(cfg.lay.source / s)}" for s in sources)
     faithful = ""
     if cfg.stage == 2:
         t = cfg.ws / part["target_path"]
         faithful = t.read_text() if t.is_file() else ""
-    adapter = cfg.ws / "rust" / "tests" / "adapter" / "mod.rs"
+    adapter = cfg.lay.crate / "tests" / "adapter" / "mod.rs"
     slots = {
         "part_id": part["part_id"],
         "tier": part["tier"],
@@ -255,7 +266,7 @@ def review_prompt(cfg: Config, part: dict[str, str], head: str, gate_output: str
         "diff": diff,
         "rulebook": rulebook,
         "idiom_rows": (SKILL / "references" / "idiom-table-c.md").read_text(),
-        "source": "\n\n".join(f"// {s}\n{numbered(cfg.ws / s)}" for s in sources),
+        "source": "\n\n".join(f"// {s}\n{numbered(cfg.lay.source / s)}" for s in sources),
         "judge": "see the RULEBOOK §10 and migration/harness/",
         "gate_output": gate_output,
     }
@@ -336,7 +347,7 @@ def git(cfg: Config, *args: str) -> str:
 
 
 def log_work(cfg: Config, summary: list[str]) -> None:
-    path = cfg.root / "WORK-LOG.md"
+    path = cfg.work_log
     text = path.read_text() if path.is_file() else ""
     nums = [int(n) for n in re.findall(r"^## (\d+)\.", text, re.M)]
     entry = (
@@ -512,7 +523,7 @@ def stop(cfg: Config, done: list[str], notes: list[str], reason: str, code: int 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("pilot", help="pilots/<name>")
+    p.add_argument("pilot", help="the workspace folder (contains migration/), e.g. pilots/<name> or the project itself")
     p.add_argument("--stage", type=int, choices=[1, 2], default=1)
     p.add_argument("--max-attempts", type=int, default=wq.MAX_ATTEMPTS)
     p.add_argument("--budget-output-tokens", type=int, default=0)
@@ -537,8 +548,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
     ws = Path(a.pilot).resolve()
-    root = Path(a.root).resolve() if a.root else ws.parent.parent
-    base = "make -C {root} pilot-{name}"
+    new_layout = (ws / "migration" / "layout.json").is_file()  # decision 72: the workspace is the root
+    root = Path(a.root).resolve() if a.root else (ws if new_layout else ws.parent.parent)
+    base = "make -C {ws}/migration" if new_layout else "make -C {root} pilot-{name}"
+    gate_default = base + (" gate" if new_layout else "") + " STAGE={stage} PART={part}"
+    snap_default = base + (" snapshot" if new_layout else "-snapshot") + " STAGE={stage} PART={part}"
     cfg = Config(
         ws=ws,
         root=root,
@@ -551,8 +565,8 @@ def main(argv: list[str] | None = None) -> int:
         claude=a.claude,
         settings=Path(a.settings),
         max_turns=a.max_turns,
-        gate_cmd=a.gate_cmd or base + " STAGE={stage} PART={part}",
-        snapshot_cmd=a.snapshot_cmd or base + "-snapshot STAGE={stage} PART={part}",
+        gate_cmd=a.gate_cmd or gate_default,
+        snapshot_cmd=a.snapshot_cmd or snap_default,
         deviations=a.deviations,
     )
     try:

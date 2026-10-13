@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Give a Pilot its own git repository, with the upstream C source as a submodule at `src/` (decision 69).
 
-    python3 -I skill/c-to-rust/scripts/pilot_repo.py new NAME [--remote URL]    # src/ is a clone, UPSTREAM exists
-    python3 -I skill/c-to-rust/scripts/pilot_repo.py split NAME [--remote URL]  # pilots/NAME tracked in the main repo
+    python3 -I skill/c-cpp-to-rust/scripts/pilot_repo.py new NAME [--remote URL]    # src/ is a clone
+    python3 -I skill/c-cpp-to-rust/scripts/pilot_repo.py split NAME [--remote URL]  # pilots/NAME tracked in main
 
 `new` runs `git init` in pilots/NAME (if it is not a repository yet), registers `src/` as a submodule pinned to the
 `commit=` line of UPSTREAM (url from the same file) and commits the Pilot as it is. `split` first rewrites the history
@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"pilot_repo: pilots/{a.name} is its own repository (no remote). Create the remote, then:\n"
                 f"  git -C pilots/{a.name} remote add origin URL && git -C pilots/{a.name} push -u origin main\n"
-                f"  python3 -I skill/c-to-rust/scripts/pilot_repo.py new {a.name} --remote URL"
+                f"  python3 -I skill/c-cpp-to-rust/scripts/pilot_repo.py new {a.name} --remote URL"
             )
     except RuntimeError as e:
         print(f"pilot_repo: {e}", file=sys.stderr)

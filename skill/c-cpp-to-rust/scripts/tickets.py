@@ -26,6 +26,10 @@ import textwrap
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import layout  # noqa: E402
+
 STATES = ("todo", "in_progress", "done")
 OPEN_TASK = re.compile(r"^- \[ \] (.*)$", re.M)
 
@@ -185,7 +189,7 @@ CHAIN = (
             Task(
                 "Protect the Rulebook and the Judge, then start the fan-out",
                 (
-                    "session started with `claude --settings skill/c-to-rust/assets/settings.json` (SKILL.md step 3.1)",
+                    "session started with `claude --settings <skill dir>/assets/settings.json` (SKILL.md step 3.1)",
                     "`tickets.py mark 04 in_progress`, then `guard.py check <ws>/migration/RULEBOOK.md` must print "
                     "REFUSE; if not, stop",
                     "write `rust/src/lib.rs` (`pub mod <stem>;` per Part) and the cargo features of rulebook §3",
@@ -308,9 +312,9 @@ CPP_REFERENCE_BUILD = Task(
     "Pick and record the reference build",
     (
         "build the original C++ (headers and the upstream test file) with the compiler you will use for every Judge "
-        "piece; if the default compiler cannot build it, try another and record why. Run `python3 -I skill/c-to-rust/"
-        "scripts/refbuild.py <ws> --test T --source S [--resource R]` (judge.md §8): it tries compilers, standards and "
-        "-O levels, never builds inside `src/`, and writes `migration/harness/refbuild.md`; do not call `c++` or `cp` "
+        "piece; if the default compiler cannot build it, try another and record why. Run `make -C <ws>/migration "
+        'refbuild TEST=T SOURCES="S" [RES=R]` (judge.md §8): it tries compilers, standards and -O levels, never '
+        "builds inside the source directory, and writes `migration/harness/refbuild.md`; do not call `c++` or `cp` "
         "by hand",
         "write the compiler, version, standard, flags and optimisation level in the RULEBOOK slot `Reference build` "
         "(`references/rulebook-template-cpp.md`); the driver's `-O` level decides uninitialised reads",
@@ -354,7 +358,14 @@ def chain(lang: str = "c") -> tuple[Spec, ...]:
     return tuple(out)
 
 
-def render(spec: Spec, pilot: str) -> str:
+def localize(text: str, lay: layout.Layout) -> str:
+    """Replace `<ws>`, `<ws>/src` and `<ws>/rust` by the absolute paths of this workspace (decision 72)."""
+    text = text.replace("<ws>/experiments/", "<ws>/migration/experiments/")
+    text = text.replace("<ws>/src", str(lay.source)).replace("<ws>/rust", str(lay.crate))
+    return text.replace("<ws>", str(lay.ws))
+
+
+def render(spec: Spec, pilot: str, lay: layout.Layout | None = None) -> str:
     names = {c.num: c.title for c in CHAIN}
     blocked = ", ".join(f"{b} {names[b]}" for b in spec.blocked_by) or "None (can start immediately)"
 
@@ -364,11 +375,12 @@ def render(spec: Spec, pilot: str) -> str:
     tasks = "\n".join(f"- [ ] {t.text}" + "".join(f"\n{how(h)}" for h in t.how) for t in spec.tasks)
     checks = "\n".join(f"- [ ] {a}" for a in spec.acceptance)
     build = textwrap.fill(f"**What to build:** {spec.build}", 120, break_long_words=False)
-    return (
+    text = (
         f"# {spec.num}: {spec.title} ({pilot})\n\n{build}\n\n"
         f"**Blocked by:** {blocked}\n\n**Status:** todo\n\n"
         f"## Tasks\n\n{tasks}\n\n## Acceptance\n\n{checks}\n"
     )
+    return localize(text, lay) if lay else text
 
 
 def ticket_dir(ws: Path) -> Path:
@@ -428,12 +440,23 @@ def load(ws: Path) -> dict[str, Path]:
     return {f.name[:2]: f for f in files}
 
 
-def write_makefile(ws: Path) -> Path:
-    """`<ws>/migration/Makefile` with `status` and `tickets`, scripts addressed by absolute path."""
+def write_makefile(ws: Path, lang: str = "cpp") -> Path:
+    """`<ws>/migration/Makefile`: WORK_DIR, status, tickets, gate, run ...; scripts addressed by absolute path."""
     template = Path(__file__).resolve().parent.parent / "assets" / "migration.Makefile"
     target = ws / "migration" / "Makefile"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(template.read_text())
+    scripts = Path(__file__).resolve().parent
+    lay = layout.load(ws)
+    text = template.read_text()
+    for key, value in {
+        "@SCRIPTS@": str(scripts),
+        "@WORK_DIR@": str(lay.ws),
+        "@SOURCE@": str(lay.source),
+        "@CRATE@": str(lay.crate),
+        "@LANG@": lang,
+    }.items():
+        text = text.replace(key, value)
+    target.write_text(text)
     return target
 
 
@@ -453,17 +476,31 @@ def cmd_tick(ws: Path, num: str, text: str) -> int:
     return 0
 
 
-def cmd_init(ws: Path, force: bool, lang: str = "c") -> int:
+def cmd_init(ws: Path, force: bool, lang: str = "c", kind: str = "auto") -> int:
+    ws = ws.resolve()
     out = ticket_dir(ws)
     if out.exists() and any(out.glob("*.md")) and not force:
         print(f"tickets: {out} exists (use --force to overwrite)", file=sys.stderr)
         return 1
     out.mkdir(parents=True, exist_ok=True)
+    f = ws / "migration" / "layout.json"
+    lay = (
+        layout.load(ws)
+        if f.is_file() and kind == "auto"
+        else layout.write(ws, layout.detect_kind(ws) if kind == "auto" else kind)
+    )
+    gi = ws / "migration" / ".gitignore"
+    if not gi.is_file():
+        gi.write_text("rust/target/\nrust/Cargo.lock\nharness/work/\nharness/inputs/\ngate/\nstress/\n__pycache__/\n")
     specs = chain(lang)
     for spec in specs:
-        (out / f"{spec.num}-{spec.slug}.md").write_text(render(spec, ws.name))
-    mk = write_makefile(ws)
-    print(f"tickets: wrote {len(specs)} tickets to {out} and {mk}", file=sys.stderr)
+        (out / f"{spec.num}-{spec.slug}.md").write_text(render(spec, ws.name, lay))
+    mk = write_makefile(ws, lang)
+    print(
+        f"tickets: wrote {len(specs)} tickets to {out}, {mk} and layout.json ({lay.kind}: source {lay.source}, "
+        f"crate {lay.crate})",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -538,14 +575,27 @@ def cmd_show(ws: Path, num: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--ws", required=True, type=Path, help="Pilot workspace, e.g. pilots/cjson")
+    p.add_argument(
+        "--ws",
+        required=True,
+        type=Path,
+        help="workspace: the folder the Skill works in (migration/ is created inside it)",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
     i = sub.add_parser("init")
     i.add_argument("--force", action="store_true")
     i.add_argument("--lang", choices=("c", "cpp"), default="c", help="cpp adds the reference-build tasks (decision 55)")
+    i.add_argument(
+        "--layout",
+        choices=("auto", *layout.KINDS),
+        default="auto",
+        help="inplace: source = <ws>, crate = <ws>/migration/rust; legacy: <ws>/src and <ws>/rust; auto: legacy only "
+        "when <ws>/src or <ws>/rust exists",
+    )
     st = sub.add_parser("status")
     st.add_argument("--tasks", action="store_true", help="also list each ticket's checkbox tasks with [x] / [ ]")
-    sub.add_parser("makefile", help="(re)write <ws>/migration/Makefile with the status and tickets targets")
+    mk = sub.add_parser("makefile", help="(re)write <ws>/migration/Makefile (status, tickets, gate, run ...)")
+    mk.add_argument("--lang", choices=("c", "cpp"), default="cpp", help="default language of `make inventory`")
     t = sub.add_parser("tick", help="tick the one open task of ticket NN whose text contains TEXT")
     t.add_argument("num")
     t.add_argument("text")
@@ -559,9 +609,9 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         if args.cmd == "init":
-            return cmd_init(args.ws, args.force, args.lang)
+            return cmd_init(args.ws, args.force, args.lang, args.layout)
         if args.cmd == "makefile":
-            print(f"tickets: wrote {write_makefile(args.ws)}", file=sys.stderr)
+            print(f"tickets: wrote {write_makefile(args.ws, args.lang)}", file=sys.stderr)
             return 0
         if args.cmd == "tick":
             return cmd_tick(args.ws, args.num, args.text)

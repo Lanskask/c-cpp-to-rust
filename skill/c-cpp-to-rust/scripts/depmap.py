@@ -35,7 +35,18 @@ CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 TEST_DIRS = {"test", "tests", "unittest", "unittests"}
 EXAMPLE_DIRS = {"example", "examples", "sample", "samples", "demo"}
 # same list as inventory.py: vendored or non-library directories never take part in the graph
-VENDORED_DIRS = {"fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity", ".git", "build"}
+VENDORED_DIRS = {
+    "fuzzing",
+    "fuzz",
+    "third_party",
+    "thirdparty",
+    "vendor",
+    "external",
+    "unity",
+    ".git",
+    "build",
+    "migration",
+}
 
 Sym = tuple[str, str, str, int, int, str]  # name, kind, file, start, end, tags
 

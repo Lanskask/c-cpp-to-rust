@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Reference build of a C or C++ original (judge.md §8): build and run the upstream test with candidate flags.
 
-    python3 -I skill/c-to-rust/scripts/refbuild.py pilots/<name> --test xmltest.cpp --source tinyxml2.cpp \\
+    python3 -I skill/c-cpp-to-rust/scripts/refbuild.py pilots/<name> --test xmltest.cpp --source tinyxml2.cpp \\
         [--resource resources] [--lang c++|c] [--std c++11 --std c++17] [--opt=-O0 --opt=-O2] [--cc c++ --cc clang++]
 
-Paths after `--test`, `--source`, `--resource` are relative to `<ws>/src`. Nothing is built inside `src/` and the shell
-never changes into `<ws>`: files are copied to `<ws>/migration/harness/work/refbuild/` (git-ignored) and compiled and
+Paths after `--test`, `--source`, `--resource` are relative to the workspace's source directory (`<ws>` itself, or
+`<ws>/src` in a legacy layout; layout.py). Nothing is built there and the shell never changes into `<ws>`: files are
+copied to `<ws>/migration/harness/work/refbuild/` (git-ignored) and compiled and
 run there. Every candidate (compiler x standard x optimisation) is tried in order; each attempt is a row of the report
 `<ws>/migration/harness/refbuild.md`, which also names the first passing candidate for the RULEBOOK `Reference build`
 slot. Exit 0: a candidate built and the test exited 0. Exit 1: none did (stop and tell the user: judge.md §8).
@@ -22,6 +23,10 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import layout  # noqa: E402
 
 TIMEOUT = 300
 DEFAULTS = {
@@ -55,10 +60,10 @@ def version(cc: str) -> str:
     return (r.stdout or r.stderr).splitlines()[0] if r.returncode == 0 and (r.stdout or r.stderr) else "unknown"
 
 
-def stage(ws: Path, work: Path, names: list[str]) -> list[str]:
-    """Copy `src/<name>` files and directories to `work/<name>`; return the names."""
+def stage(src: Path, work: Path, names: list[str]) -> list[str]:
+    """Copy `<source>/<name>` files and directories to `work/<name>`; return the names."""
     for n in names:
-        s = ws / "src" / n
+        s = src / n
         d = work / n
         d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_dir():
@@ -131,9 +136,10 @@ def main(argv: list[str] | None = None) -> int:
         if work.exists():
             shutil.rmtree(work)
         work.mkdir(parents=True)
-        files = stage(ws, work, [*a.test, *a.source])
-        stage(ws, work, a.resource)
-        stage(ws, work, a.include)
+        src = layout.load(ws).source
+        files = stage(src, work, [*a.test, *a.source])
+        stage(src, work, a.resource)
+        stage(src, work, a.include)
     except (OSError, FileNotFoundError) as e:
         print(f"refbuild: {e}", file=sys.stderr)
         return 1

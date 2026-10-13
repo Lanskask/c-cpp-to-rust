@@ -432,3 +432,18 @@ Each entry: decision, reason, who/what it came from. Newest last.
     never edit the installed copy). `guard.py` falls back to the cwd when installed outside a repo with `pilots/`.
     _Reason:_ user's request (this session): install globally without Claude reading the repo's files. Not covered:
     the repo Makefile's `pilot-<name>` gate targets (project-level, `run.py --gate-cmd` replaces them).
+
+72. **Renamed to `c-cpp-to-rust`; a workspace is the folder the Skill is called in, everything under
+    `<ws>/migration/`.** `scripts/layout.py` + `migration/layout.json` (`inplace`: source = `<ws>`, crate =
+    `migration/rust`; `legacy`: `src/` and `rust/`, the default without the file); `tickets.py init --layout
+    auto|inplace|legacy` writes it with `.gitignore`, the tickets (absolute paths in place of `<ws>`) and a Makefile
+    that holds `WORK_DIR`, the absolute `SCRIPTS` and the common commands (`gate`, `snapshot`, `next`, `verify`,
+    `inventory`, `depmap`, `tier`, `refbuild`, `run`, `run-go`, `spend*`; the Judge's `gate.mk` supplies
+    `GATE_ARGS`). `tier.py` emits `<crate>/src/..`; `inventory`/`depmap` skip `migration/`; `run.py` reads sources
+    from the layout, uses `<ws>` as root and `migration/WORK-LOG.md`; `guard.py` also protects `migration/..` at the
+    project root. _Reason:_ user's requirement (this session): invoke `/c-cpp-to-rust` in the project folder, create
+    nothing outside `migration/`, run scripts from the global Skill with the work dir as a parameter. `skill/c-to-rust`
+    stays as a symlink so existing Pilot Makefiles keep working. Side finding: `source_paths` are relative to the
+    source root, and `run.py` read them from `<ws>`; fixed. Not done: write-protecting the original source in the new
+    layout (settings.json deny rules name `pilots/*/src`), `xmltest.cpp`-style test files are still inventoried as
+    Parts (use `--exclude`).

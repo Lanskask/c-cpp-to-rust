@@ -1,6 +1,6 @@
 # settlers_to_rust
 
-A Claude Code **Skill** (`skill/c-to-rust/`) that translates C/C++ projects into Rust in two
+A Claude Code **Skill** (`skill/c-cpp-to-rust/`) that translates C/C++ projects into Rust in two
 stages (Faithful port, then Idiomatic pass), resumable after a crash. It is proven on small
 Pilots (`pilots/`) first. Vocabulary: `CONTEXT.md`. Plan: `PLAN.md`. Decisions: `docs/DECISIONS.md`.
 
@@ -23,15 +23,15 @@ Requires: `uv`, Python ≥ 3.12, Rust (`cargo`), `clang`. Optional: `c2rust` (C-
 ## Running the Skill
 
 The Skill is not installed as a global Claude Code skill. Start a session from the repo root and point it at
-`skill/c-to-rust/SKILL.md`:
+`skill/c-cpp-to-rust/SKILL.md`:
 
 ```bash
-claude --name <pilot>-translation --settings skill/c-to-rust/assets/settings.json --model sonnet --allowedTools Agent
+claude --name <pilot>-translation --settings skill/c-cpp-to-rust/assets/settings.json --model sonnet --allowedTools Agent
 ```
 
 Before the first run, check these (each one has bitten a session in E3):
 
-1. **The guard is active.** `--settings` loads `skill/c-to-rust/assets/settings.json`: static deny-rules for the
+1. **The guard is active.** `--settings` loads `skill/c-cpp-to-rust/assets/settings.json`: static deny-rules for the
    upstream
    source, `skill/**`, `docs/**` and the git history, plus the `guard.py` hook, which makes the Rulebook, the Judge
    files and `parts*.tsv` read-only only while the fan-out ticket (04 or 06) is `in_progress`. The session proves it:
@@ -46,7 +46,7 @@ Before the first run, check these (each one has bitten a session in E3):
 
 ## Layout
 
-- `skill/c-to-rust/` — the Skill: `SKILL.md`, `references/`, `scripts/` (stdlib Python), `assets/`.
+- `skill/c-cpp-to-rust/` — the Skill: `SKILL.md`, `references/`, `scripts/` (stdlib Python), `assets/`.
 - `pilots/<name>/` — one Pilot each: `UPSTREAM` (pinned source), `src/` (git-ignored clone),
   `rust/` (the crate), `migration/` (rulebook, `parts.tsv`, run notes, harness).
 - `experiments/` — one script per question, docstring states the question and the answer.

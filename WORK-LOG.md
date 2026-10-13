@@ -1099,3 +1099,11 @@ Dates are the commit's local time (UTC+7 shown by git); entries 1-6 were backfil
 - **Who:** c-to-rust Skill-editing session
 - skill/install_global.py, `make install-skill`, tests/test_install_global.py, guard.py cwd fallback. Decision 71.
 - Installed to ~/.claude/skills/cpp-to-rust (27 files, 11 rewritten); make test 148 passed 1 skipped, lint clean.
+
+## 74. Skill: rename to c-cpp-to-rust, workspace layout in migration/
+- **Date:** 2026-10-12
+- **Who:** c-to-rust Skill-editing session
+- git mv skill/c-to-rust skill/c-cpp-to-rust (+ symlink), scripts/layout.py, tickets.py init layout/Makefile, tier,
+  inventory, depmap, run, refbuild, guard, SKILL.md, run-loop.md, install_global.py (name fixed). Decision 72.
+- End-to-end on a copy of the tinyxml2 sources in the scratchpad: init -> migration/ only; `make parts` gave
+  2 Parts with `migration/rust/src/*.rs` targets. make test 155 passed 1 skipped (see commit).

@@ -39,7 +39,7 @@ from pathlib import Path
 
 C_EXT = {".c", ".h"}
 CPP_EXT = {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".inl"}
-SKIP_DIRS = {".git", "build", "target", "node_modules"}
+SKIP_DIRS = {".git", "build", "target", "node_modules", "migration"}  # migration/: the Skill's own output (decision 72)
 # vendored or non-library directories that never become Parts (extend per project with --exclude)
 VENDORED_DIRS = {
     "fuzzing", "fuzz", "third_party", "thirdparty", "vendor", "external", "unity", "catch2", "gtest", "gmock",

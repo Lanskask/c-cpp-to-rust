@@ -30,21 +30,25 @@ import re
 import sys
 from pathlib import Path
 
+# `pilots/<P>/...` (legacy layout) or `migration/...` directly under the project root (the workspace is the
+# project, decision 72); `rust/` is `migration/rust/` in the new layout
+_P = r"^(?:pilots/([^/]+)/)?"
 PROTECTED = (
-    re.compile(r"^pilots/([^/]+)/migration/RULEBOOK\.md$"),
-    re.compile(r"^pilots/([^/]+)/migration/parts[^/]*\.tsv$"),
-    re.compile(r"^pilots/([^/]+)/migration/harness/"),
-    re.compile(r"^pilots/([^/]+)/rust/Cargo\.toml$"),
-    re.compile(r"^pilots/([^/]+)/rust/tests/[^/]+\.rs$"),
-    re.compile(r"^pilots/([^/]+)/rust/examples/"),
+    re.compile(_P + r"migration/RULEBOOK\.md$"),
+    re.compile(_P + r"migration/parts[^/]*\.tsv$"),
+    re.compile(_P + r"migration/harness/"),
+    re.compile(_P + r"(?:migration/)?rust/Cargo\.toml$"),
+    re.compile(_P + r"(?:migration/)?rust/tests/[^/]+\.rs$"),
+    re.compile(_P + r"(?:migration/)?rust/examples/"),
 )
 FANOUT_TICKETS = ("04", "06")
 WRITE_MARKERS = re.compile(r"(>|\btee\b|\bsed\s+-i|\bmv\b|\bcp\b|\brm\b|\btruncate\b|\bperl\s+-i|\binstall\b)")
-PATH_IN_COMMAND = re.compile(r"pilots/[^\s'\"`;|&)]+")
+PATH_IN_COMMAND = re.compile(r"(?:pilots/[^\s'\"`;|&)]+/)?migration/[^\s'\"`;|&)]+")
 
 
 def fanout_active(root: Path, pilot: str) -> bool:
-    tdir = root / "pilots" / pilot / "migration" / "tickets"
+    """`pilot` is the Pilot folder name, or "" when the workspace is the project root itself."""
+    tdir = (root / "pilots" / pilot if pilot else root) / "migration" / "tickets"
     for num in FANOUT_TICKETS:
         for f in tdir.glob(f"{num}-*.md"):
             m = re.search(r"^\*\*Status:\*\* (\w+)", f.read_text(), re.M)
@@ -54,10 +58,12 @@ def fanout_active(root: Path, pilot: str) -> bool:
 
 
 def protected_pilot(rel: str) -> str | None:
+    """The Pilot name ("" for a workspace at the project root) when `rel` is a protected path, else None."""
     for rx in PROTECTED:
         m = rx.match(rel)
         if m:
-            return m.group(1)
+            return m.group(1) or ""
+    return None
     return None
 
 
@@ -67,7 +73,7 @@ def project_root() -> Path:
     env = os.environ.get("CLAUDE_PROJECT_DIR")
     if env:
         return Path(env)
-    here = Path(__file__).resolve().parents[3]  # skill/c-to-rust/scripts -> repo root
+    here = Path(__file__).resolve().parents[3]  # skill/c-cpp-to-rust/scripts -> repo root
     return here if (here / "pilots").is_dir() else Path.cwd()  # installed under ~/.claude/skills: the project is cwd
 
 
@@ -84,9 +90,9 @@ def relative(path: str, root: Path, cwd: Path | None = None) -> str:
 
 def refusal(root: Path, rel: str) -> str | None:
     pilot = protected_pilot(rel)
-    if pilot and fanout_active(root, pilot):
+    if pilot is not None and fanout_active(root, pilot):
         return (
-            f"guard: {rel} is read-only while ticket 04 or 06 of {pilot} is in_progress (fan-out). "
+            f"guard: {rel} is read-only while ticket 04 or 06 of {pilot or 'this workspace'} is in_progress (fan-out). "
             f"For a Judge change: tickets.py mark 04 todo, commit the change, mark 04 in_progress again."
         )
     return None
